@@ -3,7 +3,7 @@ id: 002
 title: Sizing the cage output to the viewer's real window and scale
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
