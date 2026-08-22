@@ -167,6 +167,32 @@ def _terminate(pid: int) -> None:
         return
 
 
+def pids_running(fragment: str) -> list[int]:
+    """Pids whose command line contains `fragment`.
+
+    Reads /proc directly rather than shelling out to pgrep: the match is the
+    security-relevant part of stopping the right processes, and doing it here
+    makes it an ordinary function -- inspectable, and testable without
+    spawning anything.
+    """
+    found: list[int] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cmdline = (entry / "cmdline").read_bytes()
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue  # exited between listing and reading
+        if fragment.encode() in cmdline:
+            found.append(int(entry.name))
+    return found
+
+
+def terminate(pid: int) -> None:
+    """SIGTERM one process, tolerating its having already gone."""
+    _terminate(pid)
+
+
 def record_viewer(pid: int) -> None:
     VIEWER_FILE.write_text(str(pid))
 

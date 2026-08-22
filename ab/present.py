@@ -18,7 +18,7 @@ import time
 from contextlib import suppress
 from typing import Protocol, assert_never, runtime_checkable
 
-from . import session
+from . import geometry, session
 from .config import settings
 from .errors import ErrorCode, WindowError
 from .models import PresenterName
@@ -74,8 +74,12 @@ class LocalViewerPresenter:
         return session.viewer_pid() is not None
 
     def present(self) -> str:
+        live = session.live()
         if self.presented():
-            return "viewer already open"
+            # Re-fitting on a repeat show is the way back to a borderless
+            # picture after the window has been moved or resized, since the
+            # viewer never asks the server to resize on its own.
+            return f"viewer already open{_fitted(live)}"
         viewer = self.viewer()
         if viewer is None:
             raise WindowError(ErrorCode.NO_PRESENTER, "no VNC client installed",
@@ -89,7 +93,11 @@ class LocalViewerPresenter:
         host, port = endpoint()
         # host::port, not host:port -- a single colon means an X display
         # number, so :5900 would be resolved as port 5900+5900.
-        args = ([host, str(port)] if viewer == "wlvncc"
+        # -n hides wlvncc's own cursor. The server draws the pointer into
+        # the frame (--render-cursor), which is what makes it visible at all;
+        # without -n the client then draws a second one over the top and you
+        # get two pointers moving together.
+        args = ([host, str(port), "-n"] if viewer == "wlvncc"
                 else [f"{host}::{port}"])
         spawned = subprocess.Popen([viewer, *args], stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL,
@@ -98,7 +106,9 @@ class LocalViewerPresenter:
         for _ in range(_CONNECT_POLLS):
             time.sleep(_POLL_INTERVAL_S)
             if self.presented():
-                return f"opened {viewer} on {host}:{port}"
+                # Fitted only once the viewer is up: the target is that
+                # window's size, so it has to exist to be measured.
+                return f"opened {viewer} on {host}:{port}{_fitted(live)}"
         session.clear_viewer()
         raise WindowError(ErrorCode.NO_PRESENTER, "VNC viewer did not connect",
                           detail=f"{viewer} {' '.join(args)}")
@@ -118,6 +128,14 @@ class LocalViewerPresenter:
     def _manual_hint(self) -> str:
         host, port = endpoint()
         return f"connect manually to {host}:{port}"
+
+
+def _fitted(live: session.NestedSession | None) -> str:
+    """Size the nested output to the viewer, and say so if anything changed."""
+    if live is None:
+        return ""
+    change = geometry.fit(live.wayland_display)
+    return "" if change is None else f", output {change}"
 
 
 class WebPresenter:

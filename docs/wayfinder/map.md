@@ -36,7 +36,11 @@ Single developer, no remote: commit to `trunk`, do not branch.
 
 <!-- one line per closed ticket -->
 
-_None yet._
+- [Sizing the cage output to the viewer's real window and scale](tickets/002-vnc-output-sizing.md)
+  — the output is resized from this side on `show`, via cage's
+  wlr-output-management; client-driven resize is refused by wayvnc. The
+  viewer's window is unmeasurable portably, so the exact target comes from
+  `AGENT_BROWSER_GEOMETRY_CMD` and the portable default is the screen.
 
 ## Fog
 
@@ -57,9 +61,15 @@ _None yet._
   not affect an already-running server, which is confusing precisely
   when someone is mid-debugging. Perhaps a version report in
   `browser_status`; perhaps nothing.
-- **Input quality during handoff, not just output.** Sizing is charted;
-  keyboard layout, clipboard, and IME through the VNC path are not, and
-  a login the human cannot type into fails just as hard as one they
-  cannot see.
+- **Input quality during handoff, not just output.** The pointer is now
+  drawn and singular, but keyboard layout, clipboard, and IME through the
+  VNC path are still unexamined -- a login the human cannot type into
+  fails just as hard as one they cannot see.
+- **Two Wayland operations shell out to CLI tools.** `wlr-randr` sets the
+  output size and `wayland-info` reads the screen. Both are protocol
+  operations that a binding could do in-process, but no Python library
+  speaks wlr-output-management, and generating bindings for it would be a
+  large dependency for a small tool. Worth revisiting if the parsing of
+  either tool's human-readable output ever bites.
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
   start. A crash between fetches is only discovered on the next one.

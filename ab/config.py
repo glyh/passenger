@@ -21,6 +21,11 @@ class Settings(BaseModel, frozen=True):
     handoff_timeout_s: int = Field(default=300, ge=1)
     vnc_host: str = "127.0.0.1"
     vnc_port: int = Field(default=5900, ge=1, le=65535)
+    # Unset means "fit the output to whoever is looking"; setting it pins the
+    # size, which is the only lever on a compositor the probes cannot read.
+    vnc_size: str | None = None
+    vnc_scale: float | None = Field(default=None, gt=0)
+    geometry_cmd: str | None = None
     novnc_port: int = Field(default=6080, ge=1, le=65535)
     presenter: PresenterName | None = None
     webhook_url: str | None = None
@@ -36,6 +41,9 @@ class Settings(BaseModel, frozen=True):
             "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
             "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
             "vnc_port": os.environ.get("AGENT_BROWSER_VNC_PORT"),
+            "vnc_size": os.environ.get("AGENT_BROWSER_VNC_SIZE"),
+            "vnc_scale": os.environ.get("AGENT_BROWSER_VNC_SCALE"),
+            "geometry_cmd": os.environ.get("AGENT_BROWSER_GEOMETRY_CMD"),
             "novnc_port": os.environ.get("AGENT_BROWSER_NOVNC_PORT"),
             "presenter": os.environ.get("AGENT_BROWSER_PRESENTER"),
             "webhook_url": os.environ.get("AGENT_BROWSER_WEBHOOK"),
@@ -43,6 +51,11 @@ class Settings(BaseModel, frozen=True):
         }
         # Pydantic coerces the strings; unset keys fall back to the defaults.
         return cls.model_validate({k: v for k, v in raw.items() if v is not None})
+
+    @property
+    def runtime_dir(self) -> str:
+        """Where the Wayland sockets live, for talking to the nested session."""
+        return os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
 
     @property
     def profile_dir(self) -> Path:

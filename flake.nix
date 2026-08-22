@@ -18,7 +18,13 @@
         # wlvncc rather than gtk-vnc: nixpkgs' gtk-vnc ships only gvnccapture,
         # not the gvncviewer binary, so it would silently fall through to a
         # host-installed client -- exactly what this flake exists to avoid.
-        runtimeDeps = with pkgs; [ cage wayvnc wlvncc ];
+        # wlr-randr resizes the nested output at runtime: cage implements
+        # wlr-output-management, and the alternative -- letting the VNC client
+        # ask for a size -- is not available, since wlvncc never asks and
+        # wayvnc refuses the request when a client does. wayland-utils reads
+        # the host's screen through core wl_output, so the target size does
+        # not depend on which compositor is running.
+        runtimeDeps = with pkgs; [ cage wayvnc wlvncc wlr-randr wayland-utils ];
 
         # Deliberately NOT pinned here: Chrome is taken from the host.
         #

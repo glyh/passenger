@@ -111,8 +111,8 @@ def stop() -> None:
     previous `pkill -x cage` matched on the program name, so it also killed
     cage sessions belonging to anyone else on the machine.
     """
-    subprocess.run(["pkill", "-f", "--", f"--user-data-dir={PROFILE_DIR}"],
-                   check=False)
+    for pid in session.pids_running(f"--user-data-dir={PROFILE_DIR}"):
+        session.terminate(pid)
     session.teardown()
 
 
