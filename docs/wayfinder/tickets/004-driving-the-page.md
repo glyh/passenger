@@ -3,7 +3,7 @@ id: 004
 title: Reaching content that sits behind an interaction
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
