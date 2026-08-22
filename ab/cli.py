@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 import cyclopts
 
-from . import browser, handoff, probe as probe_mod, registry, window
+from . import browser, handoff, launch, present, probe as probe_mod, registry
 from .config import settings
 from .detect import blocker_name, classify, is_novel
 from .errors import AgentBrowserError, BlockedError, ErrorCode
@@ -126,7 +126,7 @@ def open(url: str) -> None:  # noqa: A001 -- the verb the user reaches for
     with browser.Session() as session:
         page = session.page(reuse=False)
         page.goto(url, wait_until=WaitUntil.DOM_CONTENT_LOADED.value, timeout=60000)
-        window.select().set_visible(True)
+        print(present.select().present(), file=sys.stderr)
         try:
             page.bring_to_front()
         except Exception:
@@ -155,29 +155,30 @@ def stop() -> None:
 
 @app.command
 def show() -> None:
-    """Summon the browser window."""
-    backend = window.select()
-    backend.set_visible(True)
-    print(f"shown [{backend.name.value}]")
+    """Put the browser in front of you."""
+    presenter = present.select()
+    print(f"{presenter.present()} [{presenter.name.value}]")
 
 
 @app.command
 def hide() -> None:
-    """Tuck the browser window away."""
-    backend = window.select()
-    backend.set_visible(False)
-    print(f"hidden [{backend.name.value}]")
+    """Tuck the browser away again."""
+    presenter = present.select()
+    presenter.dismiss()
+    print(f"dismissed [{presenter.name.value}]")
 
 
 @app.command
 def status() -> None:
     """Show daemon, window, and open tabs."""
-    backend = window.select()
+    launcher = launch.select()
+    presenter = present.select()
     up = browser.is_up()
-    print(f"daemon:  {'up' if up else 'down'} ({settings.cdp_url})")
-    print(f"window:  {'visible' if backend.visible() else 'hidden'} "
-          f"[{backend.name.value}]")
-    print(f"profile: {settings.profile_dir}")
+    print(f"daemon:    {'up' if up else 'down'} ({settings.cdp_url})")
+    print(f"launch:    {launcher.name.value}")
+    print(f"presenter: {presenter.name.value} "
+          f"({'showing' if presenter.presented() else 'hidden'})")
+    print(f"profile:   {settings.profile_dir}")
     if up:
         with browser.Session() as session:
             for page in session.context.pages:

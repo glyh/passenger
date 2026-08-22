@@ -4,13 +4,12 @@ Nothing here tries to solve a challenge. Solver services get profiles burned
 and make the browser *more* detectable; a human solving it once into a
 persistent profile is both more robust and the defensible version of this.
 """
-import subprocess
 import sys
 import time
 from typing import Any, Callable
 
 from . import probe as probe_mod
-from . import registry, window
+from . import notify, present, registry
 from .config import HANDOFF_TIMEOUT_S
 from .detect import blocker_name, classify, is_novel, propose_signature
 from .errors import HandoffTimeout, WindowError
@@ -45,18 +44,17 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
     """
     name = blocker_name(blocker)
     message = f"[{name}] needs you: {blocker.probe.url}"
-    print(f"\n!! {message}", file=sys.stderr)
 
-    backend = window.select()
-    was_hidden = not backend.visible()
+    presenter = present.select()
+    was_hidden = not presenter.presented()
     try:
-        backend.set_visible(True)
+        how = presenter.present()
     except WindowError as exc:
-        print(f"   {exc.message} -- {exc.detail}", file=sys.stderr)
+        how = f"{exc.message} -- {exc.detail}"
     _bring_to_front(page)
-    _notify(message)
-    print(f"   solve it in the Chrome window; waiting up to {timeout_s}s...",
-          file=sys.stderr)
+    notify.select().notify("Agent browser needs you", f"{message}\n{how}")
+    print(f"   {how}", file=sys.stderr)
+    print(f"   waiting up to {timeout_s}s...", file=sys.stderr)
 
     try:
         deadline = time.time() + timeout_s
@@ -71,7 +69,7 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
         raise HandoffTimeout(name, timeout_s)
     finally:
         if was_hidden:
-            backend.set_visible(False)
+            presenter.dismiss()
 
 
 def _recheck(page: Any, extractor: Extractor, min_words: int) -> Extraction | None:
@@ -92,12 +90,6 @@ def _bring_to_front(page: Any) -> None:
         page.bring_to_front()
     except Exception:
         pass
-
-
-def _notify(message: str) -> None:
-    subprocess.run(
-        ["notify-send", "-u", "critical", "Agent browser needs you", message],
-        check=False)
 
 
 __all__ = ["record_novel", "wait_for_human", "is_novel", "Extractor"]

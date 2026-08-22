@@ -31,7 +31,17 @@ class WaitUntil(str, Enum):
 
 
 class BackendName(str, Enum):
+    """How Chrome is launched."""
+
     NESTED = "nested"
+    NONE = "none"
+
+
+class PresenterName(str, Enum):
+    """How a human is given a look at the hidden browser."""
+
+    LOCAL = "local"
+    WEB = "web"
     NONE = "none"
 
 

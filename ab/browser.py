@@ -19,7 +19,7 @@ from typing import Any
 
 from patchright.sync_api import sync_playwright
 
-from . import window
+from . import launch
 from .config import CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
 from .errors import DaemonError, ErrorCode
 
@@ -60,10 +60,10 @@ def start(detach: bool = True, hidden: bool = True) -> str:
         "--no-default-browser-check",
     )
 
-    backend = window.select()
+    backend = launch.select()
     if hidden:
         backend.prepare()
-        argv += (f"--class={window.WM_CLASS}",)
+        argv += (f"--class={launch.WM_CLASS}",)
         # Off-screen windows get their timers throttled, which stalls the very
         # challenge scripts we need to run. None are visible to page JS.
         argv += ("--disable-background-timer-throttling",
@@ -71,7 +71,7 @@ def start(detach: bool = True, hidden: bool = True) -> str:
                  "--disable-renderer-backgrounding")
     argv += ("about:blank",)
 
-    plan = backend.plan(argv) if hidden else window.NoOpBackend().plan(argv)
+    plan = backend.plan(argv) if hidden else launch.NoOpBackend().plan(argv)
     subprocess.Popen(
         list(plan.argv),
         env={**os.environ, **plan.env} if plan.env else None,

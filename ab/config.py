@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .models import ExtractMode
+from .models import ExtractMode, PresenterName
 
 
 class Settings(BaseModel, frozen=True):
@@ -21,6 +21,9 @@ class Settings(BaseModel, frozen=True):
     handoff_timeout_s: int = Field(default=300, ge=1)
     vnc_host: str = "127.0.0.1"
     vnc_port: int = Field(default=5900, ge=1, le=65535)
+    novnc_port: int = Field(default=6080, ge=1, le=65535)
+    presenter: PresenterName | None = None
+    webhook_url: str | None = None
     default_extract_mode: ExtractMode = ExtractMode.AUTO
 
     @classmethod
@@ -33,6 +36,9 @@ class Settings(BaseModel, frozen=True):
             "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
             "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
             "vnc_port": os.environ.get("AGENT_BROWSER_VNC_PORT"),
+            "novnc_port": os.environ.get("AGENT_BROWSER_NOVNC_PORT"),
+            "presenter": os.environ.get("AGENT_BROWSER_PRESENTER"),
+            "webhook_url": os.environ.get("AGENT_BROWSER_WEBHOOK"),
             "default_extract_mode": os.environ.get("AGENT_BROWSER_EXTRACT"),
         }
         # Pydantic coerces the strings; unset keys fall back to the defaults.
@@ -54,6 +60,10 @@ class Settings(BaseModel, frozen=True):
     def cdp_url(self) -> str:
         return f"http://127.0.0.1:{self.cdp_port}"
 
+    @property
+    def novnc_url(self) -> str:
+        return f"http://{self.vnc_host}:{self.novnc_port}/vnc.html"
+
 
 settings = Settings.from_env()
 
@@ -67,5 +77,3 @@ CDP_URL = settings.cdp_url
 CHROME_BIN = settings.chrome_binary
 MIN_CONTENT_WORDS = settings.min_content_words
 HANDOFF_TIMEOUT_S = settings.handoff_timeout_s
-VNC_HOST = settings.vnc_host
-VNC_PORT = str(settings.vnc_port)
