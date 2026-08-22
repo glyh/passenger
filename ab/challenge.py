@@ -163,6 +163,9 @@ def hand_off(page, blocker: dict, extract_fn,
              min_words: int = MIN_CONTENT_WORDS) -> str | None:
     """Ask the human to solve it, then wait for the page to come good.
 
+    extract_fn takes the live page (not HTML) so the wait loop re-measures with
+    whatever extraction mode the caller settled on.
+
     Returns the extracted text once the block clears, or None on timeout.
     """
     label = blocker["name"]
@@ -183,7 +186,7 @@ def hand_off(page, blocker: dict, extract_fn,
     while time.time() < deadline:
         time.sleep(2)
         try:
-            text = extract_fn(page.content(), page.url)
+            text = extract_fn(page)
             words = len(text.split())
             if detect(page, words, min_words) is None:
                 print(f"   resolved ({words} words)\n", file=sys.stderr)

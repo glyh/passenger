@@ -15,7 +15,33 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 
 **Transport and extraction are separate layers.** Per-site scrapers rot because
 they fuse the two. Here anything fetchable is `navigate + extract`, and the
-extraction half (trafilatura → markdown) is the part that never goes stale.
+extraction half is the part that never goes stale.
+
+### Extraction modes (`--extract`)
+
+| mode | what it does |
+|---|---|
+| `auto` (default) | runs the article extractor, falls back to DOM text only if it recovered under 35% of the page's visible words |
+| `article` | trafilatura boilerplate removal → markdown |
+| `dom` | visible text off the live DOM, minus nav/header/footer/aria-hidden |
+
+**`dom` is an escape hatch that has not yet proved necessary.** It was added on
+the assumption that trafilatura returns nav chrome for JS apps. Measured, that
+turned out to be false — with `favor_recall=True` it wins on every page tried,
+including app-shaped ones:
+
+| page | article | dom |
+|---|---|---|
+| Wikipedia article | 4145 w | — |
+| Google Calendar agenda | 494 w | 347 w |
+| Gmail inbox | 4878 w | 4144 w |
+| Google Maps | 107 w | 30 w |
+
+Both modes recovered identical event counts on Calendar (16 / 4). So `auto` has
+never actually fired its fallback. Keep `dom` for the page that eventually
+needs it; don't assume an app-shaped page is one of them without measuring.
+(Google Maps is a reminder that some pages lose to *both* — the content is in a
+canvas, and no text extractor will help.)
 
 **Nothing is spoofed.** The profile is a real Chrome on your real IP, so there
 is no fake fingerprint to catch — only the automation protocol needed patching,

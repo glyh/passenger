@@ -5,19 +5,20 @@ import sys
 
 from . import browser, challenge, window
 from .config import CDP_URL, MIN_CONTENT_WORDS, PROFILE_DIR
-from .extract import to_markdown
+from .extract import extract
 
 
-def _load(page, url: str, wait: str, settle_ms: int):
+def _load(page, url: str, wait: str, settle_ms: int, mode: str):
     page.goto(url, wait_until=wait, timeout=60000)
     page.wait_for_timeout(settle_ms)
-    return to_markdown(page.content(), page.url)
+    return extract(page, mode)
 
 
 def cmd_fetch(args):
     with browser.Session() as s:
         page = s.page(reuse=not args.new_tab)
-        text = _load(page, args.url, args.wait, args.settle)
+        mode = "dom" if args.dom else args.extract
+        text, used = _load(page, args.url, args.wait, args.settle, mode)
         blocker = challenge.detect(page, len(text.split()), args.min_words)
         if blocker:
             # Evidence is captured for novel blockers either way -- a suppressed
@@ -32,11 +33,12 @@ def cmd_fetch(args):
             if args.no_handoff:
                 json.dump({"blocked": blocker}, sys.stdout, indent=2)
                 sys.exit(2)
-            text = challenge.hand_off(page, blocker, to_markdown, args.min_words)
+            text = challenge.hand_off(
+                page, blocker, lambda pg: extract(pg, mode)[0], args.min_words)
             if text is None:
                 sys.exit(2)
         if args.json:
-            json.dump({"url": page.url, "title": page.title(),
+            json.dump({"url": page.url, "title": page.title(), "mode": used,
                        "words": len(text.split()), "markdown": text},
                       sys.stdout, indent=2)
         else:
@@ -111,6 +113,10 @@ def main():
                    help="exit 2 on a blocker instead of asking for help")
     f.add_argument("--wait", default="domcontentloaded",
                    choices=["load", "domcontentloaded", "networkidle", "commit"])
+    f.add_argument("--extract", default="auto", choices=["auto", "article", "dom"],
+                   help="auto measures both and picks; article=documents, "
+                        "dom=JS apps")
+    f.add_argument("--dom", action="store_true", help="shorthand for --extract dom")
     f.add_argument("--min-words", type=int, default=MIN_CONTENT_WORDS,
                    help="below this, a page is treated as blocked (0 disables)")
     f.add_argument("--settle", type=int, default=1500,
