@@ -2,8 +2,8 @@
 id: 008
 title: Word counts assume spaces, so CJK pages read as empty
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -74,3 +74,56 @@ Both halves are pure and need no browser to test: `classify` against a
 fixture `PageProbe`, `choose` against two fixture strings. A CJK string
 belongs in whatever fixtures [What the test suite covers, and how the
 shells get tested](001-testing-the-shells.md) lands with.
+
+## Answer
+
+Real segmentation, not a heuristic. `ab/text.py` holds one `count_words`,
+and both consumers -- `Extraction.word_count` and `choose` -- now call it.
+
+The ticket's own point 1 proposed counting CJK codepoints as words, and
+point 4 asked whether `min_words = 80` would still mean anything. Both are
+moot: ICU's `BreakIterator` does dictionary-based segmentation, so the unit
+stays "word" in every script and the threshold keeps its meaning unchanged.
+That closes point 2 as well -- there is no reason to restate `min_words` in
+characters, so the public MCP parameter does not change and no caller
+breaks. Point 3 (whether `classify` and `choose` want different measures)
+resolves to no: once both inputs are counted honestly, one ruler serves the
+threshold and the ratio alike.
+
+PyICU is a real native dependency and was weighed as one. jieba covers
+Chinese only and would leave the Thai case in [Reaching content that sits
+behind an interaction](004-driving-the-page.md) still broken; uniseg
+implements UAX #29, which without a dictionary counts each Han ideograph as
+a word and leaves Thai runs whole -- the rejected heuristic, with a
+dependency attached. ICU is the only one that covers every unspaced script,
+and nixpkgs ships it prebuilt.
+
+Measured:
+
+| text | `len(split())` | `count_words` |
+|---|---|---|
+| zh.wikipedia 珠海市, live through `article` | 2,196 | 22,014 |
+| note body, 1,890 Chinese characters | 1 | 1,050 |
+| search listing, 1,240 characters | 1 | 520 |
+| ICP footer, 44 characters | 4 | 17 |
+| `hello world foo` | 3 | 3 |
+
+Both halves the ticket describes are fixed by the one change. `classify`
+no longer calls a rendered CJK page blocked, so the `^<query> - 小红书搜索`
+proposal cannot arise by this route. And `choose` now compares 17 against
+520 rather than 4 against 1, so the yield floor trips and `auto` returns the
+listing instead of the footer -- the reason the xiaohongshu recipe had to
+pin `mode` per page type.
+
+Note what this does *not* fix. A thin page is still called blocked on a low
+count alone, which is [The extract mode decides whether a page counts as
+blocked](005-mode-decides-blocked.md); `example.com` measures 30-odd words
+in any unit and still proposes `^Example\ Domain` as a signature. Counting
+honestly removes the false readings, not the weak rule that consumes them.
+
+Regression seams landed with it, as the ticket asked: `tests/test_text.py`,
+`tests/test_extract.py` and `tests/test_detect.py`, all pure, no browser,
+with the CJK fixtures sized to the measurements above. They run under
+`pytest` in the dev shell. This is a narrower thing than [What the test
+suite covers, and how the shells get tested](001-testing-the-shells.md)
+wants and does not pre-empt it -- only the pure core is covered.

@@ -48,6 +48,13 @@ Single developer, no remote: commit to `trunk`, do not branch.
   — cage's fullscreen was hiding Chrome's own toolbar. The window is taken out
   of fullscreen over CDP, permanently, so the handoff hands over an ordinary
   browser rather than a bare page.
+- [Word counts assume spaces, so CJK pages read as empty](tickets/008-word-counts-assume-spaces.md)
+  — one `count_words`, ICU's dictionary segmentation, shared by `classify`
+  and `choose`. A 1,890-character Chinese note counted 1 word and now counts
+  1,050; `min_words` keeps its meaning in every script. The Python side moved
+  to nix in the same change, since PyICU is the project's one native
+  dependency and was resolving against the host's libicu.
+
 - [Whether defuddle belongs alongside trafilatura as an extract mode](tickets/009-defuddle-as-a-mode.md)
   — no. Measured on six pages: it wins only on fenced code blocks in
   documentation and loses links everywhere else, which is what 007 needs.

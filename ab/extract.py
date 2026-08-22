@@ -22,6 +22,7 @@ from typing import Any, assert_never
 import trafilatura
 
 from .models import Extraction, ExtractMode
+from .text import count_words
 
 _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
           "[role=navigation], [role=banner], [role=contentinfo], "
@@ -92,7 +93,7 @@ def dom_text(page: Any) -> str:
 
 def choose(article: str, dom: str) -> Extraction:
     """Pure: the `auto` decision, isolated so it can be tested without a page."""
-    article_words, dom_words = len(article.split()), len(dom.split())
+    article_words, dom_words = count_words(article), count_words(dom)
     if dom_words >= _MIN_COMPARABLE_WORDS:
         if article_words < _ARTICLE_YIELD_FLOOR * dom_words:
             return Extraction(text=dom, mode_used=ExtractMode.DOM)

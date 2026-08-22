@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from .text import count_words
+
 
 class SignatureKind(str, Enum):
     CHALLENGE = "challenge"
@@ -117,7 +119,7 @@ class Extraction(BaseModel, frozen=True):
 
     @property
     def word_count(self) -> int:
-        return len(self.text.split())
+        return count_words(self.text)
 
 
 class FetchRequest(BaseModel, frozen=True):

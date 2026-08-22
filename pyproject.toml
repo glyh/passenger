@@ -31,3 +31,10 @@ plugins = ["pydantic.mypy"]
 [[tool.mypy.overrides]]
 module = ["trafilatura.*", "patchright.*", "icu.*"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# The project is not installed into the dev shell's interpreter -- that env
+# carries the dependencies, not `ab` itself -- so the tests import it from the
+# working tree.
+pythonpath = ["."]
+testpaths = ["tests"]
