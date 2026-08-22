@@ -85,6 +85,13 @@ Single developer, no remote: commit to `trunk`, do not branch.
   patchright is the thing that is stuck, and stops the navigation rather than
   closing the tab.
 
+- [The passthrough tool that runs a script against a page](tickets/013-the-passthrough-tool.md)
+  — built at both doors: caller-supplied Python with `page` and `read(page)` in
+  scope, tabs by CDP target id, and `service.inspect` shared with `fetch` so the
+  ending page is classified the same way. A locator that tries to cross is told
+  what to return instead; a script that raises comes back as an outcome with its
+  own line number, not an exception.
+
 ## Fog
 
 - **Two viewers fight over the framebuffer.** Now that the size is
