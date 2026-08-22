@@ -61,3 +61,47 @@ Decide how far up the Playwright surface this tool should go.
    otherwise have hit has made itself worse, so the honest answer might
    be that (1) is not a stepping stone to (2) but a deliberate stopping
    point.
+
+## Research so far
+
+Findings: [What driving the page would cost, and what it would look like](../assets/004-driving-the-page-findings.md).
+
+**The direction is set, and it is neither of the two options above.** Not a
+rewrapped verb per action (question 2), and not a stopping point at reading the
+current page either: expose the Playwright surface *directly* -- one way in
+that can call any API `page` exposes -- with this project's scaffolding
+wrapped around the call rather than around each verb. Rewrapping is the thing
+being avoided; the peers' addressing schemes (accessibility refs, coordinates)
+exist to serve a per-verb tool surface that this design does not have.
+
+That answers questions 1 and 2 and rewrites what is left:
+
+- **The envelope, not the verbs.** What the script is written against
+  (`page`), what may cross the MCP boundary (JSON only -- handles cannot),
+  and whether the reply carries an extraction of the page the script left on
+  as well as the script's own return value.
+- **Question 4 gets easier, not harder.** Running the existing probe/classify
+  on the page the script *ends* on yields the same `blocked` outcome the agent
+  already knows how to handle, whatever happened in between. No per-step
+  probing needed.
+- **Question 3 got sharper.** Probing for it surfaced
+  [One wedged tab bricks every later call](012-one-wedged-tab-bricks-every-call.md):
+  a tab left mid-navigation hangs `connect_over_cdp` indefinitely. A driving
+  sequence keeps tabs alive across calls by design, so the handle needs a
+  liveness story, not just a name.
+- **Patchright's isolated world leaks into the design.** `evaluate` defaults
+  to `isolated_context=True`; page globals are invisible unless the caller
+  opts out, and opting out is the detectable path. Measured.
+- **Question 5 is answered on the evidence, and does not block the shape.**
+  Every CDP-dispatched event is `isTrusted: true`, so the flag is not the
+  tell. `click` teleports the cursor -- one `mousemove`, at the destination --
+  and `fill` emits a bare `input` with no keystrokes at all. Against
+  continuous behavioural scoring (Cloudflare Precursor and its kin), that is
+  what gets a warm profile marked. It does not argue against a passthrough;
+  it argues that reading and driving are different *kinds* of act, and that
+  the difference has to be stated where the caller reads it.
+
+Still open: whether the script is Python or JS; what the tab handle is; what a
+sequence looks like across several calls; and whether execution of caller-
+supplied code in the MCP server process needs any boundary beyond the one the
+agent already has (it can run `Bash`).
