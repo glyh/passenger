@@ -21,23 +21,17 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 Register it with Claude Code for every project:
 
     claude mcp add agent-browser --scope user -- \
-      nix develop /path/to/agent-browser --command \
-      uv run --project /path/to/agent-browser agent-browser-mcp
+      nix run /path/to/agent-browser#mcp
 
-`nix develop` rather than a bare `uv run`: uv heals the Python side on its own
-(it creates and syncs .venv from uv.lock, fetching the interpreter if needed),
-but it knows nothing about cage and wayvnc. Without the flake shell those
-resolve only if they also happen to be installed system-wide, and a machine
+The flake builds a real derivation, so the wrapper already carries cage and
+wayvnc on its PATH. That matters more than it looks: without them Chrome
+resolves only if they happen to be installed system-wide, and a machine
 without them would start Chrome *visible*.
 
-Two traps that cost real debugging, both worth knowing if you rewire this:
-
-- `nix develop --command` forwards the shellHook to **stdout**, which corrupts
-  any stdio protocol. This flake's hook prints to stderr for that reason.
-- `direnv exec <dir> uv run ...` is the fast alternative -- 0.16s against 3.0s,
-  thanks to nix-direnv's cache, and its stdout is clean. It is not the default
-  only because editing .envrc revokes direnv's approval until you re-allow it,
-  which would break the server at the worst moment.
+One trap worth knowing if you rewire this: `nix develop --command` forwards
+the shellHook to **stdout**, which corrupts any stdio protocol. This flake's
+hook prints to stderr for that reason. `nix run` does not run the hook at all,
+which is why the registration above is the simpler of the two.
 
 Tools: `fetch`, `show_browser`, `hide_browser`, `browser_status`,
 `close_tabs`, `list_blockers`.
@@ -82,7 +76,7 @@ so `detect.classify()` is a function of that record alone.
 
 Blockers are a discriminated union closed with `assert_never`, so adding a
 variant without handling it is a type error rather than a silent fallthrough.
-`mypy --strict` passes; run it with `uv run mypy ab`.
+`mypy --strict` passes; run it with `mypy ab` in `nix develop`.
 
 ## Design
 
@@ -212,10 +206,13 @@ own compositor sidesteps that whole class of breakage.
 
 ## Install
 
-    nix develop            # dev shell: cage, wayvnc, noVNC, python, uv
+    nix develop            # dev shell: cage, wayvnc, noVNC, python + deps
     nix run .              # run the CLI directly
+    nix run .#mcp          # run the MCP server
 
-The flake pins everything except the browser. Chrome deliberately comes from
+The flake pins everything except the browser, Python dependencies included --
+`nix/python-overlay.nix` carries the two that nixpkgs lacks or has too old,
+and `nix build` needs neither a network nor a compiler. Chrome deliberately comes from
 the host (`AGENT_BROWSER_CHROME`, default `google-chrome-stable`): pinning it
 would freeze its version, and the version string is one of the most visible
 fingerprint fields there is -- a browser months behind what real users run is a

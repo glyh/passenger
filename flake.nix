@@ -49,11 +49,40 @@
           default google-chrome-stable) so it keeps its own update cadence.
         '';
 
-        pythonEnv = pkgs.python314;
+        # The interpreter, carrying this project's overlay. Two of the six
+        # Python dependencies are absent or too old in nixpkgs; nix/ says which
+        # and why. `self` is threaded through so anything built against this
+        # interpreter sees the overridden set rather than the stock one.
+        python = pkgs.python314.override {
+          self = python;
+          packageOverrides = import ./nix/python-overlay.nix;
+        };
+
+        pythonDeps = ps: with ps; [
+          cyclopts
+          mcp
+          patchright
+          pydantic
+          pyicu
+          trafilatura
+        ];
+
+        # .git and the local build detritus are not inputs; without this filter
+        # every write to any of them would invalidate the build.
+        source = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: type:
+            !(builtins.elem (baseNameOf (toString path)) [
+              ".venv" ".direnv" ".git" ".mypy_cache" ".ruff_cache" "result"
+            ]);
+        };
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = runtimeDeps ++ [ pythonEnv pkgs.uv pkgs.mypy ];
+          packages = runtimeDeps ++ [
+            (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
+            pkgs.mypy
+          ];
           # Everything the hook prints goes to stderr. `nix develop --command`
           # forwards hook output to stdout, which would corrupt any program
           # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
@@ -65,21 +94,51 @@
             {
               echo "agent-browser dev shell"
               echo "${chromeNote}"
-              echo "run: uv run agent-browser status"
+              echo "run: python -m ab.cli status"
             } >&2
           '';
         };
 
-        # A wrapper that puts the runtime deps on PATH and hands off to the
-        # CLI. uv resolves the Python side from the committed uv.lock.
-        packages.default = pkgs.writeShellApplication {
-          name = "agent-browser";
-          runtimeInputs = runtimeDeps ++ [ pythonEnv pkgs.uv ];
-          text = ''
-            export AGENT_BROWSER_NOVNC="''${AGENT_BROWSER_NOVNC:-${novncStatic}}"
-            exec uv run --project "''${AGENT_BROWSER_SRC:-${self}}" \
-              agent-browser "$@"
+        # A real derivation. The closure describes every dependency, so this
+        # builds and runs with no network and no compiler. It used to be a
+        # shell script that called `uv run`, which resolved the Python side at
+        # first use -- reproducible only in the sense that uv.lock was pinned,
+        # and unbuildable offline.
+        packages.default = python.pkgs.buildPythonApplication {
+          pname = "agent-browser";
+          version = "0.1.0";
+          pyproject = true;
+          src = source;
+
+          build-system = [ python.pkgs.hatchling ];
+          dependencies = pythonDeps python.pkgs;
+
+          nativeBuildInputs = [ pkgs.makeWrapper ];
+
+          # No test suite yet (ticket 001). Import-checking both entry points
+          # is the cheapest thing that still catches a missing dependency.
+          doCheck = false;
+          pythonImportsCheck = [ "ab.cli" "ab.mcp_server" ];
+
+          # Both entry points need the compositor on PATH and the viewer's
+          # JavaScript findable; neither can be discovered at runtime.
+          postFixup = ''
+            for exe in $out/bin/*; do
+              wrapProgram "$exe" \
+                --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
+                --set-default AGENT_BROWSER_NOVNC ${novncStatic}
+            done
           '';
+
+          meta.mainProgram = "agent-browser";
+        };
+
+        # The MCP server is the second entry point, and the one that gets
+        # wired into a client's config, so it deserves a name of its own
+        # rather than an argv suffix.
+        apps.mcp = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/agent-browser-mcp";
         };
 
         apps.default = {
