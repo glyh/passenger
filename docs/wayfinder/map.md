@@ -48,6 +48,12 @@ Single developer, no remote: commit to `trunk`, do not branch.
   — cage's fullscreen was hiding Chrome's own toolbar. The window is taken out
   of fullscreen over CDP, permanently, so the handoff hands over an ordinary
   browser rather than a bare page.
+- [Whether defuddle belongs alongside trafilatura as an extract mode](tickets/009-defuddle-as-a-mode.md)
+  — no. Measured on six pages: it wins only on fenced code blocks in
+  documentation and loses links everywhere else, which is what 007 needs.
+  The measurement also corrected the premise -- `page.content()` is the
+  rendered DOM, so trafilatura already sees a JS app and discards it as
+  boilerplate rather than failing to see it.
 
 ## Fog
 

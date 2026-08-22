@@ -4,7 +4,13 @@ Two strategies, because pages come in two shapes:
 
   article  boilerplate removal (trafilatura). Right for documents.
   dom      visible text off the live DOM, minus obvious furniture. Noisier,
-           but it is the only thing that sees a JS app's content.
+           but it is the only thing that keeps a listing's content.
+
+This file used to say `dom` exists because trafilatura cannot see a JS app.
+That is wrong: `page.content()` is the *rendered* DOM, so trafilatura is handed
+the same nodes -- it sees a listing and discards it as boilerplate, which every
+readability-family extractor does (measured against defuddle in ticket 009).
+The difference `dom` makes is one of judgement, not of visibility.
 
 `auto` picks by measuring rather than guessing from the URL. Note that on every
 page measured so far, `article` has won -- see README. `dom` is an escape
