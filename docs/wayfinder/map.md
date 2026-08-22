@@ -114,4 +114,8 @@ Single developer, no remote: commit to `trunk`, do not branch.
   [Reaching content that sits behind an interaction](tickets/004-driving-the-page.md),
   where a read-per-step multiplies the cost.
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
-  start. A crash between fetches is only discovered on the next one.
+  start. A crash between fetches is only discovered on the next one. The
+  sharpest form of this is now a ticket --
+  [One wedged tab bricks every later call](tickets/012-one-wedged-tab-bricks-every-call.md)
+  -- but that one is about a tab; a Chrome that died between fetches, or a
+  compositor that outlived it, is still unexamined.
