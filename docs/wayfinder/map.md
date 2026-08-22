@@ -77,6 +77,14 @@ Single developer, no remote: commit to `trunk`, do not branch.
   `isTrusted`, but `click` teleports the cursor and `fill` types nothing — so
   reading and driving are different kinds of act, not degrees of one.
 
+- [One wedged tab bricks every later call](tickets/012-one-wedged-tab-bricks-every-call.md)
+  — the attach is bounded, and a failed one now frees what is holding it rather
+  than reporting. Two holders, and the second was ours: a navigation that never
+  lands silences the renderer, and an abandoned attach keeps every request paused
+  for interception. Recovery talks to the browser process directly, since
+  patchright is the thing that is stuck, and stops the navigation rather than
+  closing the tab.
+
 ## Fog
 
 - **Two viewers fight over the framebuffer.** Now that the size is
@@ -122,8 +130,7 @@ Single developer, no remote: commit to `trunk`, do not branch.
   [Reaching content that sits behind an interaction](tickets/004-driving-the-page.md),
   where a read-per-step multiplies the cost.
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
-  start. A crash between fetches is only discovered on the next one. The
-  sharpest form of this is now a ticket --
-  [One wedged tab bricks every later call](tickets/012-one-wedged-tab-bricks-every-call.md)
-  -- but that one is about a tab; a Chrome that died between fetches, or a
-  compositor that outlived it, is still unexamined.
+  start. A crash between fetches is only discovered on the next one. The tab
+  half of this is answered; a Chrome that died between fetches, or a compositor
+  that outlived it, is still unexamined -- as is the fact that nothing reports
+  what tabs are open until something goes wrong.

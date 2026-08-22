@@ -4,7 +4,7 @@ title: The passthrough tool that runs a script against a page
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: [012]
+blocked_by: []
 ---
 
 ## Question
