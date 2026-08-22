@@ -11,6 +11,36 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     agent-browser show | hide | stop | status
     agent-browser signatures [--approve NAME | --forget NAME]
 
+## Layout
+
+Functional core, imperative shell. The core is pure and testable without a
+browser; everything that touches Chrome, the disk, the clock, or a subprocess
+lives in the shell.
+
+    core    models.py    every boundary shape, as frozen pydantic models
+            detect.py    blocked-or-not, given a measurement
+            extract.py   article/dom text handling + the `auto` decision
+            errors.py    ErrorCode + structural errors
+
+    shell   browser.py   Chrome daemon lifecycle, CDP attach
+            probe.py     measuring a live page into a PageProbe
+            handoff.py   summon, notify, poll for a human
+            window.py    hide/show backends (Protocol)
+            registry.py  signatures.json
+            config.py    the AGENT_BROWSER_* env boundary
+            cli.py       cyclopts; the only place a failure becomes terminal output
+
+Detection is pure because the shell measures first: `probe.probe()` tests every
+candidate selector against the live page and records the hits in a `PageProbe`,
+so `detect.classify()` is a function of that record alone.
+
+    PageProbe(url=..., title='Just a moment...', word_count=3)
+      -> KnownBlocker(signature=cloudflare-interstitial)
+
+Blockers are a discriminated union closed with `assert_never`, so adding a
+variant without handling it is a type error rather than a silent fallthrough.
+`mypy --strict` passes; run it with `uv run mypy ab`.
+
 ## Design
 
 **Transport and extraction are separate layers.** Per-site scrapers rot because

@@ -2,26 +2,31 @@
 
 Two strategies, because pages come in two shapes:
 
-  article  boilerplate removal (trafilatura). Right for documents -- news,
-           docs, blogs, wikis. Wrong for app-like pages, where it strips the
-           actual content as chrome and returns the nav bar.
-  dom      visible text straight off the live DOM, minus obvious furniture.
-           Noisier, but it's the only thing that sees a JS app's content.
+  article  boilerplate removal (trafilatura). Right for documents.
+  dom      visible text off the live DOM, minus obvious furniture. Noisier,
+           but it is the only thing that sees a JS app's content.
 
-`auto` picks between them by measuring, rather than guessing from the URL.
+`auto` picks by measuring rather than guessing from the URL. Note that on every
+page measured so far, `article` has won -- see README. `dom` is an escape
+hatch, not a validated fix.
 """
 import re
+from typing import Any, assert_never
 
 import trafilatura
 
-# Structural furniture that is never the content, plus common cookie/consent
-# containers that survive into innerText.
+from .models import Extraction, ExtractMode
+
 _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
           "[role=navigation], [role=banner], [role=contentinfo], "
           "[aria-hidden=true], [hidden]")
 
-# Preference order for the content root; body is the last resort.
 _ROOTS = ("main", "[role=main]", "article", "#content", "#main", "body")
+
+# Below this share of the page's visible words, the article extractor is
+# assumed to have thrown away real content rather than boilerplate.
+_ARTICLE_YIELD_FLOOR = 0.35
+_MIN_COMPARABLE_WORDS = 40
 
 _DOM_JS = """
 ([stripSel, roots]) => {
@@ -33,8 +38,6 @@ _DOM_JS = """
     if (el && (el.innerText || '').trim().length > 40) { root = el; break; }
   }
   root = root || doc.body;
-  // innerText on a detached clone loses layout-based visibility, so fall back
-  // to the live node when the clone yields nothing useful.
   const txt = (root.innerText || '').trim();
   if (txt.length > 40) return txt;
   for (const sel of roots) {
@@ -46,46 +49,59 @@ _DOM_JS = """
 """
 
 
-def article_text(html: str, url: str = "") -> str:
+def article_text(html: str, url: str | None = None) -> str:
+    """Pure: HTML in, markdown out."""
     out = trafilatura.extract(
-        html, url=url or None, output_format="markdown",
+        html, url=url, output_format="markdown",
         include_links=True, include_tables=True, favor_recall=True,
     )
     return (out or "").strip()
 
 
-def dom_text(page) -> str:
+def tidy(raw: str) -> str:
+    """Pure: collapse the blank runs and stray whitespace innerText leaves."""
+    lines = [re.sub(r"[ \t ]+", " ", line).strip()
+             for line in raw.splitlines()]
+    kept: list[str] = []
+    pending_blank = False
+    for line in lines:
+        if not line:
+            pending_blank = True
+            continue
+        if pending_blank and kept:
+            kept.append("")
+        pending_blank = False
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def dom_text(page: Any) -> str:
+    """Shell: read visible text off the live page."""
     try:
         raw = page.evaluate(_DOM_JS, [_STRIP, list(_ROOTS)])
     except Exception:
         raw = page.inner_text("body")
-    # innerText from an app is full of blank runs and repeated single glyphs.
-    lines = [re.sub(r"[ \t ]+", " ", ln).strip() for ln in raw.splitlines()]
-    kept, blanks = [], 0
-    for ln in lines:
-        if not ln:
-            blanks += 1
-            continue
-        if blanks and kept:
-            kept.append("")
-        blanks = 0
-        kept.append(ln)
-    return "\n".join(kept).strip()
+    return tidy(raw)
 
 
-def extract(page, mode: str = "auto") -> tuple[str, str]:
-    """Return (text, mode_used)."""
-    if mode == "dom":
-        return dom_text(page), "dom"
-    article = article_text(page.content(), page.url)
-    if mode == "article":
-        return article, "article"
+def choose(article: str, dom: str) -> Extraction:
+    """Pure: the `auto` decision, isolated so it can be tested without a page."""
+    article_words, dom_words = len(article.split()), len(dom.split())
+    if dom_words >= _MIN_COMPARABLE_WORDS:
+        if article_words < _ARTICLE_YIELD_FLOOR * dom_words:
+            return Extraction(text=dom, mode_used=ExtractMode.DOM)
+    return Extraction(text=article, mode_used=ExtractMode.ARTICLE)
 
-    # auto: trust the article extractor unless it recovered only a sliver of
-    # what's actually on the page -- the signature of an app-shaped page whose
-    # content got classified as boilerplate.
-    dom = dom_text(page)
-    a_words, d_words = len(article.split()), len(dom.split())
-    if d_words >= 40 and a_words < 0.35 * d_words:
-        return dom, "dom"
-    return article, "article"
+
+def extract(page: Any, mode: ExtractMode) -> Extraction:
+    """Shell: gather what the chosen mode needs, then decide."""
+    match mode:
+        case ExtractMode.DOM:
+            return Extraction(text=dom_text(page), mode_used=ExtractMode.DOM)
+        case ExtractMode.ARTICLE:
+            return Extraction(text=article_text(page.content(), page.url),
+                              mode_used=ExtractMode.ARTICLE)
+        case ExtractMode.AUTO:
+            return choose(article_text(page.content(), page.url), dom_text(page))
+        case _ as unreachable:
+            assert_never(unreachable)

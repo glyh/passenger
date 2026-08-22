@@ -1,149 +1,229 @@
-"""agent-browser -- one generic fetch/browse pair over a warm Chrome session."""
-import argparse
+"""The CLI boundary.
+
+cyclopts lives here and nowhere else: core modules raise domain errors and
+return models, and this is the single place that decides what a failure looks
+like on a terminal.
+"""
 import json
 import sys
+from typing import Annotated, Any
 
-from . import browser, challenge, window
-from .config import CDP_URL, MIN_CONTENT_WORDS, PROFILE_DIR
+import cyclopts
+
+from . import browser, handoff, probe as probe_mod, registry, window
+from .config import settings
+from .detect import blocker_name, classify, is_novel
+from .errors import AgentBrowserError, BlockedError, ErrorCode
 from .extract import extract
+from .models import (Blocker, ExtractMode, Extraction, FetchRequest, Signature,
+                     WaitUntil)
+
+app = cyclopts.App(
+    name="agent-browser",
+    help="Fetch web context through a real, logged-in Chrome, "
+         "with a human handoff when a site puts up a challenge.",
+)
 
 
-def _load(page, url: str, wait: str, settle_ms: int, mode: str):
-    page.goto(url, wait_until=wait, timeout=60000)
-    page.wait_for_timeout(settle_ms)
-    return extract(page, mode)
+@app.command
+def fetch(
+    url: str,
+    *,
+    mode: Annotated[ExtractMode, cyclopts.Parameter(name=["--mode", "--extract"])]
+        = ExtractMode.AUTO,
+    dom: bool = False,
+    wait: WaitUntil = WaitUntil.DOM_CONTENT_LOADED,
+    settle: int = 1500,
+    min_words: int | None = None,
+    handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
+    new_tab: bool = False,
+    keep_tab: bool = False,
+    json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
+) -> None:
+    """Fetch a URL and print its content.
+
+    Parameters
+    ----------
+    url
+        Page to fetch.
+    mode
+        auto measures both extractors and picks; article suits documents,
+        dom suits JS apps.
+    dom
+        Shorthand for --mode dom.
+    settle
+        Milliseconds to let client-side rendering finish.
+    min_words
+        Below this, a page is treated as blocked. 0 disables tier-2 detection.
+    handoff_enabled
+        With --no-handoff, exit on a blocker instead of asking for help.
+    json_out
+        Emit a JSON record instead of bare markdown.
+    """
+    request = FetchRequest(
+        url=url,
+        extract_mode=ExtractMode.DOM if dom else mode,
+        wait_until=wait,
+        settle_ms=settle,
+        min_words=settings.min_content_words if min_words is None else min_words,
+        allow_handoff=handoff_enabled,
+        reuse_tab=not new_tab,
+        keep_tab=keep_tab,
+        as_json=json_out,
+    )
+    _render(_run_fetch(request), request)
 
 
-def cmd_fetch(args):
-    with browser.Session() as s:
-        page = s.page(reuse=not args.new_tab)
-        mode = "dom" if args.dom else args.extract
-        text, used = _load(page, args.url, args.wait, args.settle, mode)
-        blocker = challenge.detect(page, len(text.split()), args.min_words)
-        if blocker:
-            # Evidence is captured for novel blockers either way -- a suppressed
-            # handoff is exactly when you most want to know what you hit.
-            if not blocker["known"]:
-                ev = challenge.capture_evidence(page, blocker)
-                sig = challenge.propose_signature(ev)
-                blocker["evidence"] = ev.get("screenshot")
-                blocker["proposed"] = sig.get("selector") or sig.get("title_re")
-                print(f"   novel blocker -- evidence: {ev.get('screenshot')}",
-                      file=sys.stderr)
-            if args.no_handoff:
-                json.dump({"blocked": blocker}, sys.stdout, indent=2)
-                sys.exit(2)
-            text = challenge.hand_off(
-                page, blocker, lambda pg: extract(pg, mode)[0], args.min_words)
-            if text is None:
-                sys.exit(2)
-        if args.json:
-            json.dump({"url": page.url, "title": page.title(), "mode": used,
-                       "words": len(text.split()), "markdown": text},
-                      sys.stdout, indent=2)
-        else:
-            print(text)
-        if not args.keep_tab and page.url != "about:blank":
+def _run_fetch(request: FetchRequest) -> Extraction:
+    with browser.Session() as session:
+        page = session.page(reuse=request.reuse_tab)
+        page.goto(request.url, wait_until=request.wait_until.value, timeout=60000)
+        page.wait_for_timeout(request.settle_ms)
+
+        def extractor(target: Any) -> Extraction:
+            return extract(target, request.extract_mode)
+
+        extraction = extractor(page)
+        signatures = registry.active()
+        page_probe = probe_mod.probe(page, extraction, signatures)
+        blocker = classify(page_probe, signatures, request.min_words)
+
+        if blocker is not None:
+            extraction = _handle_blocker(page, blocker, request, extractor)
+        if not request.keep_tab and page.url != "about:blank":
             page.goto("about:blank")
+        return extraction
 
 
-def cmd_open(args):
-    """Park a URL in the window so you can log in / solve something by hand."""
-    with browser.Session() as s:
-        page = s.page(reuse=False)
-        page.goto(args.url, wait_until="domcontentloaded", timeout=60000)
-        window.show()
-        page.bring_to_front()
-        print(f"opened {args.url} -- log in there; the profile keeps the session.")
+def _handle_blocker(page: Any, blocker: Blocker, request: FetchRequest,
+                    extractor: handoff.Extractor) -> Extraction:
+    if is_novel(blocker):
+        evidence, proposal = handoff.record_novel(page, blocker)
+        print(f"   novel blocker -- evidence: {evidence.screenshot}",
+              file=sys.stderr)
+        if proposal is not None:
+            print(f"   proposed signature: {proposal.condition} (pending review)",
+                  file=sys.stderr)
+    if not request.allow_handoff:
+        raise BlockedError(blocker_name(blocker), blocker.probe.url)
+    return handoff.wait_for_human(page, blocker, extractor, request.min_words,
+                                  settings.handoff_timeout_s)
 
 
-def cmd_serve(args):
-    browser.start(detach=not args.foreground, hidden=not args.visible)
+def _render(extraction: Extraction, request: FetchRequest) -> None:
+    if request.as_json:
+        json.dump({"url": request.url, "mode": extraction.mode_used.value,
+                   "words": extraction.word_count, "markdown": extraction.text},
+                  sys.stdout, indent=2)
+        print()
+    else:
+        print(extraction.text)
 
 
-def cmd_show(args):
-    window.show()
-    print(f"shown [{window.backend()}]")
+@app.command
+def open(url: str) -> None:  # noqa: A001 -- the verb the user reaches for
+    """Open a URL in the visible window so you can log in by hand."""
+    with browser.Session() as session:
+        page = session.page(reuse=False)
+        page.goto(url, wait_until=WaitUntil.DOM_CONTENT_LOADED.value, timeout=60000)
+        window.select().set_visible(True)
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+    print(f"opened {url} -- log in there; the profile keeps the session.")
 
 
-def cmd_hide(args):
-    print(f"hidden [{window.backend()}]" if window.hide()
-          else f"cannot hide on this compositor [{window.backend()}]")
+@app.command
+def serve(*, foreground: bool = False, visible: bool = False) -> None:
+    """Start the Chrome daemon.
+
+    Parameters
+    ----------
+    visible
+        Skip hiding; leave the window on screen.
+    """
+    print(browser.start(detach=not foreground, hidden=not visible))
 
 
-def cmd_stop(args):
+@app.command
+def stop() -> None:
+    """Kill the daemon and its compositor."""
     browser.stop()
+    print("stopped")
 
 
-def cmd_status(args):
+@app.command
+def show() -> None:
+    """Summon the browser window."""
+    backend = window.select()
+    backend.set_visible(True)
+    print(f"shown [{backend.name.value}]")
+
+
+@app.command
+def hide() -> None:
+    """Tuck the browser window away."""
+    backend = window.select()
+    backend.set_visible(False)
+    print(f"hidden [{backend.name.value}]")
+
+
+@app.command
+def status() -> None:
+    """Show daemon, window, and open tabs."""
+    backend = window.select()
     up = browser.is_up()
-    print(f"daemon:  {'up' if up else 'down'} ({CDP_URL})")
-    print(f"window:  {'visible' if window._visible() else 'hidden'} "
-          f"[{window.backend()}]")
-    print(f"profile: {PROFILE_DIR}")
+    print(f"daemon:  {'up' if up else 'down'} ({settings.cdp_url})")
+    print(f"window:  {'visible' if backend.visible() else 'hidden'} "
+          f"[{backend.name.value}]")
+    print(f"profile: {settings.profile_dir}")
     if up:
-        with browser.Session() as s:
-            for p in s.context.pages:
-                print(f"  tab: {p.url[:100]}")
+        with browser.Session() as session:
+            for page in session.context.pages:
+                print(f"  tab: {page.url[:100]}")
 
 
-def cmd_signatures(args):
-    if args.approve:
-        print("approved" if challenge.approve(args.approve) else "no such pending signature")
+@app.command
+def signatures(*, approve: str | None = None, forget: str | None = None) -> None:
+    """List learned blocker signatures, or curate them.
+
+    Parameters
+    ----------
+    approve
+        Promote a pending signature so it is allowed to match.
+    forget
+        Delete a signature by name.
+    """
+    if approve is not None:
+        print(f"approved {registry.approve(approve).name}")
         return
-    if args.forget:
-        print("forgotten" if challenge.forget(args.forget) else "no such signature")
+    if forget is not None:
+        registry.forget(forget)
+        print(f"forgot {forget}")
         return
-    for sig in challenge.signatures(include_pending=True):
-        flag = " (pending review)" if sig.get("pending_review") else ""
-        cond = sig.get("selector") or sig.get("title_re") or sig.get("url_re")
-        print(f"{sig['name']:<40} {sig.get('kind','?'):<10} {cond}{flag}")
+    for signature in registry.listing():
+        flag = " (pending review)" if signature.pending_review else ""
+        print(f"{signature.name:<40} {signature.kind.value:<10} "
+              f"{signature.condition}{flag}")
 
 
-def main():
-    ap = argparse.ArgumentParser(prog="agent-browser")
-    sub = ap.add_subparsers(dest="cmd", required=True)
+_EXIT_CODES = {
+    ErrorCode.PAGE_BLOCKED: 2,
+    ErrorCode.HANDOFF_TIMEOUT: 2,
+    ErrorCode.DAEMON_NOT_RUNNING: 3,
+}
 
-    f = sub.add_parser("fetch", help="fetch a URL as markdown")
-    f.add_argument("url")
-    f.add_argument("--json", action="store_true")
-    f.add_argument("--new-tab", action="store_true")
-    f.add_argument("--keep-tab", action="store_true", help="leave the tab open")
-    f.add_argument("--no-handoff", action="store_true",
-                   help="exit 2 on a blocker instead of asking for help")
-    f.add_argument("--wait", default="domcontentloaded",
-                   choices=["load", "domcontentloaded", "networkidle", "commit"])
-    f.add_argument("--extract", default="auto", choices=["auto", "article", "dom"],
-                   help="auto measures both and picks; article=documents, "
-                        "dom=JS apps")
-    f.add_argument("--dom", action="store_true", help="shorthand for --extract dom")
-    f.add_argument("--min-words", type=int, default=MIN_CONTENT_WORDS,
-                   help="below this, a page is treated as blocked (0 disables)")
-    f.add_argument("--settle", type=int, default=1500,
-                   help="ms to let client-side rendering finish")
-    f.set_defaults(func=cmd_fetch)
 
-    o = sub.add_parser("open", help="open a URL and leave it for manual login")
-    o.add_argument("url"); o.set_defaults(func=cmd_open)
-
-    sv = sub.add_parser("serve", help="start the Chrome daemon")
-    sv.add_argument("--foreground", action="store_true")
-    sv.add_argument("--visible", action="store_true",
-                    help="don't hide the window on a special workspace")
-    sv.set_defaults(func=cmd_serve)
-
-    sub.add_parser("show", help="summon the browser window").set_defaults(func=cmd_show)
-    sub.add_parser("hide", help="tuck the window away").set_defaults(func=cmd_hide)
-    sub.add_parser("stop", help="kill the daemon").set_defaults(func=cmd_stop)
-    sub.add_parser("status").set_defaults(func=cmd_status)
-
-    sg = sub.add_parser("signatures", help="list / curate learned signatures")
-    sg.add_argument("--approve", metavar="NAME", help="promote a pending signature")
-    sg.add_argument("--forget", metavar="NAME", help="delete a signature")
-    sg.set_defaults(func=cmd_signatures)
-
-    args = ap.parse_args()
-    args.func(args)
+def main() -> None:
+    """Single place that turns a domain error into terminal behaviour."""
+    try:
+        app()
+    except AgentBrowserError as error:
+        print(f"error: {error.message}", file=sys.stderr)
+        if error.detail is not None:
+            print(f"       {error.detail}", file=sys.stderr)
+        raise SystemExit(_EXIT_CODES.get(error.code, 1))
 
 
 if __name__ == "__main__":
