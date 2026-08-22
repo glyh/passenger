@@ -38,6 +38,7 @@ def fetch(
     handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
     new_tab: bool = False,
     keep_tab: bool = False,
+    close_tabs: bool = False,
     json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
 ) -> None:
     """Fetch a URL and print its content.
@@ -57,6 +58,9 @@ def fetch(
         Below this, a page is treated as blocked. 0 disables tier-2 detection.
     handoff_enabled
         With --no-handoff, exit on a blocker instead of asking for help.
+    close_tabs
+        Close every other tab afterwards, clearing tabs orphaned by earlier
+        runs.
     json_out
         Emit a JSON record instead of bare markdown.
     """
@@ -69,6 +73,7 @@ def fetch(
         allow_handoff=handoff_enabled,
         reuse_tab=not new_tab,
         keep_tab=keep_tab,
+        close_tabs=close_tabs,
         as_json=json_out,
     )
     _render(_run_fetch(request), request)
@@ -92,6 +97,9 @@ def _run_fetch(request: FetchRequest) -> Extraction:
             extraction = _handle_blocker(page, blocker, request, extractor)
         if not request.keep_tab and page.url != "about:blank":
             page.goto("about:blank")
+        if request.close_tabs:
+            closed = session.close_other_tabs(keep=page)
+            print(f"closed {closed} other tab(s)", file=sys.stderr)
         return extraction
 
 
@@ -132,6 +140,21 @@ def open(url: str) -> None:  # noqa: A001 -- the verb the user reaches for
         except Exception:
             pass
     print(f"opened {url} -- log in there; the profile keeps the session.")
+
+
+@app.command(name="close-tabs")
+def close_tabs_cmd() -> None:
+    """Close orphaned tabs, keeping one blank tab alive.
+
+    Tabs outlive the command that opened them by design -- that is what keeps a
+    solved challenge warm -- so `open` and interrupted fetches leave them
+    behind.
+    """
+    with browser.Session() as session:
+        keep = session.page(reuse=True)
+        if keep.url != "about:blank":
+            keep.goto("about:blank")
+        print(f"closed {session.close_other_tabs(keep=keep)} tab(s)")
 
 
 @app.command

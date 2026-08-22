@@ -8,6 +8,8 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     agent-browser fetch <url>            # → markdown on stdout
     agent-browser fetch <url> --json     # → {url,title,words,markdown}
     agent-browser open <url>             # show the window, log in by hand
+    agent-browser fetch <url> --close-tabs   # ...and tidy up after
+    agent-browser close-tabs             # clear tabs orphaned by earlier runs
     agent-browser show | hide | stop | status
     agent-browser signatures [--approve NAME | --forget NAME]
 

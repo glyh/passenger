@@ -129,6 +129,7 @@ class FetchRequest(BaseModel, frozen=True):
     allow_handoff: bool = True
     reuse_tab: bool = True
     keep_tab: bool = False
+    close_tabs: bool = False
     as_json: bool = False
 
 

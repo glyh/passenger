@@ -116,6 +116,24 @@ class Session:
                     return existing
         return self.context.new_page()
 
+    def close_other_tabs(self, keep: Any) -> int:
+        """Close every tab except `keep`. Returns how many were closed.
+
+        Chrome exits when its last tab closes, which would take the daemon and
+        the warm session with it -- so this is expressed as "keep that one"
+        rather than "close all", making it impossible to ask for zero.
+        """
+        closed = 0
+        for page in list(self.context.pages):
+            if page is keep:
+                continue
+            try:
+                page.close()
+            except Exception:
+                continue  # already gone, or mid-navigation
+            closed += 1
+        return closed
+
     def __exit__(self, exc_type: type[BaseException] | None,
                  exc: BaseException | None,
                  tb: TracebackType | None) -> None:
