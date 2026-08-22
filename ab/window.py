@@ -18,7 +18,6 @@ from .errors import ErrorCode, WindowError
 from .models import BackendName, LaunchPlan
 
 WM_CLASS = "agent-browser"
-SPECIAL_WS = "agentbrowser"
 SESSION_SH = STATE_DIR / "cage-session.sh"
 VIEWERS = ("wlvncc", "vncviewer", "gvncviewer", "remmina")
 
@@ -45,7 +44,7 @@ class NestedBackend:
     """Chrome inside its own cage compositor, viewed over VNC on demand.
 
     The host compositor is not involved, so nothing here breaks when you switch
-    compositors -- or when one of them rewrites its IPC, as Hyprland 0.56 did.
+    compositors -- or when one of them rewrites the IPC a backend depended on.
     """
 
     name = BackendName.NESTED
@@ -104,33 +103,6 @@ class NestedBackend:
                           detail=f"{viewer} {' '.join(args)}")
 
 
-class HyprlandBackend:
-    """LEGACY. Hyprland 0.56 removed `hyprctl keyword` and moved dispatch to a
-    Lua API, and `hyprctl keyword` exits 0 while printing an error -- so this
-    fails silently there. Kept for older versions, excluded from auto-detect.
-    """
-
-    name = BackendName.HYPRLAND
-
-    def available(self) -> bool:
-        return (bool(shutil.which("hyprctl"))
-                and "Hyprland" in os.environ.get("XDG_CURRENT_DESKTOP", ""))
-
-    def prepare(self) -> None:
-        _run("hyprctl", "keyword", "windowrulev2",
-             f"workspace special:{SPECIAL_WS} silent,class:^({WM_CLASS})$")
-
-    def plan(self, argv: tuple[str, ...]) -> LaunchPlan:
-        return LaunchPlan(argv=argv)
-
-    def visible(self) -> bool:
-        return f"special:{SPECIAL_WS}" in _run("hyprctl", "activeworkspace")
-
-    def set_visible(self, visible: bool) -> None:
-        if self.visible() != visible:
-            _run("hyprctl", "dispatch", "togglespecialworkspace", SPECIAL_WS)
-
-
 class WlrctlBackend:
     """Portable across wlroots compositors, but minimize is advisory: some
     implement it as a no-op, so treat success as best-effort."""
@@ -181,16 +153,12 @@ def _build(name: BackendName) -> WindowBackend:
             return NestedBackend()
         case BackendName.WLRCTL:
             return WlrctlBackend()
-        case BackendName.HYPRLAND:
-            return HyprlandBackend()
         case BackendName.NONE:
             return NoOpBackend()
         case _ as unreachable:
             assert_never(unreachable)
 
 
-# Hyprland is absent: broken on >=0.56 and silently so, which is worse than
-# having no backend at all.
 _AUTO_ORDER = (BackendName.NESTED, BackendName.WLRCTL, BackendName.NONE)
 
 

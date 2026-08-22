@@ -102,8 +102,8 @@ false-positive forever. (Observed during development — a thin page taught it
 ## Hiding the window
 
 Chrome runs inside its own nested **cage** compositor. Your host compositor
-never sees a window, so this works identically on Hyprland, sway, niri, GNOME,
-KDE, or over SSH — and survives switching between them. `show` attaches a VNC
+never sees a window, so this works identically on any Wayland compositor,
+or over SSH — and survives switching between them. `show` attaches a VNC
 viewer to that session; a challenge handoff does it automatically and re-hides
 afterwards.
 
@@ -118,7 +118,6 @@ Backends are pluggable via `AGENT_BROWSER_WM`:
 |------------|----------------------------------|-------|
 | `nested`   | cage + wayvnc (default)          | portable everywhere |
 | `wlrctl`   | wlr-foreign-toplevel minimize    | wlroots only; minimize is advisory |
-| `hyprland` | special workspace                | **broken on Hyprland ≥0.56** — `hyprctl keyword` was removed and dispatch became a Lua API (`hl.dsp.*`). Worse, `hyprctl keyword` exits 0 while printing an error, so it fails silently. Legacy only. |
 | `none`     | no-op                            | window stays visible |
 
 ## Environment
