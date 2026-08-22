@@ -3,7 +3,7 @@ id: 007
 title: A listing read through dom mode has no link targets
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
