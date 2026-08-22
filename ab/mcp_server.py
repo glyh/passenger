@@ -17,7 +17,7 @@ from typing import Annotated
 from mcp.server import MCPServer
 from pydantic import Field
 
-from . import browser, present, registry, service
+from . import browser, present, registry, service, session as session_mod
 from .config import settings
 from .models import ExtractMode, FetchRequest, WaitUntil
 
@@ -96,11 +96,17 @@ def hide_browser() -> str:
 def browser_status() -> dict[str, str]:
     """Report whether the browser is running, and what is on screen."""
     presenter = present.select()
+    live = session_mod.live()
+    host, port = present.endpoint()
     return {
         "daemon": "up" if browser.is_up() else "down",
         "presenter": presenter.name.value,
         "on_screen": str(presenter.presented()),
         "profile": str(settings.profile_dir),
+        # Named so a black screen is diagnosable: a viewer attached while
+        # session reads "stale" is looking at a compositor with nothing in it.
+        "session": "live" if live is not None else "stale",
+        "vnc": f"{host}:{port}",
     }
 
 

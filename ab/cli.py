@@ -10,7 +10,7 @@ from typing import Annotated, assert_never
 
 import cyclopts
 
-from . import browser, launch, present, registry, service
+from . import browser, launch, present, registry, service, session as session_mod
 from .config import settings
 from .errors import AgentBrowserError, ErrorCode
 from .models import ExtractMode, FetchRequest, WaitUntil
@@ -184,6 +184,10 @@ def status() -> None:
     print(f"launch:    {launcher.name.value}")
     print(f"presenter: {presenter.name.value} "
           f"({'showing' if presenter.presented() else 'hidden'})")
+    live = session_mod.live()
+    host, port = present.endpoint()
+    print(f"session:   {'live' if live is not None else 'stale'} "
+          f"(vnc {host}:{port})")
     print(f"profile:   {settings.profile_dir}")
     if up:
         with browser.Session() as session:

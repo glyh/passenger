@@ -9,12 +9,16 @@ it, and that differs by where the tool is deployed:
          works from a container without a client installed on the host
   none   nothing can show it; say so rather than pretending
 """
+import os
 import shutil
+import signal
 import socket
 import subprocess
 import time
+from contextlib import suppress
 from typing import Protocol, assert_never, runtime_checkable
 
+from . import session
 from .config import settings
 from .errors import ErrorCode, WindowError
 from .models import PresenterName
@@ -22,6 +26,20 @@ from .models import PresenterName
 VIEWERS = ("wlvncc", "vncviewer", "gvncviewer", "remmina")
 _CONNECT_POLLS = 10
 _POLL_INTERVAL_S = 0.5
+
+
+def endpoint() -> tuple[str, int]:
+    """Where the *live* session is listening.
+
+    Read from the session record rather than from settings, because the port a
+    session ends up on is claimed when it starts. Pointing a viewer at the
+    configured port instead is how a viewer ends up attached to a previous,
+    dead session and shows nothing but black.
+    """
+    live = session.live()
+    if live is None:
+        return settings.vnc_host, settings.vnc_port
+    return live.vnc_host, live.vnc_port
 
 
 @runtime_checkable
@@ -46,10 +64,14 @@ class LocalViewerPresenter:
         return self.viewer() is not None
 
     def presented(self) -> bool:
-        # -x matches the process NAME exactly. -f would match any command line
-        # merely mentioning a viewer -- including the shell that called us.
-        return any(subprocess.run(["pgrep", "-x", v], capture_output=True)
-                   .returncode == 0 for v in VIEWERS)
+        """Is *our* viewer open?
+
+        Tracked by the pid we spawned, not by process name. Matching on the
+        name meant any VNC client the user had open for something else read as
+        "already showing", so a show request returned success having put
+        nothing on screen.
+        """
+        return session.viewer_pid() is not None
 
     def present(self) -> str:
         if self.presented():
@@ -58,25 +80,44 @@ class LocalViewerPresenter:
         if viewer is None:
             raise WindowError(ErrorCode.NO_PRESENTER, "no VNC client installed",
                               detail=self._manual_hint())
+        # Refused rather than shown: with no live session there is nothing
+        # behind the port, and a viewer opened onto it displays a black
+        # rectangle that looks exactly like a broken VNC stack.
+        if session.live() is None:
+            raise WindowError(ErrorCode.NO_PRESENTER, "no live browser session",
+                              detail="start it with: agent-browser serve")
+        host, port = endpoint()
         # host::port, not host:port -- a single colon means an X display
         # number, so :5900 would be resolved as port 5900+5900.
-        args = ([settings.vnc_host, str(settings.vnc_port)] if viewer == "wlvncc"
-                else [f"{settings.vnc_host}::{settings.vnc_port}"])
-        subprocess.Popen([viewer, *args], stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+        args = ([host, str(port)] if viewer == "wlvncc"
+                else [f"{host}::{port}"])
+        spawned = subprocess.Popen([viewer, *args], stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL,
+                                   start_new_session=True)
+        session.record_viewer(spawned.pid)
         for _ in range(_CONNECT_POLLS):
             time.sleep(_POLL_INTERVAL_S)
             if self.presented():
-                return f"opened {viewer}"
+                return f"opened {viewer} on {host}:{port}"
+        session.clear_viewer()
         raise WindowError(ErrorCode.NO_PRESENTER, "VNC viewer did not connect",
                           detail=f"{viewer} {' '.join(args)}")
 
     def dismiss(self) -> None:
-        for viewer in VIEWERS:
-            subprocess.run(["pkill", "-x", viewer], check=False)
+        """Close only the viewer this tool opened.
+
+        The old `pkill -x` swept up every VNC client on the machine, including
+        remote desktops that had nothing to do with this browser.
+        """
+        pid = session.viewer_pid()
+        if pid is not None:
+            with suppress(ProcessLookupError, PermissionError):
+                os.kill(pid, signal.SIGTERM)
+        session.clear_viewer()
 
     def _manual_hint(self) -> str:
-        return f"connect manually to {settings.vnc_host}:{settings.vnc_port}"
+        host, port = endpoint()
+        return f"connect manually to {host}:{port}"
 
 
 class WebPresenter:
@@ -125,9 +166,9 @@ class NullPresenter:
         wayvnc is listening whenever the nested compositor is up, so any VNC
         client can still reach it -- from another machine, or a phone.
         """
+        host, port = endpoint()
         return ("no viewer installed and no noVNC server; wayvnc is listening "
-                f"on {settings.vnc_host}:{settings.vnc_port} -- point any VNC "
-                "client at it")
+                f"on {host}:{port} -- point any VNC client at it")
 
     def dismiss(self) -> None:
         return None

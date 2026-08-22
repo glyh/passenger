@@ -19,7 +19,7 @@ from typing import Any
 
 from patchright.sync_api import sync_playwright
 
-from . import launch
+from . import launch, session
 from .config import CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
 from .errors import DaemonError, ErrorCode
 from .models import BackendName
@@ -51,6 +51,12 @@ def start(detach: bool = True, hidden: bool = True) -> str:
     if shutil.which(CHROME_BIN) is None:
         raise DaemonError(ErrorCode.CHROME_NOT_FOUND,
                           f"{CHROME_BIN} not found on PATH")
+
+    # A previous session whose Chrome died leaves cage and wayvnc behind,
+    # still holding the VNC port. Left alone, the session starting here cannot
+    # claim that port and the stale server keeps answering viewers with the
+    # empty compositor it is still attached to.
+    session.reap_stale()
 
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     argv: tuple[str, ...] = (
@@ -99,9 +105,15 @@ def start(detach: bool = True, hidden: bool = True) -> str:
 
 
 def stop() -> None:
+    """Stop this tool's browser, and nothing else.
+
+    Scoped to the recorded session and to our own profile directory. The
+    previous `pkill -x cage` matched on the program name, so it also killed
+    cage sessions belonging to anyone else on the machine.
+    """
     subprocess.run(["pkill", "-f", "--", f"--user-data-dir={PROFILE_DIR}"],
                    check=False)
-    subprocess.run(["pkill", "-x", "cage"], check=False)
+    session.teardown()
 
 
 class Session:
