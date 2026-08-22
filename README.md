@@ -156,6 +156,12 @@ over SSH — and survives switching between them. `show` attaches a VNC
 viewer to that session; a challenge handoff does it automatically and re-hides
 afterwards.
 
+cage is a kiosk compositor: it fullscreens what it starts, and a fullscreen
+Chrome hides its own tab strip and toolbar — so the browser you were handed to
+solve a captcha had no address bar, no back button and no tabs. It is taken
+back out of fullscreen at start, and again before every handoff, so what you
+take over is an ordinary browser window.
+
 Hardware GL survives the move (the session uses `/dev/dri/renderD128`), so the
 fingerprint is unchanged. The one delta is `screen: 1280x720`, cage's default
 headless output — plausible but fixed. Swap cage for `sway --headless` if you

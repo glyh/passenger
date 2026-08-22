@@ -44,6 +44,10 @@ Single developer, no remote: commit to `trunk`, do not branch.
   — it can. `SetDesktopSize failed: 4` is printed and the resize happens
   anyway; the refusal that justified measuring windows from this side was
   never real.
+- [The human takes over a browser with no address bar](tickets/006-no-address-bar-in-handoff.md)
+  — cage's fullscreen was hiding Chrome's own toolbar. The window is taken out
+  of fullscreen over CDP, permanently, so the handoff hands over an ordinary
+  browser rather than a bare page.
 
 ## Fog
 

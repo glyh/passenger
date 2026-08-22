@@ -17,6 +17,7 @@ import urllib.request
 from types import TracebackType
 from typing import Any
 
+from patchright.sync_api import Error as PlaywrightError
 from patchright.sync_api import sync_playwright
 
 from . import launch, session
@@ -96,12 +97,55 @@ def start(detach: bool = True, hidden: bool = True) -> str:
     )
     for _ in range(_STARTUP_POLLS):
         if is_up():
+            unfullscreen()
             state = "hidden" if hidden else "visible"
             return f"chrome up on {CDP_URL} [{state}] (profile: {PROFILE_DIR})"
         time.sleep(_POLL_INTERVAL_S)
     raise DaemonError(ErrorCode.DAEMON_START_FAILED,
                       "chrome did not expose CDP in time",
                       detail=" ".join(plan.argv))
+
+
+def unfullscreen() -> None:
+    """Give Chrome its own toolbar back, by taking it out of fullscreen.
+
+    cage is a kiosk compositor: it fullscreens the client it starts, and a
+    fullscreen Chrome hides its tab strip and toolbar. Nothing chose that --
+    it fell out of the mechanism picked for hiding the window -- and it landed
+    on the one moment the window is looked at. A human handed the browser to
+    solve a captcha or finish a login could click inside the page and nothing
+    else: no address bar to read or type into, no back button out of a
+    redirect, no tabs.
+
+    Windowed is also the more ordinary of the two shapes for a real browser to
+    be in: a fullscreen window reports outerHeight equal to the screen with no
+    browser UI accounting for the difference.
+
+    Cheap and idempotent, so it runs on every start and again before
+    every handoff (see present._prepared). When the window was never
+    fullscreen -- --visible, or no nested backend -- the state is read and
+    nothing is written.
+    """
+    if not is_up():
+        return
+    try:
+        with Session() as sess:
+            page = next(iter(sess.context.pages), None)
+            if page is None:
+                return  # no target to name a window by; nothing to fix
+            target = sess.context.new_cdp_session(page).send("Target.getTargetInfo")
+            control = sess.browser.new_browser_cdp_session()
+            window = control.send("Browser.getWindowForTarget",
+                                  {"targetId": target["targetInfo"]["targetId"]})
+            if window["bounds"]["windowState"] != "fullscreen":
+                return
+            control.send("Browser.setWindowBounds",
+                         {"windowId": window["windowId"],
+                          "bounds": {"windowState": "normal"}})
+    except PlaywrightError:
+        # The daemon is up and fetching works; only the toolbar is missing.
+        # Raising here would report a working browser as a failed start.
+        return
 
 
 def stop() -> None:

@@ -31,6 +31,7 @@ import time
 from contextlib import suppress
 from typing import Protocol, assert_never, runtime_checkable
 
+from . import browser as browser_mod
 from . import geometry, session, webserve
 from .config import settings
 from .errors import ErrorCode, WindowError
@@ -75,14 +76,23 @@ class Presenter(Protocol):
     def presented(self) -> bool: ...
 
 
-def _fitted(live: session.NestedSession | None) -> str:
-    """Give the output the host screen's density, and say so if it changed.
+def _prepared(live: session.NestedSession | None) -> str:
+    """Make the nested session fit to be looked at, and say what changed.
 
-    Only the density: the size belongs to the viewer, which asks for it over
-    RFB as soon as it connects and again whenever its window changes.
+    Two things a human needs that a hidden browser does not. The output takes
+    the host screen's density -- only the density: the size belongs to the
+    viewer, which asks for it over RFB as soon as it connects and again
+    whenever its window changes. And Chrome comes out of the fullscreen cage
+    put it in, which is what hid its address bar and back button from the
+    person being asked to use them.
+
+    Done here rather than only at startup so that a session started before
+    this existed, or one somehow re-fullscreened, is still handed over with
+    its controls.
     """
     if live is None:
         return ""
+    browser_mod.unfullscreen()
     change = geometry.fit(live.wayland_display)
     return "" if change is None else f", {change}"
 
@@ -112,7 +122,7 @@ class WindowPresenter:
     def present(self) -> str:
         live = session.live()
         if self.presented():
-            return f"viewer already open{_fitted(live)}"
+            return f"viewer already open{_prepared(live)}"
         browser = self.browser()
         if browser is None:
             raise WindowError(ErrorCode.NO_PRESENTER, "no browser to open",
@@ -126,9 +136,9 @@ class WindowPresenter:
         if not webserve.ensure(settings.novnc_port):
             raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
                               detail="no noVNC found; set AGENT_BROWSER_NOVNC")
-        fitted = _fitted(live)
+        prepared = _prepared(live)
         self._open(browser)
-        return f"opened {browser} on {page_url()}{fitted}"
+        return f"opened {browser} on {page_url()}{prepared}"
 
     def _open(self, browser: str) -> None:
         """Start the window and wait for it to be up, or say it never was."""
@@ -190,8 +200,8 @@ class LinkPresenter:
         if not webserve.ensure(settings.novnc_port):
             raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
                               detail="no noVNC found; set AGENT_BROWSER_NOVNC")
-        fitted = _fitted(live)
-        return f"open {page_url()} to take over the browser{fitted}"
+        prepared = _prepared(live)
+        return f"open {page_url()} to take over the browser{prepared}"
 
     def dismiss(self) -> None:
         return None
