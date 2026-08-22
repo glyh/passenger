@@ -16,7 +16,12 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 
 ## As an MCP server
 
-    agent-browser-mcp        # stdio; registered for this project in .mcp.json
+    agent-browser-mcp        # stdio
+
+Register it with Claude Code for every project:
+
+    claude mcp add agent-browser --scope user -- \
+      uv run --project /path/to/agent-browser agent-browser-mcp
 
 Tools: `fetch`, `show_browser`, `hide_browser`, `browser_status`,
 `close_tabs`, `list_blockers`.

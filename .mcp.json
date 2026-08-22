@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "agent-browser": {
-      "command": "uv",
-      "args": ["run", "--project", "/home/lyh/agent-browser", "agent-browser-mcp"]
-    }
-  }
-}
