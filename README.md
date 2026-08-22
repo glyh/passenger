@@ -14,6 +14,23 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     agent-browser show | hide | stop | status
     agent-browser signatures [--approve NAME | --forget NAME]
 
+## As an MCP server
+
+    agent-browser-mcp        # stdio; registered for this project in .mcp.json
+
+Tools: `fetch`, `show_browser`, `hide_browser`, `browser_status`,
+`close_tabs`, `list_blockers`.
+
+Two things differ from the CLI, both deliberate:
+
+- **`fetch` does not wait for a human by default.** A tool call that hangs for
+  five minutes while someone hunts for a captcha is a bad citizen, so a blocked
+  page comes straight back as `type="blocked"` with what is in the way and how
+  to clear it. The agent tells the user, the user solves it, the agent calls
+  again -- the profile kept the result. `wait_seconds` opts into blocking.
+- **The daemon starts on demand.** A human runs `serve` first; an agent should
+  not have to know that.
+
 ## Layout
 
 Functional core, imperative shell. The core is pure and testable without a
@@ -25,13 +42,15 @@ lives in the shell.
             extract.py   article/dom text handling + the `auto` decision
             errors.py    ErrorCode + structural errors
 
-    shell   browser.py   Chrome daemon lifecycle, CDP attach
+    shell   service.py   the one fetch orchestration, shared by both frontends
+            browser.py   Chrome daemon lifecycle, CDP attach
             probe.py     measuring a live page into a PageProbe
             handoff.py   summon, notify, poll for a human
             window.py    hide/show backends (Protocol)
             registry.py  signatures.json
             config.py    the AGENT_BROWSER_* env boundary
             cli.py       cyclopts; the only place a failure becomes terminal output
+            mcp_server.py  the MCP frontend over the same service layer
 
 Detection is pure because the shell measures first: `probe.probe()` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,

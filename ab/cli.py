@@ -6,17 +6,14 @@ like on a terminal.
 """
 import json
 import sys
-from typing import Annotated, Any
+from typing import Annotated, assert_never
 
 import cyclopts
 
-from . import browser, handoff, launch, present, probe as probe_mod, registry
+from . import browser, launch, present, registry, service
 from .config import settings
-from .detect import blocker_name, classify, is_novel
-from .errors import AgentBrowserError, BlockedError, ErrorCode
-from .extract import extract
-from .models import (Blocker, ExtractMode, Extraction, FetchRequest, Signature,
-                     WaitUntil)
+from .errors import AgentBrowserError, ErrorCode
+from .models import ExtractMode, FetchRequest, WaitUntil
 
 app = cyclopts.App(
     name="agent-browser",
@@ -75,57 +72,31 @@ def fetch(
         keep_tab=keep_tab,
         close_tabs=close_tabs,
         as_json=json_out,
+        handoff_timeout_s=settings.handoff_timeout_s,
     )
-    _render(_run_fetch(request), request)
+    _render(service.fetch(request), json_out)
 
 
-def _run_fetch(request: FetchRequest) -> Extraction:
-    with browser.Session() as session:
-        page = session.page(reuse=request.reuse_tab)
-        page.goto(request.url, wait_until=request.wait_until.value, timeout=60000)
-        page.wait_for_timeout(request.settle_ms)
-
-        def extractor(target: Any) -> Extraction:
-            return extract(target, request.extract_mode)
-
-        extraction = extractor(page)
-        signatures = registry.active()
-        page_probe = probe_mod.probe(page, extraction, signatures)
-        blocker = classify(page_probe, signatures, request.min_words)
-
-        if blocker is not None:
-            extraction = _handle_blocker(page, blocker, request, extractor)
-        if not request.keep_tab and page.url != "about:blank":
-            page.goto("about:blank")
-        if request.close_tabs:
-            closed = session.close_other_tabs(keep=page)
-            print(f"closed {closed} other tab(s)", file=sys.stderr)
-        return extraction
-
-
-def _handle_blocker(page: Any, blocker: Blocker, request: FetchRequest,
-                    extractor: handoff.Extractor) -> Extraction:
-    if is_novel(blocker):
-        evidence, proposal = handoff.record_novel(page, blocker)
-        print(f"   novel blocker -- evidence: {evidence.screenshot}",
-              file=sys.stderr)
-        if proposal is not None:
-            print(f"   proposed signature: {proposal.condition} (pending review)",
-                  file=sys.stderr)
-    if not request.allow_handoff:
-        raise BlockedError(blocker_name(blocker), blocker.probe.url)
-    return handoff.wait_for_human(page, blocker, extractor, request.min_words,
-                                  settings.handoff_timeout_s)
-
-
-def _render(extraction: Extraction, request: FetchRequest) -> None:
-    if request.as_json:
-        json.dump({"url": request.url, "mode": extraction.mode_used.value,
-                   "words": extraction.word_count, "markdown": extraction.text},
-                  sys.stdout, indent=2)
-        print()
-    else:
-        print(extraction.text)
+def _render(outcome: service.FetchOutcome, as_json: bool) -> None:
+    """The CLI's reading of an outcome: blocked is a failure worth exiting on."""
+    match outcome:
+        case service.Fetched():
+            if as_json:
+                json.dump(outcome.model_dump(mode="json"), sys.stdout, indent=2)
+                print()
+            else:
+                print(outcome.markdown)
+        case service.Blocked():
+            if outcome.evidence is not None:
+                print(f"   evidence: {outcome.evidence}", file=sys.stderr)
+            if outcome.proposed_condition is not None:
+                print(f"   proposed signature: {outcome.proposed_condition} "
+                      f"(pending review)", file=sys.stderr)
+            json.dump(outcome.model_dump(mode="json"), sys.stderr, indent=2)
+            print(file=sys.stderr)
+            raise SystemExit(2)
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 @app.command

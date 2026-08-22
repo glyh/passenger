@@ -131,6 +131,7 @@ class FetchRequest(BaseModel, frozen=True):
     keep_tab: bool = False
     close_tabs: bool = False
     as_json: bool = False
+    handoff_timeout_s: int = Field(default=300, ge=1)
 
 
 class LaunchPlan(BaseModel, frozen=True):

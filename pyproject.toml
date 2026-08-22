@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
     "cyclopts>=4.23.1",
+    "mcp>=2.0.0",
     "patchright>=1.62.1",
     "pydantic>=2.13.4",
     "trafilatura>=2.2.0",
@@ -11,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 agent-browser = "ab.cli:main"
+agent-browser-mcp = "ab.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
