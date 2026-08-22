@@ -2,7 +2,7 @@
 id: 004
 title: Reaching content that sits behind an interaction
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -105,3 +105,54 @@ Still open: whether the script is Python or JS; what the tab handle is; what a
 sequence looks like across several calls; and whether execution of caller-
 supplied code in the MCP server process needs any boundary beyond the one the
 agent already has (it can run `Bash`).
+
+## Answer
+
+**All the way up -- but through one door, not a door per verb.** A single
+passthrough tool that runs caller-supplied Python with `page` bound, so the
+whole patchright surface is reachable without this project rewrapping any of
+it. The scaffolding wraps the *call*, not each verb.
+
+The envelope:
+
+- **The script** is Python source, executed with `page` (a patchright sync
+  `Page`) and `read(page)` -- the project's own extraction -- in scope. Control
+  flow, waits and locals across statements come for free, which is the whole
+  reason not to take a step list instead: a declarative `{method, args}` list
+  would have been a rewrapping too, just a generic one, and would still have
+  had no handles between steps.
+- **What crosses back** is the script's return value, JSON only. A Playwright
+  handle cannot cross an MCP boundary; returning one is a typed error that
+  names that, rather than a serialisation traceback.
+- **The page it ends on** is probed and classified by the existing
+  `probe`/`classify`, so a challenge that appears at step four comes back as
+  the same `blocked` outcome `fetch` already returns and the agent already
+  knows how to act on. That is question 4 answered by construction -- no
+  per-step probing. The accompanying extraction is opt-out, because a
+  sequence that pages a list should not pay a full page read per step.
+- **The tab** is addressed by CDP `targetId`. Every reply carries the id of
+  the page it ended on; a later call passes `tab` to resume there, and a
+  listing (id, url, title) names what is open -- which is what makes the
+  motivating case work at all: after a handoff, the agent finds the tab the
+  *human* navigated to and reads it. A stale id is a typed error, and the
+  reap from
+  [One wedged tab bricks every later call](012-one-wedged-tab-bricks-every-call.md)
+  is what keeps a dead tab from taking the next attach down with it.
+- **No `read_current` tool.** The ticket's option 1 was to add one; it is not
+  needed, because `{tab: <id>, script: "return read(page)"}` *is* it. One tool
+  covers both the cheap case and the expensive one.
+- **Executing caller-supplied code** adds no privilege boundary that is not
+  already open: the MCP server runs as the user, and the agent calling it has
+  a shell. Pretending otherwise by sandboxing the script would cost more than
+  it buys.
+
+**On question 5, the honest part.** Measured (see the findings asset): every
+CDP-dispatched event is `isTrusted: true`, so nothing here is detectable by
+that flag. But `click` teleports the cursor -- one `mousemove`, at the
+destination -- and `fill` emits a bare `input` with no keystrokes at all, and
+continuous behavioural scoring is exactly what watches for that. So reading a
+page a human navigated to and driving one are different *kinds* of act:
+reading emits no behavioural signal, driving spends the reputation of a
+profile whose value is that it has never done anything unusual. The
+passthrough permits both and says so where the caller reads it; it does not
+pretend they cost the same.

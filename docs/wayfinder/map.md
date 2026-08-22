@@ -69,6 +69,14 @@ Single developer, no remote: commit to `trunk`, do not branch.
   rendered DOM, so trafilatura already sees a JS app and discards it as
   boilerplate rather than failing to see it.
 
+- [Reaching content that sits behind an interaction](tickets/004-driving-the-page.md)
+  — all the way up the Playwright surface, but through one door: a tool that runs
+  caller-supplied Python with `page` bound, tabs addressed by CDP `targetId`, and
+  the existing probe/classify run on whatever page the script ends on. No verb is
+  rewrapped and no `read_current` is needed. Measured alongside it: CDP input is
+  `isTrusted`, but `click` teleports the cursor and `fill` types nothing — so
+  reading and driving are different kinds of act, not degrees of one.
+
 ## Fog
 
 - **Two viewers fight over the framebuffer.** Now that the size is
