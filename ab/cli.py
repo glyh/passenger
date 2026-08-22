@@ -129,17 +129,29 @@ def _render(extraction: Extraction, request: FetchRequest) -> None:
 
 
 @app.command
-def open(url: str) -> None:  # noqa: A001 -- the verb the user reaches for
-    """Open a URL in the visible window so you can log in by hand."""
+def open(url: str, *, show: bool = False) -> None:  # noqa: A001
+    """Park a URL in a tab, without putting the window on screen.
+
+    Navigating and displaying are separate on purpose: the window should only
+    appear when a human is actually needed. Pass --show, or run `show`
+    afterwards, when you want to look at it -- to log in, typically.
+
+    Parameters
+    ----------
+    show
+        Also put the browser on screen.
+    """
     with browser.Session() as session:
         page = session.page(reuse=False)
         page.goto(url, wait_until=WaitUntil.DOM_CONTENT_LOADED.value, timeout=60000)
-        print(present.select().present(), file=sys.stderr)
-        try:
-            page.bring_to_front()
-        except Exception:
-            pass
-    print(f"opened {url} -- log in there; the profile keeps the session.")
+        if show:
+            print(present.select().present(), file=sys.stderr)
+            try:
+                page.bring_to_front()
+            except Exception:
+                pass
+    hint = "" if show else " -- run `agent-browser show` to log in there"
+    print(f"opened {url}{hint}")
 
 
 @app.command(name="close-tabs")

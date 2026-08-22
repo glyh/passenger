@@ -7,7 +7,8 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     agent-browser serve                  # start the hidden Chrome daemon
     agent-browser fetch <url>            # → markdown on stdout
     agent-browser fetch <url> --json     # → {url,title,words,markdown}
-    agent-browser open <url>             # show the window, log in by hand
+    agent-browser open <url>             # park a URL in a tab, no window
+    agent-browser open <url> --show      # ...and show it, to log in by hand
     agent-browser fetch <url> --close-tabs   # ...and tidy up after
     agent-browser close-tabs             # clear tabs orphaned by earlier runs
     agent-browser show | hide | stop | status
@@ -80,6 +81,12 @@ is no fake fingerprint to catch — only the automation protocol needed patching
 which is what patchright does (notably avoiding the `Runtime.enable` CDP leak).
 Verified: `navigator.webdriver=false`, no `Headless` in the UA, 5 plugins, no
 `cdc_` globals, WebGL reporting the genuine adapter rather than SwiftShader.
+
+**The window appears only when a human is needed.** Navigating and displaying
+are separate commands: `open` parks a URL silently, `show` puts the browser on
+screen. The one place presentation happens on its own is a challenge handoff --
+which is the definition of actually necessary -- and it re-hides afterwards if
+it was hidden when it started.
 
 **Challenges are handed to you, never auto-solved.** Solver services get
 profiles burned and make you *more* detectable. You solve it once; the
