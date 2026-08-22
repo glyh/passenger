@@ -114,6 +114,16 @@ need to control it (`swaymsg output HEADLESS-1 resolution 1920x1080`).
 
 Selectable via `AGENT_BROWSER_WM`:
 
+### Presenters (`AGENT_BROWSER_PRESENTER`)
+
+| value   | how you take over | notes |
+|---------|-------------------|-------|
+| `local` | VNC client window | default when one is installed |
+| `web`   | noVNC URL         | for containers/servers with no client on the host |
+| `none`  | nothing           | honest about having no way to show it |
+
+### Launch (`AGENT_BROWSER_WM`)
+
 | value    | mechanism               | notes |
 |----------|-------------------------|-------|
 | `nested` | cage + wayvnc (default) | the only real mechanism; portable everywhere |
@@ -134,5 +144,38 @@ own compositor sidesteps that whole class of breakage.
     AGENT_BROWSER_WM        window backend
     AGENT_BROWSER_VNC_HOST/PORT    default 127.0.0.1:5900
 
-Requires: `cage wayvnc gtk-vnc` (or any VNC client — if none is found the tool
+## Install
+
+    nix develop            # dev shell: cage, wayvnc, wlvncc, python, uv
+    nix run .              # run the CLI directly
+
+The flake pins everything except the browser. Chrome deliberately comes from
+the host (`AGENT_BROWSER_CHROME`, default `google-chrome-stable`): pinning it
+would freeze its version, and the version string is one of the most visible
+fingerprint fields there is -- a browser months behind what real users run is a
+tell in itself, and stops getting security updates.
+
+Without nix, install the equivalents yourself: `cage wayvnc` plus any VNC
+client (see the presenter table).
+
+### Why not Docker
+
+This tool's whole value is *inheriting* the host: its fonts (819 here, 115 of
+them CJK), its GPU, its residential IP, its timezone. A container isolates
+exactly those, so a Dockerfile would spend its length painstakingly rebuilding
+them -- baking in a font set, passing through `/dev/dri`, pinning TZ and locale
+-- and would still only approximate the real thing. Measured under nix, the
+fingerprint is untouched:
+
+    webgl : ANGLE (Intel, Mesa Intel(R) Graphics (LNL), OpenGL ES 3.2)
+    tz    : Asia/Shanghai
+
+Nix isolates the dependency graph, which was the actual problem, and leaves the
+machine identity alone.
+
+Docker is still the right tool for a *headless server* deployment, where there
+is no host identity worth inheriting. `present.py` (web/noVNC) and `notify.py`
+(webhook) exist so that case works.
+
+Requires without nix: `cage wayvnc` (or any VNC client — if none is found the tool
 prints the address so you can connect from another machine or a phone).
