@@ -10,6 +10,7 @@ it, and that differs by where the tool is deployed:
   none   nothing can show it; say so rather than pretending
 """
 import shutil
+import socket
 import subprocess
 import time
 from typing import Protocol, assert_never, runtime_checkable
@@ -89,7 +90,15 @@ class WebPresenter:
     name = PresenterName.WEB
 
     def available(self) -> bool:
-        return True
+        """Only if something is actually serving noVNC.
+
+        Handing back a URL that answers nothing would be the same silent lie as
+        launching a visible window and calling it hidden.
+        """
+        with socket.socket() as probe:
+            probe.settimeout(0.3)
+            return probe.connect_ex((settings.vnc_host,
+                                     settings.novnc_port)) == 0
 
     def presented(self) -> bool:
         return False
@@ -111,7 +120,14 @@ class NullPresenter:
         return False
 
     def present(self) -> str:
-        return "no way to display the browser on this host"
+        """Say what is actually available rather than just refusing.
+
+        wayvnc is listening whenever the nested compositor is up, so any VNC
+        client can still reach it -- from another machine, or a phone.
+        """
+        return ("no viewer installed and no noVNC server; wayvnc is listening "
+                f"on {settings.vnc_host}:{settings.vnc_port} -- point any VNC "
+                "client at it")
 
     def dismiss(self) -> None:
         return None
@@ -130,10 +146,15 @@ def _build(name: PresenterName) -> Presenter:
 
 
 def select() -> Presenter:
-    """Explicit choice wins; otherwise a local client, else the web URL."""
+    """Explicit choice wins; otherwise the first mechanism that really exists.
+
+    Each candidate is asked whether it is available, including the web one --
+    an unconditional fallback would hand back a noVNC URL with nothing serving
+    it, which is a worse answer than admitting there is no viewer.
+    """
     if settings.presenter is not None:
         return _build(settings.presenter)
-    local = LocalViewerPresenter()
-    if local.available():
-        return local
-    return WebPresenter()
+    for candidate in (LocalViewerPresenter(), WebPresenter()):
+        if candidate.available():
+            return candidate
+    return NullPresenter()
