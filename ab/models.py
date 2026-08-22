@@ -76,6 +76,25 @@ class Signature(BaseModel, frozen=True):
         return self.selector or self.title_re or self.url_re or "?"
 
 
+class Target(BaseModel, frozen=True, populate_by_name=True):
+    """One entry from Chrome's target list, as the CDP HTTP endpoint reports it.
+
+    That endpoint is served by the browser process, so it keeps answering when
+    a page's renderer does not. This shape exists for exactly that moment.
+    """
+
+    id: str
+    type: str
+    url: str
+    title: str = ""
+    websocket_url: str = Field(default="", alias="webSocketDebuggerUrl")
+
+    @property
+    def is_page(self) -> bool:
+        """Tabs only. Chrome also lists its own UI, workers and extensions."""
+        return self.type == "page"
+
+
 class PageProbe(BaseModel, frozen=True):
     """What the shell measured about a loaded page.
 

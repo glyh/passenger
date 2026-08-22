@@ -19,6 +19,10 @@ class Settings(BaseModel, frozen=True):
     chrome_binary: str = "google-chrome-stable"
     min_content_words: int = Field(default=80, ge=0)
     handoff_timeout_s: int = Field(default=300, ge=1)
+    # How long to wait for an attach before treating the browser as
+    # stuck. Attaching initialises every open tab, so this is really a
+    # budget for the slowest one.
+    attach_timeout_s: int = Field(default=15, ge=1)
     vnc_host: str = "127.0.0.1"
     vnc_port: int = Field(default=5900, ge=1, le=65535)
     # The viewer asks for the framebuffer size it needs, so there is nothing to
@@ -44,6 +48,7 @@ class Settings(BaseModel, frozen=True):
             "chrome_binary": os.environ.get("AGENT_BROWSER_CHROME"),
             "min_content_words": os.environ.get("AGENT_BROWSER_MIN_WORDS"),
             "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
+            "attach_timeout_s": os.environ.get("AGENT_BROWSER_ATTACH_TIMEOUT"),
             "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
             "vnc_port": os.environ.get("AGENT_BROWSER_VNC_PORT"),
             "vnc_scale": os.environ.get("AGENT_BROWSER_VNC_SCALE"),
@@ -109,3 +114,4 @@ CDP_URL = settings.cdp_url
 CHROME_BIN = settings.chrome_binary
 MIN_CONTENT_WORDS = settings.min_content_words
 HANDOFF_TIMEOUT_S = settings.handoff_timeout_s
+ATTACH_TIMEOUT_S = settings.attach_timeout_s

@@ -18,10 +18,11 @@ from types import TracebackType
 from typing import Any
 
 from patchright.sync_api import Error as PlaywrightError
+from patchright.sync_api import TimeoutError as PlaywrightTimeout
 from patchright.sync_api import sync_playwright
 
-from . import launch, session
-from .config import CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
+from . import launch, session, targets
+from .config import ATTACH_TIMEOUT_S, CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
 from .errors import DaemonError, ErrorCode
 from .models import BackendName
 
@@ -169,9 +170,55 @@ class Session:
                               "browser not running",
                               detail="start it with: agent-browser serve")
         self._playwright = sync_playwright().start()
-        self.browser = self._playwright.chromium.connect_over_cdp(CDP_URL)
+        self.browser = self._attach()
         self.context = self.browser.contexts[0]
         return self
+
+    def _attach(self) -> Any:
+        """Attach -- and if a stuck tab is holding the attach open, free it.
+
+        connect_over_cdp initialises every tab that is already open and waits
+        for all of them, and passes no timeout of its own. So one tab left
+        mid-navigation used to hang every later call, forever, and every entry
+        point into this tool starts with an attach: the whole thing bricked
+        until a human found the tab. Measured at 75s and still counting.
+
+        The rescue cannot use patchright, since patchright is what is stuck.
+        It goes to the browser process directly instead (see targets.py), and
+        stops the pending navigation rather than closing the tab -- whatever
+        document that tab already had is usually the one a human was reading.
+        """
+        try:
+            return self._connect()
+        except PlaywrightTimeout:
+            # A timeout here only abandons the call on this side: the driver
+            # carries on attaching, and its half-finished attach is itself part
+            # of what holds a tab -- it pauses every request for interception
+            # and then never answers. So the driver goes first, then whatever
+            # is still stuck is freed, and the retry starts from nothing.
+            self._restart_driver()
+            stuck = targets.unstick()
+            try:
+                return self._connect()
+            except PlaywrightTimeout as again:
+                raise DaemonError(
+                    ErrorCode.ATTACH_TIMEOUT,
+                    f"could not attach to chrome within {ATTACH_TIMEOUT_S}s, "
+                    "twice",
+                    detail=(", ".join(page.url for page in stuck) if stuck else
+                            "no tab was stuck mid-navigation, so this is "
+                            "something else; try: agent-browser stop")) from again
+
+    def _restart_driver(self) -> None:
+        try:
+            self._playwright.stop()
+        except Exception:
+            pass  # it is being replaced; how it died does not matter
+        self._playwright = sync_playwright().start()
+
+    def _connect(self) -> Any:
+        return self._playwright.chromium.connect_over_cdp(
+            CDP_URL, timeout=ATTACH_TIMEOUT_S * 1000)
 
     def page(self, reuse: bool = True) -> Any:
         """Reuse a blank tab if one is lying around, else open a new one."""

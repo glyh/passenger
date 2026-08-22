@@ -49,7 +49,7 @@
           default google-chrome-stable) so it keeps its own update cadence.
         '';
 
-        # The interpreter, carrying this project's overlay. Two of the six
+        # The interpreter, carrying this project's overlay. Two of the seven
         # Python dependencies are absent or too old in nixpkgs; nix/ says which
         # and why. `self` is threaded through so anything built against this
         # interpreter sees the overridden set rather than the stock one.
@@ -65,6 +65,7 @@
           pydantic
           pyicu
           trafilatura
+          websockets
         ];
 
         # .git and the local build detritus are not inputs; without this filter

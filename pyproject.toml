@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pyicu>=2.16.2",
     "trafilatura>=2.2.0",
+    "websockets>=14.1",
 ]
 
 [project.scripts]
