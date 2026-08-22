@@ -5,7 +5,7 @@ xiaohongshu pages, which is why the fixtures are sized to match: a note body
 of about 1,800 Chinese characters, and a search listing against the short
 ICP footer that `article` returns for the same page.
 """
-from ab.text import count_words
+from ab.text import count_words, unlinked
 
 # A note body of the size ticket 008 measured. Chinese runs about 1.5-2
 # characters per word, so ~1,800 characters should land near 1,000.
@@ -58,3 +58,26 @@ def test_japanese_is_segmented():
 def test_mixed_scripts_add_up():
     """Latin and Han in one string must both be counted, not one or other."""
     assert count_words("hello 中文测试 world") > count_words("hello world")
+
+
+def test_link_targets_do_not_count_as_content():
+    """Ticket 007's guard.
+
+    Both extractors emit `[label](url)` now, and a URL segments into a dozen
+    or more "words". On the xiaohongshu search page the DOM text carries 70
+    links against the footer's 22, which was enough on its own to drag the
+    yield ratio under the floor -- `auto` would have started picking `dom`
+    because of link density rather than because it kept more content.
+    """
+    plain = "The docs say so"
+    linked = "The [docs](https://docs.python.org/3/library/asyncio-task.html) say so"
+    assert count_words(unlinked(linked)) == count_words(plain)
+    assert count_words(linked) > count_words(plain) + 5
+
+
+def test_unlinked_keeps_bare_urls_and_plain_text():
+    """Only the target half of a markdown link goes. A URL written out as
+    prose is something the page actually said.
+    """
+    assert unlinked("see https://example.com/x now") == "see https://example.com/x now"
+    assert unlinked("[a](mailto:x@y.z)") == "[a](mailto:x@y.z)"

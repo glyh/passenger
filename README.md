@@ -92,6 +92,33 @@ extraction half is the part that never goes stale.
 | `article` | trafilatura boilerplate removal → markdown |
 | `dom` | visible text off the live DOM, minus nav/header/footer/aria-hidden |
 
+Both modes render links inline as `[label](url)`, resolved against the page's
+own URL and otherwise passed through untouched — query strings included, since
+on some sites the token in the query string is what makes the URL work at all.
+`dom` used to return text only, which cost a listing the only part of it that
+was navigable; it also read `innerText` off a *detached clone*, where innerText
+degrades to `textContent`, so every block boundary was lost and whatever line
+structure survived was the source HTML's own whitespace. A xiaohongshu search
+page came back as one unbroken 1,500-character line. It now walks the live
+document, and the same page comes back as 93 lines with 70 links.
+
+Links are not free. Measured on five saved pages, as characters of extracted
+text, `dom` before → after:
+
+| page | before | after | links |
+|---|---|---|---|
+| xiaohongshu search | 1,502 | 11,042 | 70 |
+| Hacker News front page | 3,767 | 16,266 | 228 |
+| Wikipedia article | 75,174 | 130,690 | 741 |
+| Python docs | 42,585 | 49,691 | 97 |
+| react.dev tutorial | 67,898 | 69,142 | 14 |
+
+The blowup tracks link density, which is exactly the axis along which links are
+worth having: the pages that grow most are the ones that are *made of* links.
+For scale, `article` on that Wikipedia page — which has always kept its links —
+is 160,317 characters, larger than the linked DOM text. Bounding a fetch's
+output is a real problem, but it is not this knob's job.
+
 **`dom` is an escape hatch that has not yet proved necessary.** It was added on
 the assumption that trafilatura returns nav chrome for JS apps. Measured, that
 turned out to be false — with `favor_recall=True` it wins on every page tried,

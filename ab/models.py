@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from .text import count_words
+from .text import count_words, unlinked
 
 
 class SignatureKind(str, Enum):
@@ -119,7 +119,13 @@ class Extraction(BaseModel, frozen=True):
 
     @property
     def word_count(self) -> int:
-        return count_words(self.text)
+        """How much the page *said*, which is what `min_words` asks.
+
+        Link targets are stripped first: they are markup, and counting them
+        would let a nav bar's worth of hrefs lift a gutted page over the
+        threshold that decides it was blocked.
+        """
+        return count_words(unlinked(self.text))
 
 
 class FetchRequest(BaseModel, frozen=True):

@@ -1,6 +1,8 @@
 """Pure text measurement, in its own module so both the models and the
 extractors can use one ruler without importing each other.
 """
+import re
+
 import icu
 
 # Root, not a guessed locale. ICU selects dictionary-based breaking from the
@@ -30,3 +32,18 @@ def count_words(text: str) -> int:
     # every band above it -- letters, numbers, ideographs, kana -- is a word.
     return sum(1 for _ in breaker
                if breaker.getRuleStatus() >= icu.UWordBreak.NONE_LIMIT)
+
+
+_LINK_TARGET = re.compile(r"\]\(https?://[^)\s]*\)")
+
+
+def unlinked(text: str) -> str:
+    """Drop the target half of every markdown link, keeping the label.
+
+    Only for measuring, never for output. Both extractors render links as
+    `[label](url)`, and a URL segments into a surprising number of "words" --
+    741 of them cost a Wikipedia page 5,477, half again what it says. Counting
+    markup as content would let a page's link density stand in for how much of
+    it an extractor kept, which is what `choose` and `min_words` are asking.
+    """
+    return _LINK_TARGET.sub("]", text)

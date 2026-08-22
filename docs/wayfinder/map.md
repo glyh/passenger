@@ -55,6 +55,13 @@ Single developer, no remote: commit to `trunk`, do not branch.
   to nix in the same change, since PyICU is the project's one native
   dependency and was resolving against the host's libicu.
 
+- [A listing read through dom mode has no link targets](tickets/007-links-lost-in-dom-mode.md)
+  — `dom` emits `[label](url)` inline, always, resolved against the document
+  and never normalised, because a signed query string *is* the URL. The walk
+  that does it also exposed the real bug: `innerText` on a detached clone is
+  `textContent`, so `dom` never had block boundaries. Link markup is stripped
+  before any word count, so density cannot masquerade as content.
+
 - [Whether defuddle belongs alongside trafilatura as an extract mode](tickets/009-defuddle-as-a-mode.md)
   — no. Measured on six pages: it wins only on fenced code blocks in
   documentation and loses links everywhere else, which is what 007 needs.
@@ -100,8 +107,10 @@ Single developer, no remote: commit to `trunk`, do not branch.
   bankruptcy notices costs the same as the paragraph that mattered.
   There is no cap, no selector to scope the read, and no notice when
   something was long. Paging such a list a few times is enough to feel
-  it. Whether the answer is a `max_words`, a scoping selector, or simply
-  leaving it to the caller is unexamined -- but it interacts with
+  it, and links made it sharper: a listing now costs several times what it
+  did, for pointers that are the point. Whether the answer is a `max_words`,
+  a scoping selector, or simply leaving it to the caller is unexamined --
+  but it interacts with
   [Reaching content that sits behind an interaction](tickets/004-driving-the-page.md),
   where a read-per-step multiplies the cost.
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
