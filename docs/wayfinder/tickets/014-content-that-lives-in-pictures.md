@@ -2,8 +2,8 @@
 id: 014
 title: Content that lives in pictures reads as an empty page
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -72,3 +72,41 @@ To decide:
    was read; nothing reports that the page's payload was a `<video>`.
    Cheap to detect, and it converts a silent empty body into a fact the
    caller can report.
+
+## Answer
+
+Closed by [The passthrough tool that runs a script against a page](013-the-passthrough-tool.md),
+which landed while this ticket was open and turns out to cover the case
+without any of the extraction changes proposed here.
+
+Measured, on a page with a figure:
+
+    page.request.get(src)                 -> 200, 19,981 bytes
+    page.locator("figure").screenshot()   -> 135,586 bytes on disk
+
+Both routes work, and the image was then read back and seen. Two things
+follow, and they answer four of the five questions above by removing them:
+
+- **Question 4 is answered by measurement, in the good direction.**
+  `page.request.get` goes through the browser's own session, so the CDN gets
+  the cookies and the `Referer` the warm profile carries. The 403-to-`curl`
+  trap that this ticket feared -- the same one 004 hit -- does not apply to a
+  caller inside the session. And `locator.screenshot()` needs no URL at all,
+  which is the route that cannot be broken by a CDN policy.
+- **Questions 1-3 dissolve.** The choice between inline `![alt](src)` and a
+  manifest, whether `alt` earns its place, and what a page of twenty CDN URLs
+  costs were all questions about what to put in *everyone's* markdown. A
+  script asks for exactly what it wants -- a list of srcs, one element's
+  screenshot, the `alt` of a single figure -- so there is no cap to design and
+  no unbounded output to fear. The right pattern is a file path plus a read,
+  never base64 through the return value, which would spend the context this
+  saves.
+
+**Deliberately left undone.** Question 5, and with it the truthfulness framing
+in the question above: a plain `fetch` of a video note still returns the
+speed-control widget and the comments, with nothing saying the payload was a
+video, and a 图文 note still returns a well-formed paragraph that omits the
+price list in the photo. `script` cures that only for a caller who already
+suspects. Closing this ticket is a decision that the cure is enough and the
+warning is not worth building now; the risk is recorded in the map's Fog so it
+stays visible rather than lost.

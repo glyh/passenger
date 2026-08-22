@@ -92,8 +92,24 @@ Single developer, no remote: commit to `trunk`, do not branch.
   what to return instead; a script that raises comes back as an outcome with its
   own line number, not an exception.
 
+- [Content that lives in pictures reads as an empty page](tickets/014-content-that-lives-in-pictures.md)
+  — no extraction change. `script` reaches images through the warm session
+  (`page.request.get`: 200, or `locator.screenshot()` with no URL at all), so the
+  caller asks for exactly the pictures it wants and hands itself a file path to
+  read. The questions about inline markdown, `alt`, and capping URL bloat were all
+  questions about everyone's markdown, and stop being asked.
+
 ## Fog
 
+- **A page can be non-text without saying so.** Closing
+  [Content that lives in pictures reads as an empty page](tickets/014-content-that-lives-in-pictures.md)
+  left this standing: a plain `fetch` cannot distinguish "there is nothing
+  here" from "what is here is not text". A video note returns its player
+  furniture and its comments; a 图文 note returns a real paragraph that omits
+  the price list in the photo. `script` is the cure, but only for a caller who
+  already suspects -- and nothing tells them to. Counting what the extraction
+  dropped would be cheap; whether the answer is that, a `mode_used` that admits
+  it, or nothing at all is undecided.
 - **Two viewers fight over the framebuffer.** Now that the size is
   client-driven, every connected viewer asks for its own window's size,
   and the last to ask wins. Harmless with one viewer, which is the only
