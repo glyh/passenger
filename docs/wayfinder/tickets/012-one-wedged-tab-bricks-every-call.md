@@ -3,7 +3,7 @@ id: 012
 title: One wedged tab bricks every later call
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
