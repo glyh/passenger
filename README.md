@@ -167,9 +167,16 @@ Selectable via `AGENT_BROWSER_WM`:
 
 | value   | how you take over | notes |
 |---------|-------------------|-------|
-| `local` | VNC client window | default when one is installed |
-| `web`   | noVNC URL         | for containers/servers with no client on the host |
+| `local` | a chromeless window of your own browser | default; app mode, so no tab strip or address bar |
+| `web`   | the URL, to open wherever you are | for containers/servers with no display of their own |
 | `none`  | nothing           | honest about having no way to show it |
+
+Both are the same page (`ab/web/viewer.html`), a full-bleed noVNC screen. There
+is no native VNC client involved: noVNC asks for the framebuffer size its
+window needs and keeps asking as the window changes, which is something no
+native client here did: the lightweight ones stretch whatever they are sent
+and freeze that aspect at connect time, and the one that does resize costs
+1.2 GiB against noVNC's 1.8 MB.
 
 ### Launch (`AGENT_BROWSER_WM`)
 
@@ -191,11 +198,15 @@ own compositor sidesteps that whole class of breakage.
     AGENT_BROWSER_MIN_WORDS tier-2 threshold (default 80)
     AGENT_BROWSER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
     AGENT_BROWSER_WM        window backend
-    AGENT_BROWSER_VNC_HOST/PORT    default 127.0.0.1:5900
+    AGENT_BROWSER_VNC_HOST/PORT    default 127.0.0.1:5900 (websocket)
+    AGENT_BROWSER_NOVNC_PORT       viewer page (default 6080)
+    AGENT_BROWSER_NOVNC     noVNC install dir (the flake sets this)
+    AGENT_BROWSER_VIEWER    browser for the viewer window (default: the Chrome above)
+    AGENT_BROWSER_VNC_SCALE nested output scale (default: the host screen's)
 
 ## Install
 
-    nix develop            # dev shell: cage, wayvnc, wlvncc, python, uv
+    nix develop            # dev shell: cage, wayvnc, noVNC, python, uv
     nix run .              # run the CLI directly
 
 The flake pins everything except the browser. Chrome deliberately comes from
@@ -204,8 +215,8 @@ would freeze its version, and the version string is one of the most visible
 fingerprint fields there is -- a browser months behind what real users run is a
 tell in itself, and stops getting security updates.
 
-Without nix, install the equivalents yourself: `cage wayvnc` plus any VNC
-client (see the presenter table).
+Without nix, install the equivalents yourself: `cage wayvnc` plus a copy of
+noVNC (`AGENT_BROWSER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
 
 ### Why not Docker
 
@@ -226,5 +237,7 @@ Docker is still the right tool for a *headless server* deployment, where there
 is no host identity worth inheriting. `present.py` (web/noVNC) and `notify.py`
 (webhook) exist so that case works.
 
-Requires without nix: `cage wayvnc` (or any VNC client — if none is found the tool
-prints the address so you can connect from another machine or a phone).
+Requires without nix: `cage wayvnc` and noVNC's static files. wayvnc serves the
+websocket itself, so nothing else has to run; if the page cannot be served the
+tool prints the address so you can point your own noVNC at it, from another
+machine or a phone.

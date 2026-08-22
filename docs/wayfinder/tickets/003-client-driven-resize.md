@@ -1,9 +1,9 @@
 ---
 id: 003
-title: Why wayvnc refuses the client's resize request
+title: Whether the viewer can drive the resize itself
 labels: [wayfinder:research]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -37,3 +37,31 @@ Nothing was investigated beyond observing the refusal.
 If this can be made to work, `AGENT_BROWSER_GEOMETRY_CMD` becomes
 unnecessary for any client that supports remote resize, and the viewer's
 window is fitted continuously rather than once per `show`.
+
+## Answer
+
+**It is not refused. The log line lies.** TigerVNC prints
+`CConnection: SetDesktopSize failed: 4` and the resize happens anyway, in the
+same second:
+
+    DesktopWindow: Requesting framebuffer resize from 1200x1200 to 1422x1730
+    CConnection: SetDesktopSize failed: 4
+    Viewport:    Resizing framebuffer from 1200x1200 to 1422x1730
+
+Started against a deliberately wrong 1280x720 output, TigerVNC drove it to
+1422x1730 -- its own window in physical pixels -- with no help from this side.
+noVNC does the same: a viewport of 1000x1400 produced exactly that framebuffer,
+and 900x1500 exactly that.
+
+So the refusal that sent
+[Sizing the cage output](002-vnc-output-sizing.md) down the measure-it-yourself
+road was never real; nothing was wrong with wayvnc, cage, or the protocol. What
+was wrong was reading one log line as the outcome and not checking the
+framebuffer afterwards.
+
+The remaining sub-questions are moot -- there is no refusal to explain -- with
+one worth recording: code 4 is outside the RFB spec's 0--3, so it is wayvnc's
+own, and it evidently does not mean failure.
+
+`AGENT_BROWSER_GEOMETRY_CMD` is gone, along with every other way this tool had
+of guessing a window size.

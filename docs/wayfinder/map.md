@@ -37,17 +37,24 @@ Single developer, no remote: commit to `trunk`, do not branch.
 <!-- one line per closed ticket -->
 
 - [Sizing the cage output to the viewer's real window and scale](tickets/002-vnc-output-sizing.md)
-  — the output is resized from this side on `show`, via cage's
-  wlr-output-management; client-driven resize is refused by wayvnc. The
-  viewer's window is unmeasurable portably, so the exact target comes from
-  `AGENT_BROWSER_GEOMETRY_CMD` and the portable default is the screen.
+  — the viewer owns the size and asks for it over RFB, continuously; this
+  side keeps only the scale. The local presenter is now the viewer page in
+  a chromeless window of the host's own browser, not a native VNC client.
+- [Whether the viewer can drive the resize itself](tickets/003-client-driven-resize.md)
+  — it can. `SetDesktopSize failed: 4` is printed and the resize happens
+  anyway; the refusal that justified measuring windows from this side was
+  never real.
 
 ## Fog
 
-- **The whole `web` presenter path is unexercised.** `WebPresenter`
-  hands back a noVNC URL and checks the port is open, but nothing here
-  has ever run noVNC. Whether that path works at all is unknown, and it
-  is the only option for a containerised deployment.
+- **Two viewers fight over the framebuffer.** Now that the size is
+  client-driven, every connected viewer asks for its own window's size,
+  and the last to ask wins. Harmless with one viewer, which is the only
+  case exercised; unclear what the right behaviour even is with two.
+- **The `web` presenter is exercised only on this machine.** It is the
+  same page and server the local presenter uses, so the path is no longer
+  untested — but nothing has yet opened it from another machine, which is
+  the case it exists for, and wayvnc's websocket is bound to localhost.
 - **Pid reuse.** The session record trusts pids. Across a reboot, or
   after enough churn, a recorded pid could belong to something else
   entirely -- and `teardown` would SIGTERM it. A start time or cgroup
@@ -71,5 +78,14 @@ Single developer, no remote: commit to `trunk`, do not branch.
   speaks wlr-output-management, and generating bindings for it would be a
   large dependency for a small tool. Worth revisiting if the parsing of
   either tool's human-readable output ever bites.
+- **A fetch returns the whole page, and nothing bounds it.** For an
+  agent, the page *is* the context budget: a listing of a hundred
+  bankruptcy notices costs the same as the paragraph that mattered.
+  There is no cap, no selector to scope the read, and no notice when
+  something was long. Paging such a list a few times is enough to feel
+  it. Whether the answer is a `max_words`, a scoping selector, or simply
+  leaving it to the caller is unexamined -- but it interacts with
+  [Reaching content that sits behind an interaction](tickets/004-driving-the-page.md),
+  where a read-per-step multiplies the cost.
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
   start. A crash between fetches is only discovered on the next one.

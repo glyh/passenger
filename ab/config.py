@@ -21,12 +21,17 @@ class Settings(BaseModel, frozen=True):
     handoff_timeout_s: int = Field(default=300, ge=1)
     vnc_host: str = "127.0.0.1"
     vnc_port: int = Field(default=5900, ge=1, le=65535)
-    # Unset means "fit the output to whoever is looking"; setting it pins the
-    # size, which is the only lever on a compositor the probes cannot read.
-    vnc_size: str | None = None
+    # The viewer asks for the framebuffer size it needs, so there is nothing to
+    # pin here. The scale it cannot ask for: unset means "match the host
+    # screen", and setting it overrides that.
     vnc_scale: float | None = Field(default=None, gt=0)
-    geometry_cmd: str | None = None
     novnc_port: int = Field(default=6080, ge=1, le=65535)
+    # Where noVNC's modules live. Set by the flake to a store path holding
+    # only the static files; unset means "look in the usual system places".
+    novnc_dir: str | None = None
+    # The browser the viewer window is opened in, which is the host's, not the
+    # nested one -- though by default it is the same binary.
+    viewer_browser: str | None = None
     presenter: PresenterName | None = None
     webhook_url: str | None = None
     default_extract_mode: ExtractMode = ExtractMode.AUTO
@@ -41,10 +46,10 @@ class Settings(BaseModel, frozen=True):
             "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
             "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
             "vnc_port": os.environ.get("AGENT_BROWSER_VNC_PORT"),
-            "vnc_size": os.environ.get("AGENT_BROWSER_VNC_SIZE"),
             "vnc_scale": os.environ.get("AGENT_BROWSER_VNC_SCALE"),
-            "geometry_cmd": os.environ.get("AGENT_BROWSER_GEOMETRY_CMD"),
             "novnc_port": os.environ.get("AGENT_BROWSER_NOVNC_PORT"),
+            "novnc_dir": os.environ.get("AGENT_BROWSER_NOVNC"),
+            "viewer_browser": os.environ.get("AGENT_BROWSER_VIEWER"),
             "presenter": os.environ.get("AGENT_BROWSER_PRESENTER"),
             "webhook_url": os.environ.get("AGENT_BROWSER_WEBHOOK"),
             "default_extract_mode": os.environ.get("AGENT_BROWSER_EXTRACT"),
@@ -62,6 +67,18 @@ class Settings(BaseModel, frozen=True):
         return self.state_dir / "chrome-profile"
 
     @property
+    def viewer_profile(self) -> Path:
+        """A profile of its own for the window the browser is watched in.
+
+        Separate from the user's everyday browser for two reasons. It keeps a
+        takeover window out of their session entirely, and it is what makes
+        the window ours to close: launched into an already-running Chrome, the
+        process we started hands the window over and exits, leaving nothing to
+        track or dismiss.
+        """
+        return self.state_dir / "viewer-profile"
+
+    @property
     def signatures_file(self) -> Path:
         return self.state_dir / "signatures.json"
 
@@ -74,8 +91,10 @@ class Settings(BaseModel, frozen=True):
         return f"http://127.0.0.1:{self.cdp_port}"
 
     @property
-    def novnc_url(self) -> str:
-        return f"http://{self.vnc_host}:{self.novnc_port}/vnc.html"
+    def viewer_url(self) -> str:
+        """The page, without the endpoint: that is per-session, so present.py
+        appends it from the live record rather than from settings."""
+        return f"http://{self.vnc_host}:{self.novnc_port}/"
 
 
 settings = Settings.from_env()

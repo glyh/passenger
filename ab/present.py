@@ -1,31 +1,48 @@
 """Imperative shell: putting the hidden browser in front of a human.
 
-Separate from how Chrome is launched. The VNC server is always running inside
-the nested compositor; presenting just means giving someone a way to look at
-it, and that differs by where the tool is deployed:
+Separate from how Chrome is launched. wayvnc is always running inside the
+nested compositor, serving the session over a websocket; presenting just means
+giving someone a way to look at it, and that differs by where the tool is
+deployed:
 
-  local  spawn a VNC client on this machine
-  web    hand back a noVNC URL to open in any browser -- the only option that
-         works from a container without a client installed on the host
+  local  open the viewer page in a chromeless window of the host's browser
+  web    hand back the URL to open wherever the human actually is -- the only
+         option that works from a container with no display of its own
   none   nothing can show it; say so rather than pretending
+
+There is no VNC client here any more. The viewer is a page (ab/web/viewer.html)
+served to the host's own browser, which is both lighter than every native
+client that would do -- 1.8 MB of noVNC against 1.2 GiB for the lightest native
+one that works -- and the only one of them that gets the size right by itself:
+it asks for the framebuffer its window needs and keeps asking as the window
+changes. The native client this replaced did the opposite, stretching whatever
+it was sent to fill its window and freezing that aspect at connect time, which
+is why the picture used to arrive squashed inside black bars.
+
+Opening it in app mode is what makes it read as a window rather than a browser
+tab: no tab strip, no address bar, and the page itself is the screen, edge to
+edge.
 """
 import os
 import shutil
 import signal
-import socket
 import subprocess
 import time
 from contextlib import suppress
 from typing import Protocol, assert_never, runtime_checkable
 
-from . import geometry, session
+from . import geometry, session, webserve
 from .config import settings
 from .errors import ErrorCode, WindowError
 from .models import PresenterName
 
-VIEWERS = ("wlvncc", "vncviewer", "gvncviewer", "remmina")
-_CONNECT_POLLS = 10
-_POLL_INTERVAL_S = 0.5
+# Chrome first because it is already this tool's dependency, then the common
+# Chromium builds: app mode is a Chromium feature, and a browser without it
+# would open a tab with a URL bar around the screen.
+BROWSERS = ("google-chrome-stable", "chromium", "chromium-browser",
+            "brave-browser", "microsoft-edge-stable")
+_OPEN_POLLS = 20
+_POLL_INTERVAL_S = 0.25
 
 
 def endpoint() -> tuple[str, int]:
@@ -42,6 +59,12 @@ def endpoint() -> tuple[str, int]:
     return live.vnc_host, live.vnc_port
 
 
+def page_url() -> str:
+    """The viewer page, told which session to connect to."""
+    host, port = endpoint()
+    return f"{settings.viewer_url}?ws={host}:{port}"
+
+
 @runtime_checkable
 class Presenter(Protocol):
     name: PresenterName
@@ -52,69 +75,81 @@ class Presenter(Protocol):
     def presented(self) -> bool: ...
 
 
-class LocalViewerPresenter:
-    """Spawn a VNC client window on this machine."""
+def _fitted(live: session.NestedSession | None) -> str:
+    """Give the output the host screen's density, and say so if it changed.
+
+    Only the density: the size belongs to the viewer, which asks for it over
+    RFB as soon as it connects and again whenever its window changes.
+    """
+    if live is None:
+        return ""
+    change = geometry.fit(live.wayland_display)
+    return "" if change is None else f", {change}"
+
+
+class WindowPresenter:
+    """Open the viewer page in a chromeless window on this machine."""
 
     name = PresenterName.LOCAL
 
-    def viewer(self) -> str | None:
-        return next((v for v in VIEWERS if shutil.which(v)), None)
+    def browser(self) -> str | None:
+        candidates = ((settings.viewer_browser,) if settings.viewer_browser
+                      else BROWSERS)
+        return next((b for b in candidates if shutil.which(b)), None)
 
     def available(self) -> bool:
-        return self.viewer() is not None
+        return (self.browser() is not None
+                and webserve.novnc_root() is not None)
 
     def presented(self) -> bool:
-        """Is *our* viewer open?
+        """Is *our* window open?
 
-        Tracked by the pid we spawned, not by process name. Matching on the
-        name meant any VNC client the user had open for something else read as
-        "already showing", so a show request returned success having put
-        nothing on screen.
+        Tracked by the pid we spawned, which is only meaningful because the
+        window runs on a profile of its own -- see settings.viewer_profile.
         """
         return session.viewer_pid() is not None
 
     def present(self) -> str:
         live = session.live()
         if self.presented():
-            # Re-fitting on a repeat show is the way back to a borderless
-            # picture after the window has been moved or resized, since the
-            # viewer never asks the server to resize on its own.
             return f"viewer already open{_fitted(live)}"
-        viewer = self.viewer()
-        if viewer is None:
-            raise WindowError(ErrorCode.NO_PRESENTER, "no VNC client installed",
+        browser = self.browser()
+        if browser is None:
+            raise WindowError(ErrorCode.NO_PRESENTER, "no browser to open",
                               detail=self._manual_hint())
         # Refused rather than shown: with no live session there is nothing
-        # behind the port, and a viewer opened onto it displays a black
-        # rectangle that looks exactly like a broken VNC stack.
-        if session.live() is None:
+        # behind the port, and a viewer opened onto it shows an empty
+        # rectangle that looks exactly like a broken stack.
+        if live is None:
             raise WindowError(ErrorCode.NO_PRESENTER, "no live browser session",
                               detail="start it with: agent-browser serve")
-        host, port = endpoint()
-        # host::port, not host:port -- a single colon means an X display
-        # number, so :5900 would be resolved as port 5900+5900.
-        # -n hides wlvncc's own cursor. The server draws the pointer into
-        # the frame (--render-cursor), which is what makes it visible at all;
-        # without -n the client then draws a second one over the top and you
-        # get two pointers moving together.
-        args = ([host, str(port), "-n"] if viewer == "wlvncc"
-                else [f"{host}::{port}"])
-        spawned = subprocess.Popen([viewer, *args], stdout=subprocess.DEVNULL,
+        if not webserve.ensure(settings.novnc_port):
+            raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
+                              detail="no noVNC found; set AGENT_BROWSER_NOVNC")
+        fitted = _fitted(live)
+        self._open(browser)
+        return f"opened {browser} on {page_url()}{fitted}"
+
+    def _open(self, browser: str) -> None:
+        """Start the window and wait for it to be up, or say it never was."""
+        args = [f"--app={page_url()}",
+                f"--user-data-dir={settings.viewer_profile}",
+                "--no-first-run", "--no-default-browser-check",
+                "--class=agent-browser-viewer"]
+        spawned = subprocess.Popen([browser, *args], stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL,
                                    start_new_session=True)
         session.record_viewer(spawned.pid)
-        for _ in range(_CONNECT_POLLS):
+        for _ in range(_OPEN_POLLS):
             time.sleep(_POLL_INTERVAL_S)
             if self.presented():
-                # Fitted only once the viewer is up: the target is that
-                # window's size, so it has to exist to be measured.
-                return f"opened {viewer} on {host}:{port}{_fitted(live)}"
+                return
         session.clear_viewer()
-        raise WindowError(ErrorCode.NO_PRESENTER, "VNC viewer did not connect",
-                          detail=f"{viewer} {' '.join(args)}")
+        raise WindowError(ErrorCode.NO_PRESENTER, "viewer window did not open",
+                          detail=f"{browser} {' '.join(args)}")
 
     def dismiss(self) -> None:
-        """Close only the viewer this tool opened.
+        """Close only the window this tool opened.
 
         The old `pkill -x` swept up every VNC client on the machine, including
         remote desktops that had nothing to do with this browser.
@@ -126,22 +161,13 @@ class LocalViewerPresenter:
         session.clear_viewer()
 
     def _manual_hint(self) -> str:
-        host, port = endpoint()
-        return f"connect manually to {host}:{port}"
+        return f"open {page_url()} in any browser"
 
 
-def _fitted(live: session.NestedSession | None) -> str:
-    """Size the nested output to the viewer, and say so if anything changed."""
-    if live is None:
-        return ""
-    change = geometry.fit(live.wayland_display)
-    return "" if change is None else f", output {change}"
+class LinkPresenter:
+    """Hand back the URL for a human to open wherever they are.
 
-
-class WebPresenter:
-    """Hand back a noVNC URL.
-
-    Whether a human actually opened it is unknowable from here, so presented()
+    Whether anyone actually opened it is unknowable from here, so presented()
     stays False and dismiss() does nothing -- better than inventing a state we
     cannot observe.
     """
@@ -149,21 +175,23 @@ class WebPresenter:
     name = PresenterName.WEB
 
     def available(self) -> bool:
-        """Only if something is actually serving noVNC.
+        """Only if the page can actually be served.
 
         Handing back a URL that answers nothing would be the same silent lie as
         launching a visible window and calling it hidden.
         """
-        with socket.socket() as probe:
-            probe.settimeout(0.3)
-            return probe.connect_ex((settings.vnc_host,
-                                     settings.novnc_port)) == 0
+        return webserve.novnc_root() is not None
 
     def presented(self) -> bool:
         return False
 
     def present(self) -> str:
-        return f"open {settings.novnc_url} to take over the browser"
+        live = session.live()
+        if not webserve.ensure(settings.novnc_port):
+            raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
+                              detail="no noVNC found; set AGENT_BROWSER_NOVNC")
+        fitted = _fitted(live)
+        return f"open {page_url()} to take over the browser{fitted}"
 
     def dismiss(self) -> None:
         return None
@@ -181,12 +209,14 @@ class NullPresenter:
     def present(self) -> str:
         """Say what is actually available rather than just refusing.
 
-        wayvnc is listening whenever the nested compositor is up, so any VNC
-        client can still reach it -- from another machine, or a phone.
+        wayvnc is listening whenever the nested compositor is up, so a browser
+        pointed at any noVNC installation can still reach it -- from another
+        machine, or a phone. It speaks websocket rather than raw RFB, though,
+        so a native VNC client is not the fallback it used to be.
         """
         host, port = endpoint()
-        return ("no viewer installed and no noVNC server; wayvnc is listening "
-                f"on {host}:{port} -- point any VNC client at it")
+        return ("no viewer: nothing here can serve the noVNC page. wayvnc is "
+                f"listening on ws://{host}:{port} -- point a noVNC at it")
 
     def dismiss(self) -> None:
         return None
@@ -195,9 +225,9 @@ class NullPresenter:
 def _build(name: PresenterName) -> Presenter:
     match name:
         case PresenterName.LOCAL:
-            return LocalViewerPresenter()
+            return WindowPresenter()
         case PresenterName.WEB:
-            return WebPresenter()
+            return LinkPresenter()
         case PresenterName.NONE:
             return NullPresenter()
         case _ as unreachable:
@@ -207,13 +237,13 @@ def _build(name: PresenterName) -> Presenter:
 def select() -> Presenter:
     """Explicit choice wins; otherwise the first mechanism that really exists.
 
-    Each candidate is asked whether it is available, including the web one --
-    an unconditional fallback would hand back a noVNC URL with nothing serving
-    it, which is a worse answer than admitting there is no viewer.
+    Each candidate is asked whether it is available, including the link one --
+    an unconditional fallback would hand back a URL with nothing serving it,
+    which is a worse answer than admitting there is no viewer.
     """
     if settings.presenter is not None:
         return _build(settings.presenter)
-    for candidate in (LocalViewerPresenter(), WebPresenter()):
+    for candidate in (WindowPresenter(), LinkPresenter()):
         if candidate.available():
             return candidate
     return NullPresenter()

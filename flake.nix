@@ -11,20 +11,30 @@
       let
         pkgs = import nixpkgs { inherit system; };
 
-        # The nested compositor, its VNC server, and a client to view it.
-        # These are the packages you would otherwise install with a system
-        # package manager.
+        # noVNC's static files, and nothing else from that package. The
+        # package itself carries websockify -- and so numpy -- for 471 MiB,
+        # where the viewer needs 1.8 MB of JavaScript: wayvnc serves the
+        # websocket itself (--websocket), and the page is served by this
+        # tool's own Python. Copying the tree into its own derivation is what
+        # keeps that closure out; plain files reference nothing.
+        novncStatic = pkgs.runCommand "novnc-static" { } ''
+          cp -r ${pkgs.novnc}/share/webapps/novnc $out
+        '';
+
+        # The nested compositor and its VNC server. These are the packages you
+        # would otherwise install with a system package manager.
         #
-        # wlvncc rather than gtk-vnc: nixpkgs' gtk-vnc ships only gvnccapture,
-        # not the gvncviewer binary, so it would silently fall through to a
-        # host-installed client -- exactly what this flake exists to avoid.
-        # wlr-randr resizes the nested output at runtime: cage implements
-        # wlr-output-management, and the alternative -- letting the VNC client
-        # ask for a size -- is not available, since wlvncc never asks and
-        # wayvnc refuses the request when a client does. wayland-utils reads
-        # the host's screen through core wl_output, so the target size does
-        # not depend on which compositor is running.
-        runtimeDeps = with pkgs; [ cage wayvnc wlvncc wlr-randr wayland-utils ];
+        # No VNC client: the viewer is a page in the host's own browser (see
+        # present.py). That is not only lighter than every native client that
+        # would do, it is the only one that sizes itself correctly -- noVNC
+        # asks for the framebuffer its window needs and keeps asking as the
+        # window changes. The light native clients cannot be sized at all, and
+        # the one that can costs 1.2 GiB to do the same job.
+        #
+        # wlr-randr and wayland-utils remain for the one thing a viewer cannot
+        # ask for: the output scale, which decides the density the nested
+        # Chrome renders at.
+        runtimeDeps = with pkgs; [ cage wayvnc wlr-randr wayland-utils ];
 
         # Deliberately NOT pinned here: Chrome is taken from the host.
         #
@@ -47,7 +57,11 @@
           # Everything the hook prints goes to stderr. `nix develop --command`
           # forwards hook output to stdout, which would corrupt any program
           # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
+          # The viewer page needs noVNC's modules; the dev shell points at the
+          # same store path the wrapper does.
+          NOVNC_STATIC = novncStatic;
           shellHook = ''
+            export AGENT_BROWSER_NOVNC="''${AGENT_BROWSER_NOVNC:-${novncStatic}}"
             {
               echo "agent-browser dev shell"
               echo "${chromeNote}"
@@ -62,6 +76,7 @@
           name = "agent-browser";
           runtimeInputs = runtimeDeps ++ [ pythonEnv pkgs.uv ];
           text = ''
+            export AGENT_BROWSER_NOVNC="''${AGENT_BROWSER_NOVNC:-${novncStatic}}"
             exec uv run --project "''${AGENT_BROWSER_SRC:-${self}}" \
               agent-browser "$@"
           '';

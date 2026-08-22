@@ -9,9 +9,9 @@ Without it the correlation was guessed by name, and both directions of the
 guess were wrong. A second cage session inherited the first one's hardcoded
 VNC port, so its wayvnc lost the bind and died while the *stale* one kept
 serving an empty compositor -- a viewer that connects and shows black. In the
-other direction `pkill -x cage` and `pkill -x wlvncc` reached every such
-process on the machine, so this tool tore down sessions and remote desktops
-that were never its own.
+other direction `pkill -x cage` and a `pkill -x` on the viewer's binary reached
+every such process on the machine, so this tool tore down sessions and remote
+desktops that were never its own.
 
 The record is written by the session script itself, from inside cage, because
 that is the only place that can observe what actually came up: the display it

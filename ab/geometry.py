@@ -1,32 +1,25 @@
-"""Imperative shell: how large the nested output is, and at what scale.
+"""Imperative shell: at what density the nested browser renders.
 
-cage's headless output is born 1280x720 at scale 1, which has nothing to do
-with the screen it is eventually looked at on. Left alone, a human taking over
-the browser gets the worst of both: the frame is letterboxed inside their
-window, and every pixel of it is resampled on the way to a HiDPI panel --
-precisely when they are being asked to read a captcha or a login form.
+The *size* of the nested output is no longer decided here. The viewer asks for
+it: noVNC sends the RFB `SetDesktopSize` its window needs, wayvnc answers it
+through cage's wlr-output-management, and the framebuffer follows the window
+continuously -- including while it is being dragged to a new size. Everything
+this module used to do to guess that size went with it, along with the race it
+could never win: wayvnc advertises a resize to clients some time after
+wlr-randr returns, and a viewer connecting inside that gap kept the old shape.
 
-The output is therefore resized to fit whoever is about to look at it. cage
-implements wlr-output-management, so this is a supported runtime
-reconfiguration rather than a restart.
+What a viewer cannot ask for is the *scale*, and scale is not cosmetic. It is
+what decides whether the nested Chrome treats a 1422x1730 output as 1422x1730
+CSS pixels of unreadably small page, or as 889x1081 at dpr 2 -- which is what
+an ordinary laptop reports, and what someone reading a captcha needs.
 
-Client-driven resize would be the tidier mechanism -- the viewer knows its own
-window, and wayvnc resizes automatically by default -- but it does not work
-here: wlvncc never asks, and a client that does ask (TigerVNC with
-RemoteResize) is answered `SetDesktopSize failed`. So the size is set from
-this side.
-
-The size comes from the screen rather than from the viewer's window. The
-window would be the exact target, but measuring another client's window is
-not something any Wayland protocol offers, and the compositor IPC that would
-answer it differs per desktop -- this tool stays out of the host compositor
-on purpose. Each probe is asked whether it is available, and when none is,
-the output simply keeps the size it had.
+Setting the scale leaves the framebuffer size alone, so unlike the old fitting
+it cannot disturb a connected viewer; a live session was watched through a
+scale change and back to confirm it.
 """
 import os
 import shutil
 import subprocess
-from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
@@ -35,26 +28,10 @@ from .config import settings
 _HEADLESS_PREFIX = "HEADLESS"
 
 
-class Screen(BaseModel, frozen=True):
-    """A target output size, in physical pixels, plus its scale factor.
+class Scale(BaseModel, frozen=True):
+    """How many device pixels the nested Chrome draws per CSS pixel."""
 
-    Physical rather than logical because that is what the VNC client
-    receives: matching it to the viewer's window is what removes the border,
-    and matching the scale is what makes Chrome render at the density the
-    panel actually has.
-    """
-
-    width: int = Field(ge=1)
-    height: int = Field(ge=1)
-    scale: float = Field(default=1.0, gt=0)
-
-
-@runtime_checkable
-class GeometryProbe(Protocol):
-    """A way of finding out how big the output should be."""
-
-    def available(self) -> bool: ...
-    def target(self) -> Screen | None: ...
+    factor: float = Field(gt=0)
 
 
 def _run(*args: str, env: dict[str, str] | None = None) -> str:
@@ -76,123 +53,61 @@ def _run(*args: str, env: dict[str, str] | None = None) -> str:
         return ""
 
 
-class ConfiguredScreen:
-    """An explicit size from the environment.
-
-    Wins over anything probed: someone who has said what they want is not
-    asking for a guess, and it is the only mechanism available on a
-    compositor none of the probes understand.
-    """
-
-    def available(self) -> bool:
-        return settings.vnc_size is not None
-
-    def target(self) -> Screen | None:
-        if settings.vnc_size is None:
-            return None
-        width, _, height = settings.vnc_size.partition("x")
-        try:
-            return Screen(width=int(width), height=int(height),
-                          scale=settings.vnc_scale or 1.0)
-        except ValueError:
-            return None
-
-
-class GeometryCommand:
-    """A command the user supplies that prints the size to use.
-
-    The exact target is the viewer's own window, and nothing portable can
-    measure it: no Wayland protocol exposes another client's geometry, and
-    the IPC that would answer it is different on every desktop. Rather than
-    picking one desktop and calling it support, the question is handed back
-    to whoever knows their own -- they configure a command, and this stays
-    ignorant of which compositor answered it.
-
-    Output is `WIDTH x HEIGHT` with an optional `@SCALE`, in physical pixels:
-
-        AGENT_BROWSER_GEOMETRY_CMD='...' agent-browser show
-    """
-
-    def available(self) -> bool:
-        return settings.geometry_cmd is not None
-
-    def target(self) -> Screen | None:
-        if settings.geometry_cmd is None:
-            return None
-        return parse_geometry(_shell(settings.geometry_cmd))
-
-
-def parse_geometry(text: str) -> Screen | None:
-    """Parse `WxH` or `WxH@scale`. Returns None for anything unrecognised."""
-    cleaned = text.strip().lower().replace(" ", "")
-    if not cleaned:
+def configured() -> Scale | None:
+    """An explicit scale from the environment, which wins over the probe."""
+    if settings.vnc_scale is None:
         return None
-    size, _, scale_text = cleaned.partition("@")
-    width, _, height = size.partition("x")
-    try:
-        return Screen(width=int(width), height=int(height),
-                      scale=float(scale_text) if scale_text else 1.0)
-    except ValueError:
+    return Scale(factor=settings.vnc_scale)
+
+
+def host() -> Scale | None:
+    """The scale the host screen runs, which the viewer's window inherits.
+
+    wlr-randr first and core `wl_output` second, because the two answer with
+    different precision: wl_output carries an integer buffer scale, so a screen
+    at 1.6 reads as 2, while wlr-randr reports the compositor's real fractional
+    value. The integer is a usable fallback -- Chrome rounds the scale up to an
+    integer anyway -- but it is not the same picture.
+    """
+    for line in _run("wlr-randr").splitlines():
+        if line.strip().startswith("Scale:"):
+            value = _number(line.split("Scale:")[1])
+            if value:
+                return Scale(factor=value)
+    return _wl_output_scale()
+
+
+def _wl_output_scale() -> Scale | None:
+    """The first output's integer buffer scale, from core wl_output."""
+    if not shutil.which("wayland-info"):
         return None
+    for line in _first_block(_run("wayland-info")).splitlines():
+        # Not startswith: scale shares a line with the position, as
+        # `x: 0, y: 0, scale: 2,`.
+        if "scale:" in line:
+            value = _number(line.split("scale:")[1])
+            if value:
+                return Scale(factor=value)
+    return None
 
 
-def _shell(command: str) -> str:
-    try:
-        return subprocess.run(command, shell=True, capture_output=True,
-                              text=True, check=False).stdout
-    except OSError:
+def _first_block(report: str) -> str:
+    """The first wl_output stanza, from its header to the next interface.
+
+    Scoped to one output because a second monitor further down the dump
+    describes a screen the viewer is not on.
+    """
+    lines = report.splitlines()
+    start = next((i for i, line in enumerate(lines) if "wl_output" in line), None)
+    if start is None:
         return ""
-
-
-class HostOutput:
-    """The screen this machine actually has, read from core Wayland.
-
-    `wl_output` is part of the core protocol, so every compositor advertises
-    it -- wlroots, GNOME, KDE alike. That matters more here than precision:
-    the viewer's own window would be the exact target, but no protocol lets
-    one client measure another's window, and reaching for a compositor's
-    private IPC to find out would tie this tool to one desktop.
-
-    So the output is sized to the whole screen. A viewer shown fullscreen
-    then maps pixel for pixel; a viewer in a tile still letterboxes, and
-    AGENT_BROWSER_VNC_SIZE is the lever for that case.
-    """
-
-    def available(self) -> bool:
-        return bool(shutil.which("wayland-info"))
-
-    def target(self) -> Screen | None:
-        report = _run("wayland-info")
-        if "wl_output" not in report:
-            return None
-        return self._first_output(report)
-
-    def _first_output(self, report: str) -> Screen | None:
-        """Parse the first output that states a current mode.
-
-        The report is a human-readable dump rather than a stable format, so
-        this reads only the two fields it needs and gives up quietly if they
-        are not where it expects -- a wrong guess here would resize the
-        session to something nobody asked for.
-        """
-        scale = 1.0
-        for line in report.splitlines():
-            stripped = line.strip()
-            # Not startswith: scale shares a line with the position, as
-            # `x: 0, y: 0, scale: 2,`.
-            if "scale:" in stripped:
-                scale = _number(stripped.split("scale:")[1]) or scale
-            if stripped.startswith("width:") and "height:" in stripped:
-                width = _number(stripped.split("width:")[1])
-                height = _number(stripped.split("height:")[1])
-                if width and height:
-                    return Screen(width=int(width), height=int(height),
-                                  scale=scale)
-        return None
+    end = next((i for i, line in enumerate(lines[start + 1:], start + 1)
+                if line.startswith("interface:")), len(lines))
+    return "\n".join(lines[start:end])
 
 
 def _number(text: str) -> float | None:
-    """Leading number of a field like `2880 px,` or `2,`."""
+    """Leading number of a field like `1.601562` or `2,`."""
     digits = ""
     for char in text.strip():
         if char.isdigit() or (char == "." and "." not in digits):
@@ -202,15 +117,9 @@ def _number(text: str) -> float | None:
     return float(digits) if digits else None
 
 
-def select() -> Screen | None:
-    """First probe that both exists and has an answer."""
-    for probe in (ConfiguredScreen(), GeometryCommand(), HostOutput()):
-        if not probe.available():
-            continue
-        target = probe.target()
-        if target is not None:
-            return target
-    return None
+def select() -> Scale | None:
+    """The configured scale, or the host screen's, or nothing to say."""
+    return configured() or host()
 
 
 def _output_name(env: dict[str, str]) -> str | None:
@@ -220,11 +129,13 @@ def _output_name(env: dict[str, str]) -> str | None:
     return None
 
 
-def apply(display: str, screen: Screen) -> str | None:
-    """Resize the nested output. Returns what changed, or None if it could not.
+def apply(display: str, scale: Scale) -> str | None:
+    """Set the nested output's scale, or None if it could not be set.
 
     Best effort by design: a failure here costs picture quality, never the
-    session, so it is reported rather than raised.
+    session, so it is reported rather than raised. Reported honestly, though --
+    announcing a scale wlr-randr refused would be the same silent lie the old
+    resize told.
     """
     if shutil.which("wlr-randr") is None:
         return None
@@ -233,13 +144,17 @@ def apply(display: str, screen: Screen) -> str | None:
     name = _output_name(env)
     if name is None:
         return None
-    _run("wlr-randr", "--output", name,
-         "--custom-mode", f"{screen.width}x{screen.height}",
-         "--scale", str(screen.scale), env=env)
-    return f"{screen.width}x{screen.height} @ {screen.scale:g}"
+    try:
+        done = subprocess.run(["wlr-randr", "--output", name,
+                               "--scale", str(scale.factor)],
+                              capture_output=True, text=True, check=False,
+                              env={**os.environ, **env})
+    except OSError:
+        return None
+    return None if done.returncode != 0 else f"scale {scale.factor:g}"
 
 
 def fit(display: str) -> str | None:
-    """Size the output to whoever is about to look at it."""
-    screen = select()
-    return None if screen is None else apply(display, screen)
+    """Give the nested output the density of the screen it will be seen on."""
+    scale = select()
+    return None if scale is None else apply(display, scale)
