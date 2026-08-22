@@ -32,7 +32,6 @@ class WaitUntil(str, Enum):
 
 class BackendName(str, Enum):
     NESTED = "nested"
-    WLRCTL = "wlrctl"
     NONE = "none"
 
 

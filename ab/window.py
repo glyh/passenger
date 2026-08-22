@@ -4,8 +4,10 @@ Deliberately NOT headless: headless changes the fingerprint (no GPU, software
 WebGL, no window) and makes human handoff impossible. The window stays fully
 real -- it is just parked somewhere you aren't looking.
 
-There is no standard Wayland protocol for this, so backends are a Protocol with
-one implementation per mechanism. Override with AGENT_BROWSER_WM.
+There is no standard Wayland protocol for a window to hide itself, and the
+compositor-specific ways of doing it are unportable and prone to breaking, so
+there is exactly one real mechanism here plus a null object for when its
+dependencies are missing. Override the choice with AGENT_BROWSER_WM.
 """
 import os
 import shutil
@@ -103,29 +105,6 @@ class NestedBackend:
                           detail=f"{viewer} {' '.join(args)}")
 
 
-class WlrctlBackend:
-    """Portable across wlroots compositors, but minimize is advisory: some
-    implement it as a no-op, so treat success as best-effort."""
-
-    name = BackendName.WLRCTL
-
-    def available(self) -> bool:
-        return bool(shutil.which("wlrctl"))
-
-    def prepare(self) -> None:
-        return None
-
-    def plan(self, argv: tuple[str, ...]) -> LaunchPlan:
-        return LaunchPlan(argv=argv)
-
-    def visible(self) -> bool:
-        return WM_CLASS in _run("wlrctl", "toplevel", "list")
-
-    def set_visible(self, visible: bool) -> None:
-        _run("wlrctl", "toplevel", "focus" if visible else "minimize",
-             f"app_id:{WM_CLASS}")
-
-
 class NoOpBackend:
     """No mechanism available; the window simply stays visible."""
 
@@ -151,15 +130,13 @@ def _build(name: BackendName) -> WindowBackend:
     match name:
         case BackendName.NESTED:
             return NestedBackend()
-        case BackendName.WLRCTL:
-            return WlrctlBackend()
         case BackendName.NONE:
             return NoOpBackend()
         case _ as unreachable:
             assert_never(unreachable)
 
 
-_AUTO_ORDER = (BackendName.NESTED, BackendName.WLRCTL, BackendName.NONE)
+_AUTO_ORDER = (BackendName.NESTED, BackendName.NONE)
 
 
 def select() -> WindowBackend:

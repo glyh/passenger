@@ -102,8 +102,8 @@ false-positive forever. (Observed during development — a thin page taught it
 ## Hiding the window
 
 Chrome runs inside its own nested **cage** compositor. Your host compositor
-never sees a window, so this works identically on any Wayland compositor,
-or over SSH — and survives switching between them. `show` attaches a VNC
+never sees a window, so this works identically on any Wayland compositor, or
+over SSH — and survives switching between them. `show` attaches a VNC
 viewer to that session; a challenge handoff does it automatically and re-hides
 afterwards.
 
@@ -112,13 +112,17 @@ fingerprint is unchanged. The one delta is `screen: 1280x720`, cage's default
 headless output — plausible but fixed. Swap cage for `sway --headless` if you
 need to control it (`swaymsg output HEADLESS-1 resolution 1920x1080`).
 
-Backends are pluggable via `AGENT_BROWSER_WM`:
+Selectable via `AGENT_BROWSER_WM`:
 
-| value      | mechanism                        | notes |
-|------------|----------------------------------|-------|
-| `nested`   | cage + wayvnc (default)          | portable everywhere |
-| `wlrctl`   | wlr-foreign-toplevel minimize    | wlroots only; minimize is advisory |
-| `none`     | no-op                            | window stays visible |
+| value    | mechanism               | notes |
+|----------|-------------------------|-------|
+| `nested` | cage + wayvnc (default) | the only real mechanism; portable everywhere |
+| `none`   | no-op                   | fallback when cage/wayvnc are missing — the window stays visible |
+
+Compositor-specific backends (hyprctl special workspaces, `wlrctl` minimize)
+were tried and removed. They break: Hyprland 0.56 dropped `hyprctl keyword` and
+moved dispatch to Lua, and did it while still exiting 0. Running Chrome in its
+own compositor sidesteps that whole class of breakage.
 
 ## Environment
 
