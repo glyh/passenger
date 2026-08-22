@@ -3,7 +3,7 @@ id: 013
 title: The passthrough tool that runs a script against a page
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
