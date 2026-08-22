@@ -17,9 +17,9 @@ from typing import Annotated
 from mcp.server import MCPServer
 from pydantic import Field
 
-from . import browser, present, registry, service, session as session_mod
+from . import browser, present, registry, service, session as session_mod, targets
 from .config import settings
-from .models import ExtractMode, FetchRequest, WaitUntil
+from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
 server = MCPServer(
     name="agent-browser",
@@ -31,7 +31,15 @@ server = MCPServer(
         "If a fetch returns type='blocked', a human must solve a challenge: "
         "tell the user what is blocking, ask them to run `agent-browser show` "
         "(or open the noVNC URL) and solve it, then call fetch again. Never "
-        "try to solve a captcha yourself."
+        "try to solve a captcha yourself.\n\n"
+        "For anything a plain fetch cannot reach -- a search box, a tab, the "
+        "next page of a list -- use `script`, which runs Playwright code "
+        "against a real tab. Prefer reading over driving: after a human has "
+        "navigated, `script` with the tab they used costs nothing and is "
+        "invisible to the site, whereas synthetic clicks and fills have no "
+        "cursor path and no keystroke timing, which is what behavioural "
+        "anti-bot systems score. Driving spends the reputation of a session "
+        "whose value is that it has never done anything unusual."
     ),
 )
 
@@ -76,6 +84,52 @@ def fetch(
         reuse_tab=True,
     )
     return service.fetch(request)
+
+
+@server.tool()
+def script(
+    source: Annotated[str, Field(description=(
+        "Python, run with `page` (a Playwright page) and `read(page)` (this "
+        "tool's markdown extraction) in scope. Use `return` to hand a value "
+        "back; it must be JSON, so return page.url or read(page), never a "
+        "locator. Example: page.fill('#q', 'x'); page.press('#q', 'Enter'); "
+        "page.wait_for_selector('.result'); return read(page)"))],
+    tab: Annotated[str | None, Field(description=(
+        "Which tab to run against, from a previous reply or from list_tabs. "
+        "Omit for a fresh blank tab."))] = None,
+    mode: Annotated[ExtractMode, Field(
+        description="How read(page) and the page report extract content.")]
+        = ExtractMode.AUTO,
+    read_page: Annotated[bool, Field(description=(
+        "Whether the reply carries the ending page as markdown. Turn it off "
+        "for steps whose content you do not need -- paging a listing, say."))]
+        = True,
+    min_words: Annotated[int | None, Field(
+        description="Below this the ending page is reported as blocked.")] = None,
+    timeout_seconds: Annotated[int, Field(
+        description="Per-call budget for each Playwright operation.",
+        ge=1, le=600)] = 60,
+) -> service.ScriptOutcome:
+    """Run Playwright code against a real tab, and read where it ends up.
+
+    The way to reach content that sits behind an interaction, and the way to
+    read a page a human navigated to during a handoff. The tab stays open and
+    comes back in `tab`, so a sequence continues across calls.
+    """
+    _ensure_daemon()
+    return service.run(ScriptRequest(
+        source=source, tab=tab, extract_mode=mode, read_page=read_page,
+        min_words=(settings.min_content_words if min_words is None
+                   else min_words),
+        timeout_s=timeout_seconds))
+
+
+@server.tool()
+def list_tabs() -> list[dict[str, str]]:
+    """List the open tabs, so a script can be pointed at one of them."""
+    _ensure_daemon()
+    return [{"tab": page.id, "url": page.url, "title": page.title}
+            for page in targets.pages()]
 
 
 @server.tool()

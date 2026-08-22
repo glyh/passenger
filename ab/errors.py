@@ -20,6 +20,10 @@ class ErrorCode(str, Enum):
     HANDOFF_TIMEOUT = "HANDOFF_TIMEOUT"
     SIGNATURE_NOT_FOUND = "SIGNATURE_NOT_FOUND"
     REGISTRY_CORRUPT = "REGISTRY_CORRUPT"
+    SCRIPT_INVALID = "SCRIPT_INVALID"
+    SCRIPT_RAISED = "SCRIPT_RAISED"
+    SCRIPT_RETURN_NOT_JSON = "SCRIPT_RETURN_NOT_JSON"
+    TAB_NOT_FOUND = "TAB_NOT_FOUND"
 
 
 class AgentBrowserError(Exception):
@@ -61,3 +65,17 @@ class HandoffTimeout(AgentBrowserError):
 
 class RegistryError(AgentBrowserError):
     """The learned-signature store is unreadable or lacks a named entry."""
+
+
+class ScriptError(AgentBrowserError):
+    """A caller's script would not compile, raised, or returned a handle."""
+
+
+class TabNotFound(AgentBrowserError):
+    """The tab a call named is gone -- closed, or from a browser since restarted."""
+
+    def __init__(self, tab: str, open_tabs: tuple[str, ...]) -> None:
+        super().__init__(ErrorCode.TAB_NOT_FOUND, f"no tab {tab}",
+                         detail=("open now: " + ", ".join(open_tabs)
+                                 if open_tabs else "no tabs are open"))
+        self.tab = tab

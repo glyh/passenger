@@ -23,7 +23,7 @@ from patchright.sync_api import sync_playwright
 
 from . import launch, session, targets
 from .config import ATTACH_TIMEOUT_S, CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
-from .errors import DaemonError, ErrorCode
+from .errors import DaemonError, ErrorCode, TabNotFound
 from .models import BackendName
 
 _STARTUP_POLLS = 60
@@ -227,6 +227,28 @@ class Session:
                 if existing.url in ("about:blank", "chrome://newtab/"):
                     return existing
         return self.context.new_page()
+
+    def target_id(self, page: Any) -> str:
+        """The tab's CDP id -- the handle a caller holds between calls.
+
+        Not the Playwright Page object, which lives only as long as this
+        attach, and not the URL, which changes under a script's feet.
+        """
+        info: dict[str, Any] = self.context.new_cdp_session(page).send(
+            "Target.getTargetInfo")
+        return str(info["targetInfo"]["targetId"])
+
+    def page_for(self, tab: str | None) -> Any:
+        """The tab a call named, or a blank one when it named none."""
+        if tab is None:
+            return self.page(reuse=True)
+        open_now = {self.target_id(page): page for page in self.context.pages}
+        if tab not in open_now:
+            # Closed, or from a browser that has restarted since. Either way
+            # the caller is holding a handle to something gone, and needs to
+            # know which tabs there are rather than a bare failure.
+            raise TabNotFound(tab, tuple(open_now))
+        return open_now[tab]
 
     def close_other_tabs(self, keep: Any) -> int:
         """Close every tab except `keep`. Returns how many were closed.

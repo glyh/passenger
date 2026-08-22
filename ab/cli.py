@@ -6,14 +6,15 @@ like on a terminal.
 """
 import json
 import sys
+from pathlib import Path
 from typing import Annotated, assert_never
 
 import cyclopts
 
-from . import browser, launch, present, registry, service, session as session_mod
+from . import browser, launch, present, registry, service, session as session_mod, targets
 from .config import settings
 from .errors import AgentBrowserError, ErrorCode
-from .models import ExtractMode, FetchRequest, WaitUntil
+from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
 app = cyclopts.App(
     name="agent-browser",
@@ -97,6 +98,70 @@ def _render(outcome: service.FetchOutcome, as_json: bool) -> None:
             raise SystemExit(2)
         case _ as unreachable:
             assert_never(unreachable)
+
+
+@app.command
+def script(
+    file: str = "-",
+    *,
+    tab: str | None = None,
+    mode: ExtractMode = ExtractMode.AUTO,
+    read_page: bool = True,
+    min_words: int | None = None,
+    timeout: int = 60,
+    json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
+) -> None:
+    """Run a Playwright script against a tab, and print where it ends up.
+
+    The same door the MCP server offers, for driving a page by hand: reaching
+    content behind a search box, or reading the tab a human just navigated to.
+
+    Parameters
+    ----------
+    file
+        Script to run. Defaults to stdin, so it reads from a heredoc.
+    tab
+        Tab id to run against, from `tabs`. Omitted means a fresh blank tab.
+    read_page
+        With --no-read-page, skip extracting the ending page.
+    timeout
+        Seconds each Playwright operation inside the script may take.
+    """
+    source = sys.stdin.read() if file == "-" else Path(file).read_text()
+    outcome = service.run(ScriptRequest(
+        source=source, tab=tab, extract_mode=mode, read_page=read_page,
+        min_words=settings.min_content_words if min_words is None else min_words,
+        timeout_s=timeout, as_json=json_out))
+    _render_script(outcome, json_out)
+
+
+def _render_script(outcome: service.ScriptOutcome, as_json: bool) -> None:
+    """A script that failed exits non-zero; where it failed goes to stderr."""
+    match outcome:
+        case service.Ran():
+            if as_json or outcome.page is None:
+                json.dump(outcome.model_dump(mode="json"), sys.stdout, indent=2)
+                print()
+            else:
+                print(f"   tab: {outcome.tab}", file=sys.stderr)
+                if outcome.returned is not None:
+                    print(f"   returned: {outcome.returned!r}", file=sys.stderr)
+                _render(outcome.page, as_json=False)
+        case service.Failed():
+            print(f"   tab: {outcome.tab}", file=sys.stderr)
+            print(f"[{outcome.code}] {outcome.error}", file=sys.stderr)
+            if outcome.where:
+                print(outcome.where, file=sys.stderr)
+            raise SystemExit(2)
+        case _ as unreachable:
+            assert_never(unreachable)
+
+
+@app.command
+def tabs() -> None:
+    """List the open tabs and their ids, for `script --tab`."""
+    for page in targets.pages():
+        print(f"{page.id}  {page.title[:40]:40}  {page.url}")
 
 
 @app.command

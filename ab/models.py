@@ -161,6 +161,27 @@ class FetchRequest(BaseModel, frozen=True):
     handoff_timeout_s: int = Field(default=300, ge=1)
 
 
+class ScriptRequest(BaseModel, frozen=True):
+    """One call at the passthrough door (ticket 013).
+
+    Deliberately not a FetchRequest: a script decides its own navigation, so
+    the fields about *how to arrive* -- url, wait_until, settle_ms, handoff --
+    have nothing to say here. What survives is what to make of the page the
+    script leaves behind.
+    """
+
+    source: str
+    # None means "a blank tab", which is the one-shot case. A targetId
+    # continues a sequence, or picks up the tab a human just navigated.
+    tab: str | None = None
+    extract_mode: ExtractMode = ExtractMode.AUTO
+    min_words: int = Field(default=80, ge=0)
+    # A sequence that pages a listing should not pay a full read per step.
+    read_page: bool = True
+    timeout_s: int = Field(default=60, ge=1)
+    as_json: bool = False
+
+
 class LaunchPlan(BaseModel, frozen=True):
     """How a window backend wants Chrome started."""
 
