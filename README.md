@@ -21,7 +21,23 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 Register it with Claude Code for every project:
 
     claude mcp add agent-browser --scope user -- \
+      nix develop /path/to/agent-browser --command \
       uv run --project /path/to/agent-browser agent-browser-mcp
+
+`nix develop` rather than a bare `uv run`: uv heals the Python side on its own
+(it creates and syncs .venv from uv.lock, fetching the interpreter if needed),
+but it knows nothing about cage and wayvnc. Without the flake shell those
+resolve only if they also happen to be installed system-wide, and a machine
+without them would start Chrome *visible*.
+
+Two traps that cost real debugging, both worth knowing if you rewire this:
+
+- `nix develop --command` forwards the shellHook to **stdout**, which corrupts
+  any stdio protocol. This flake's hook prints to stderr for that reason.
+- `direnv exec <dir> uv run ...` is the fast alternative -- 0.16s against 3.0s,
+  thanks to nix-direnv's cache, and its stdout is clean. It is not the default
+  only because editing .envrc revokes direnv's approval until you re-allow it,
+  which would break the server at the worst moment.
 
 Tools: `fetch`, `show_browser`, `hide_browser`, `browser_status`,
 `close_tabs`, `list_blockers`.

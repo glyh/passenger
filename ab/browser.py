@@ -22,6 +22,7 @@ from patchright.sync_api import sync_playwright
 from . import launch
 from .config import CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
 from .errors import DaemonError, ErrorCode
+from .models import BackendName
 
 _STARTUP_POLLS = 60
 _POLL_INTERVAL_S = 0.5
@@ -61,6 +62,14 @@ def start(detach: bool = True, hidden: bool = True) -> str:
     )
 
     backend = launch.select()
+    if hidden and backend.name is BackendName.NONE:
+        # Silently launching a visible window would defeat the point of this
+        # tool, and the caller would never know. Make them say so explicitly.
+        raise DaemonError(
+            ErrorCode.CANNOT_HIDE,
+            "asked to start hidden, but nothing here can hide a window",
+            detail="install cage + wayvnc (or `nix develop`), "
+                   "or start it with --visible to accept a visible window")
     if hidden:
         backend.prepare()
         argv += (f"--class={launch.WM_CLASS}",)

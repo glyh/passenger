@@ -38,10 +38,15 @@
       {
         devShells.default = pkgs.mkShell {
           packages = runtimeDeps ++ [ pythonEnv pkgs.uv pkgs.mypy ];
+          # Everything the hook prints goes to stderr. `nix develop --command`
+          # forwards hook output to stdout, which would corrupt any program
+          # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
           shellHook = ''
-            echo "agent-browser dev shell"
-            echo "${chromeNote}"
-            echo "run: uv run agent-browser status"
+            {
+              echo "agent-browser dev shell"
+              echo "${chromeNote}"
+              echo "run: uv run agent-browser status"
+            } >&2
           '';
         };
 
