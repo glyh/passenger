@@ -2,8 +2,8 @@
 the empty extraction, and the tidying ticket 025's markup work depends on.
 
 `choose` and `tidy` are pure by design, so none of this needs a browser. The
-walker itself is JavaScript and is not reachable from here; it was measured
-against live pages instead.
+walker itself is JavaScript over a live DOM and is covered separately, in
+`test_walker.py`, which does start one.
 """
 from ab.extract import choose, tidy
 from ab.models import ExtractMode

@@ -110,10 +110,20 @@
           {
             nativeBuildInputs = [
               (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
+              # The DOM walker is JavaScript over a live document, so the one
+              # test that covers it needs a browser (ticket 028). This is not
+              # the browser the tool fetches with -- that one is deliberately
+              # the host's, so its version keeps drifting with the vendor's
+              # releases. A browser that is only ever handed a fixture string
+              # has no fingerprint to keep current, and pinning it is what
+              # stops the test from quietly skipping in the one command that
+              # gates the repo.
+              pkgs.chromium
             ];
           }
           ''
             cd ${source}
+            export AGENT_BROWSER_CHROME=${pkgs.chromium}/bin/chromium
             # HOME is unset in the sandbox, and Settings' state_dir defaults to
             # a path under it. conftest.py overrides that anyway; this keeps
             # import time from failing before conftest gets to run.

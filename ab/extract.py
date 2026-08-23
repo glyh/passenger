@@ -40,7 +40,10 @@ _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
           "[role=navigation], [role=banner], [role=contentinfo], "
           "[aria-hidden=true], [hidden]")
 
-_ROOTS = ("main", "[role=main]", "article", "#content", "#main", "body")
+# Candidate containers, most specific first. `body` is not among them: it
+# matches on every page and holds everything, so as a candidate it could never
+# lose. It is the fallback, and the walker names it as one.
+_ROOTS = ("main", "[role=main]", "article", "#content", "#main")
 
 # Below this share of the page's visible words, the article extractor is
 # assumed to have thrown away real content rather than boilerplate.
@@ -56,10 +59,24 @@ _DOM_JS = r"""
     'H4','H5','H6','HEADER','HGROUP','HR','LI','MAIN','NAV','OL','OPTION','P','PRE','SECTION',
     'SUMMARY','TABLE','TBODY','TD','TFOOT','TH','THEAD','TR','UL']);
 
+  // A selector that matches many elements has not found the document's
+  // container; it has found a collection of them, and the first one is a
+  // card. americanthinker carries 30 <article> promo teasers of 79-203
+  // characters, so `querySelector('article')` returned the card advertising
+  // the very piece that was asked for -- 273 characters, while the
+  // 5,769-character article was never reached (ticket 028).
+  //
+  // Counting matches is not the yield ratio ticket 011 deleted. That one
+  // judged a page's *type* by volume, which volume cannot tell you. This is a
+  // structural question -- which element is the document -- with a structural
+  // answer, and nothing here is measured against anything else.
   let root = null;
   for (const sel of roots) {
-    const el = document.querySelector(sel);
-    if (el && (el.textContent || '').trim().length > 40) { root = el; break; }
+    const els = document.querySelectorAll(sel);
+    if (els.length !== 1) continue;
+    // Not a quality bar. A selector can match a shell the page never filled,
+    // and the content then lives somewhere else entirely.
+    if ((els[0].textContent || '').trim().length > 40) { root = els[0]; break; }
   }
   root = root || document.body;
 

@@ -199,6 +199,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   four considerations were answered by 025 and by the walker fix, all the same
   way, and the fourth was never measurable from here.
 
+- [The root heuristic picks a decoy](tickets/028-the-root-heuristic-picks-a-decoy.md)
+  — a selector matching more than once has found a collection, not the
+  document, so the walker skips it. americanthinker's thirty `<article>`
+  teasers stop being a root and its piece comes back: 277 characters to
+  43,981, with the other four of 025's pages unchanged to the byte.
+  Largest-candidate-wins was rejected — `body` is a superset of everything and
+  would win on every page. First test in the suite to start a browser, with
+  one pinned in `flake.nix` so it runs rather than skips.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
