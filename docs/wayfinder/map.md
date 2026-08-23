@@ -309,6 +309,21 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   moonofalabama's photograph entirely. No bucket word and no floor — 005 and
   021 removed ruling-on-your-own-number everywhere else.
 
+- [Six skills restate the server
+  instructions](tickets/032-skills-restate-the-instructions.md)
+  — one `agent-browser` skill shipped from this repo holds the operating
+  knowledge, and the docstrings are cut to the call contract rather than
+  mirrored. The defensive reason for the copying turned out not to exist: two
+  probes found no context where a docstring arrives but the server
+  instructions do not — they are one channel, gated by the tool load, which
+  also makes the ticket's "instructions arrive before there is a task"
+  obsolete in this harness. What the probes did find is that before that load
+  an agent has *neither*, which is planning time, and a skill is the only
+  channel that reaches there. Field descriptions stay in full, since 021 chose
+  `mode`'s as the replacement for deleted code. Point 4 is left live as [A
+  Fetched that says this reads like a
+  wall](tickets/038-a-fetched-that-says-this-reads-like-a-wall.md).
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
@@ -414,3 +429,11 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   half of this is answered; a Chrome that died between fetches, or a compositor
   that outlived it, is still unexamined -- as is the fact that nothing reports
   what tabs are open until something goes wrong.
+
+- **An agent treats the document in front of it as the whole procedure.**
+  What 032 could not fix, and may not be this repo's to fix. The six copied
+  paragraphs were written by an agent that had the server instructions and
+  `show_browser`'s docstring in context at the time; being the proximate
+  authority is what made the skill win. One skill for this server makes the
+  document in front of it the right one, which is a remedy for this instance
+  and not for the shape.
