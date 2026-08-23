@@ -99,7 +99,29 @@ To decide:
    the honest fix is a line in the vault's `CLAUDE.md` saying skills do not
    restate tool behaviour, and no code changes here at all.
 
+6. **A skill for this server, that the others cite.** The owner's idea, and
+   it answers reason 3 directly: the reason six skills copied the paragraph
+   is that there was nothing to point at, and a skill *is* the one address a
+   skill can already name. One `agent-browser` skill holds the operating
+   knowledge -- what `blocked` does and does not fire on, why reading beats
+   driving, `close_tabs` after a batch, `fetch` is goto-settle-read -- and
+   the six site skills carry only what is theirs, with a wikilink where the
+   paragraph used to be. Unlike server instructions it arrives at the moment
+   of work rather than at session start, which is reason 1's whole
+   complaint.
+   Open, and worth deciding before writing it: **where it lives.** In the
+   Notes vault it is a seventh copy of tool knowledge outside this repo,
+   drifting the same way, only now once instead of six times -- which is a
+   real improvement in blast radius and no improvement in kind. Shipped
+   *from* this repo, next to the code it describes, it is the same artifact
+   with a chance of staying true, and the vault skills link to it by name.
+   That makes it the skill-shaped answer to point 2's resource, with the
+   addressing problem already solved. It does not subsume 4: a skill still
+   has to be loaded, and a `Fetched` that says "this reads like a wall"
+   arrives whether anything was loaded or not.
+
 Point 4 subsumes the most valuable case and 3 is nearly free; they are not
-alternatives. What none of them settles is the general problem -- an agent
-mid-task treats the document in front of it as the whole procedure -- and
-that may not be this repo's to solve.
+alternatives, and 6 is the cheapest thing that stops the copying today. What
+none of them settles is the general problem -- an agent mid-task treats the
+document in front of it as the whole procedure -- and that may not be this
+repo's to solve.
