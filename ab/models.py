@@ -1,14 +1,12 @@
 """Domain models.
 
-Every shape that crosses a boundary -- the signature registry on disk, what we
+Every shape that crosses a boundary -- what we
 measured about a page, what the CLI asked for -- is parsed into one of these
 once, at the edge. Nothing downstream sees a raw dict.
 """
 from enum import Enum
-from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
-
 
 
 class SignatureKind(str, Enum):
@@ -61,6 +59,12 @@ class Signature(BaseModel, frozen=True):
     At least one condition is required. The old dict version could produce a
     condition-less signature that silently matched nothing; making it a
     construction-time invariant means that shape can no longer exist.
+
+    `pending_review`, `seen_at` and `evidence` were carried for signatures the
+    tool proposed to itself from pages it found thin. Ticket 005 deleted what
+    wrote them and ticket 019 deleted the store that held them: every value of
+    this type is now a builtin, written by hand and true of a vendor rather
+    than of a site.
     """
 
     name: str
@@ -68,20 +72,12 @@ class Signature(BaseModel, frozen=True):
     title_re: str | None = None
     url_re: str | None = None
     selector: str | None = None
-    pending_review: bool = False
-    seen_at: str | None = None
-    evidence: Path | None = None
 
     @model_validator(mode="after")
     def _needs_a_condition(self) -> "Signature":
         if self.title_re is None and self.url_re is None and self.selector is None:
             raise ValueError(f"signature {self.name!r} has no condition")
         return self
-
-    @property
-    def condition(self) -> str:
-        """Single-line rendering of what this matches on, for listings."""
-        return self.selector or self.title_re or self.url_re or "?"
 
 
 class Target(BaseModel, frozen=True, populate_by_name=True):
@@ -204,9 +200,3 @@ class LaunchPlan(BaseModel, frozen=True):
 
     argv: tuple[str, ...]
     env: dict[str, str] = Field(default_factory=dict)
-
-
-class Registry(BaseModel):
-    """On-disk shape of signatures.json."""
-
-    learned: list[Signature] = Field(default_factory=list)

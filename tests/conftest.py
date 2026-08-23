@@ -2,8 +2,8 @@
 
 This is a safety mechanism, not a convenience. `ab.config` reads the
 environment exactly once, at import, into module-level constants -- so
-`session.SESSION_FILE`, `launch.SESSION_SH` and the signature registry are all
-fixed by the time any test runs. Without this, a test that called `teardown()`
+`session.SESSION_FILE` and `launch.SESSION_SH` are both fixed by the time any
+test runs. Without this, a test that called `teardown()`
 would SIGTERM the pids in the *developer's real* session record and unlink it,
 killing a live browser to run a unit test. The failure mode is destructive
 rather than red, which is why it is done here and once, rather than

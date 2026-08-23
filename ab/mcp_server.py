@@ -82,6 +82,11 @@ def fetch(
     moved. Before concluding you have a whole comment section or a whole
     listing, look in the markdown for the page's own account of what it kept
     back: a stated total, an expander, a pager. Reaching the rest is `script`.
+
+    This tool recognises a fixed table of challenge vendors and nothing else,
+    and it learns nothing between calls. A wall it cannot name arrives as
+    ordinary content -- yours to recognise, and yours to remember, because
+    nothing on this side will remember it for you.
     """
     _ensure_daemon()
     request = FetchRequest(

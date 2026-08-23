@@ -10,7 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from . import browser, handoff, probe as probe_mod, registry, script
+from . import browser, handoff, probe as probe_mod, script
 from .detect import classify
 from .errors import HandoffTimeout, ScriptError
 from .extract import extract
@@ -90,9 +90,7 @@ def inspect(page: Any,
     already handles, with no per-step probing.
     """
     extraction = extract(page, extract_mode)
-    signatures = registry.active()
-    page_probe = probe_mod.probe(page, signatures)
-    return extraction, classify(page_probe, signatures)
+    return extraction, classify(probe_mod.probe(page))
 
 
 def fetch(request: FetchRequest) -> FetchOutcome:

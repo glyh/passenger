@@ -11,8 +11,9 @@ from typing import Annotated, assert_never
 
 import cyclopts
 
-from . import browser, launch, present, registry, service, session as session_mod, targets
+from . import browser, launch, present, service, session as session_mod, targets
 from .config import settings
+from .detect import BUILTIN
 from .errors import AgentBrowserError, ErrorCode
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
@@ -247,34 +248,17 @@ def status() -> None:
     print(f"session:   {'live' if live is not None else 'stale'} "
           f"(vnc {host}:{port})")
     print(f"profile:   {settings.profile_dir}")
+    # What the tool can call `blocked` -- a fixed table, so it belongs to no
+    # session and needs no command of its own. `agent-browser signatures` was
+    # that command, and it existed to curate a learned list that ticket 019
+    # removed; printing a constant was all it had left to do. It says the
+    # useful half here, where a human already looks when a fetch surprised
+    # them, and everything not on this line arrives as ordinary content.
+    print("recognises: " + ", ".join(s.name for s in BUILTIN))
     if up:
         with browser.Session() as session:
             for page in session.context.pages:
                 print(f"  tab: {page.url[:100]}")
-
-
-@app.command
-def signatures(*, approve: str | None = None, forget: str | None = None) -> None:
-    """List learned blocker signatures, or curate them.
-
-    Parameters
-    ----------
-    approve
-        Promote a pending signature so it is allowed to match.
-    forget
-        Delete a signature by name.
-    """
-    if approve is not None:
-        print(f"approved {registry.approve(approve).name}")
-        return
-    if forget is not None:
-        registry.forget(forget)
-        print(f"forgot {forget}")
-        return
-    for signature in registry.listing():
-        flag = " (pending review)" if signature.pending_review else ""
-        print(f"{signature.name:<40} {signature.kind.value:<10} "
-              f"{signature.condition}{flag}")
 
 
 _EXIT_CODES = {

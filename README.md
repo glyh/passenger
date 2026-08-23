@@ -12,7 +12,6 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     agent-browser fetch <url> --close-tabs   # ...and tidy up after
     agent-browser close-tabs             # clear tabs orphaned by earlier runs
     agent-browser show | hide | stop | status
-    agent-browser signatures [--approve NAME | --forget NAME]
 
 ## As an MCP server
 
@@ -72,7 +71,6 @@ lives in the shell.
             probe.py     measuring a live page into a PageProbe
             handoff.py   summon, notify, poll for a human
             window.py    hide/show backends (Protocol)
-            registry.py  signatures.json
             config.py    the AGENT_BROWSER_* env boundary
             cli.py       cyclopts; the only place a failure becomes terminal output
             mcp_server.py  the MCP frontend over the same service layer
@@ -177,7 +175,8 @@ IP + User-Agent, which is why this runs locally rather than on a VPS.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
 DataDome, PerimeterX, login walls. Cheap, exact, and the only thing that can
-mark a page blocked.
+mark a page blocked. `agent-browser status` prints the table; it is fixed at
+build time and is the same on every machine.
 
 There was a second tier: anything extracting to under `--min-words` was
 treated as blocked, screenshotted, and turned into a proposed signature. It is
@@ -196,6 +195,17 @@ every later fetch of that site.
 
 So a short page is now simply a short page. You get the content and its size in
 characters, and you decide.
+
+**And the table never grows.** Removing the tier that proposed rules left the
+store that held them — an on-disk `signatures.json`, with `--approve` and
+`--forget` to curate it — and that is gone too. A tool that learns is a second
+memory owned by the wrong party: a judgement made once, from one page, filed
+where the agent it would affect cannot see it, cannot explain it, and can only
+be surprised by it. Anything durable about a *site* belongs in the calling
+agent's memory, which is written deliberately, attributed, re-read in context,
+and cheap to delete when it turns out to be wrong. The builtins are not an
+exception — they are how challenge vendors identify themselves, true
+regardless of who is calling.
 
 ## Hiding the window
 

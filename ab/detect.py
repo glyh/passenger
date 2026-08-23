@@ -31,9 +31,9 @@ BUILTIN: tuple[Signature, ...] = (
 )
 
 
-def selectors_of(signatures: tuple[Signature, ...]) -> tuple[str, ...]:
+def selectors_of() -> tuple[str, ...]:
     """Every selector the shell must test against the live page."""
-    return tuple(s.selector for s in signatures if s.selector is not None)
+    return tuple(s.selector for s in BUILTIN if s.selector is not None)
 
 
 def matches(signature: Signature, probe: PageProbe) -> bool:
@@ -50,8 +50,7 @@ def matches(signature: Signature, probe: PageProbe) -> bool:
     return True
 
 
-def classify(probe: PageProbe,
-             signatures: tuple[Signature, ...]) -> Blocker | None:
+def classify(probe: PageProbe) -> Blocker | None:
     """A signature matched, or nothing did. None means the page is real content.
 
     There used to be a second tier: a page whose word count fell below
@@ -64,8 +63,14 @@ def classify(probe: PageProbe,
 
     A signature match is a positive claim this tool can defend, made from
     things the caller cannot see. A short page is the caller's to judge.
+
+    The table was a parameter until ticket 019, threaded here from a registry
+    that added a learned list to it. There is no learned list now and there is
+    no second table: `BUILTIN` is knowledge about how challenge vendors
+    identify themselves, true regardless of who is calling. A parameter with
+    one possible argument advertises a variation that is not wanted.
     """
-    for signature in signatures:
+    for signature in BUILTIN:
         if matches(signature, probe):
             return Blocker(signature=signature, probe=probe)
     return None

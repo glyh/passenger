@@ -9,7 +9,7 @@ import time
 from typing import Any, Callable
 
 from . import probe as probe_mod
-from . import notify, present, registry
+from . import notify, present
 from .config import HANDOFF_TIMEOUT_S
 from .detect import classify
 from .errors import HandoffTimeout, WindowError
@@ -88,9 +88,7 @@ def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
     """One poll. None means the signature still matches (or mid-navigation)."""
     try:
         extraction = extractor(page)
-        signatures = registry.active()
-        page_probe = probe_mod.probe(page, signatures)
-        if classify(page_probe, signatures) is None:
+        if classify(probe_mod.probe(page)) is None:
             return extraction
     except Exception:
         return None  # navigating; try again next tick

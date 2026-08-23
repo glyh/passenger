@@ -80,10 +80,6 @@ class Settings(BaseModel, frozen=True):
         return self.state_dir / "viewer-profile"
 
     @property
-    def signatures_file(self) -> Path:
-        return self.state_dir / "signatures.json"
-
-    @property
     def reports_dir(self) -> Path:
         return self.state_dir / "reports"
 
@@ -103,7 +99,6 @@ settings = Settings.from_env()
 # Aliases so call sites read as plain names rather than settings.x everywhere.
 STATE_DIR = settings.state_dir
 PROFILE_DIR = settings.profile_dir
-SIGNATURES_FILE = settings.signatures_file
 REPORTS_DIR = settings.reports_dir
 CDP_PORT = settings.cdp_port
 CDP_URL = settings.cdp_url

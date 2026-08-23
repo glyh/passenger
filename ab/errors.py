@@ -18,8 +18,6 @@ class ErrorCode(str, Enum):
     CANNOT_HIDE = "CANNOT_HIDE"
     PAGE_BLOCKED = "PAGE_BLOCKED"
     HANDOFF_TIMEOUT = "HANDOFF_TIMEOUT"
-    SIGNATURE_NOT_FOUND = "SIGNATURE_NOT_FOUND"
-    REGISTRY_CORRUPT = "REGISTRY_CORRUPT"
     SCRIPT_INVALID = "SCRIPT_INVALID"
     SCRIPT_RAISED = "SCRIPT_RAISED"
     SCRIPT_RETURN_NOT_JSON = "SCRIPT_RETURN_NOT_JSON"
@@ -61,10 +59,6 @@ class HandoffTimeout(AgentBrowserError):
                          f"no human solved {blocker_name} within {seconds}s")
         self.blocker_name = blocker_name
         self.seconds = seconds
-
-
-class RegistryError(AgentBrowserError):
-    """The learned-signature store is unreadable or lacks a named entry."""
 
 
 class ScriptError(AgentBrowserError):
