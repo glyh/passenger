@@ -32,6 +32,7 @@ page read the wrong way is now a caller's decision rather than this side's
 silent one.
 """
 import re
+from importlib import resources
 from typing import Any, assert_never
 
 import trafilatura
@@ -47,117 +48,16 @@ _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
 # lose. It is the fallback, and the walker names it as one.
 _ROOTS = ("main", "[role=main]", "article", "#content", "#main")
 
-_DOM_JS = r"""
-([stripSel, roots]) => {
-  const OPAQUE = new Set(['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG','IFRAME','CANVAS','SELECT']);
-  const HEADING = {H1:'# ', H2:'## ', H3:'### ', H4:'#### ', H5:'##### ', H6:'###### '};
-  const BLOCK = new Set(['ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','BR','BUTTON','DD','DETAILS',
-    'DIALOG','DIV','DL','DT','FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM','H1','H2','H3',
-    'H4','H5','H6','HEADER','HGROUP','HR','LI','MAIN','NAV','OL','OPTION','P','PRE','SECTION',
-    'SUMMARY','TABLE','TBODY','TD','TFOOT','TH','THEAD','TR','UL']);
-
-  // A selector that matches many elements has not found the document's
-  // container; it has found a collection of them, and the first one is a
-  // card. americanthinker carries 30 <article> promo teasers of 79-203
-  // characters, so `querySelector('article')` returned the card advertising
-  // the very piece that was asked for -- 273 characters, while the
-  // 5,769-character article was never reached (ticket 028).
-  //
-  // Counting matches is not the yield ratio ticket 011 deleted. That one
-  // judged a page's *type* by volume, which volume cannot tell you. This is a
-  // structural question -- which element is the document -- with a structural
-  // answer, and nothing here is measured against anything else.
-  let root = null;
-  for (const sel of roots) {
-    const els = document.querySelectorAll(sel);
-    if (els.length !== 1) continue;
-    // Not a quality bar. A selector can match a shell the page never filled,
-    // and the content then lives somewhere else entirely.
-    if ((els[0].textContent || '').trim().length > 40) { root = els[0]; break; }
-  }
-  root = root || document.body;
-
-  // Walk the live document, not a detached clone: innerText on a clone is
-  // textContent, which is why this used to return one unbroken run of text.
-  const stripped = new Set(document.querySelectorAll(stripSel));
-  const hrefs = new Map();
-  for (const a of root.querySelectorAll('a[href]')) {
-    hrefs.set(a.href, (hrefs.get(a.href) || 0) + 1);
-  }
-
-  const out = [];
-  // A marker waits for the text it marks. `- ` written the moment an LI opens
-  // lands alone on its line as soon as the item's first child is a block --
-  // and on documentation most of them are, so the whole list came out as bare
-  // dashes above their items. Deferring it also fixes the same case in a
-  // heading whose text is wrapped in a div.
-  let pending = '';
-  const push = (s) => {
-    if (!s) return;
-    if (pending) { out.push(pending); pending = ''; }
-    out.push(s);
-  };
-  const mark = (s) => { pending = s; };
-  const nl = () => { if (out.length && !out[out.length - 1].endsWith('\n')) out.push('\n'); };
-  // An anchor with no text still has a label often enough -- an icon link
-  // carries it in aria-label, an image link in alt.
-  const label = (el) => {
-    const own = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-    if (own) return own;
-    const img = el.querySelector('img[alt]');
-    return (el.getAttribute('aria-label') || el.getAttribute('title')
-            || (img && img.getAttribute('alt')) || '').replace(/\s+/g, ' ').trim();
-  };
-
-  const walk = (node, pre, depth) => {
-    if (node.nodeType === 3) {
-      push(pre ? node.nodeValue : node.nodeValue.replace(/\s+/g, ' '));
-      return;
-    }
-    if (node.nodeType !== 1) return;
-    if (OPAQUE.has(node.tagName) || stripped.has(node)) return;
-    if (node.checkVisibility && !node.checkVisibility()) return;
-
-    const raw = node.tagName === 'A' ? (node.getAttribute('href') || '') : '';
-    // node.href resolves against the document, which is the point -- but it
-    // also turns `#section` into a link back to this same page.
-    if (raw && !raw.startsWith('#') && /^https?:/i.test(node.href)) {
-      const text = label(node);
-      // A URL with no label is cost without information -- unless nothing
-      // else on the page points there, in which case dropping it would lose
-      // the target outright. That keeps the one search result whose card is
-      // a bare cover image, and drops the other nineteen cover anchors that
-      // merely repeat their card's title link.
-      if (text || (hrefs.get(node.href) || 0) < 2) {
-        push('[' + text + '](' + node.href + ')');
-      }
-      return;
-    }
-
-    const block = BLOCK.has(node.tagName);
-    if (block) nl();
-    // Markdown structure. `dom` used to emit block boundaries and links and
-    // nothing else, so a heading was a short line, a list was a run of short
-    // lines, and a code sample was prose -- while trafilatura, asked for
-    // markdown, emitted all of it. Ticket 009 found fenced code to be the one
-    // axis on which an extractor visibly wins, which makes it the axis a
-    // documentation page is lost on.
-    const isPre = node.tagName === 'PRE';
-    const list = node.tagName === 'UL' || node.tagName === 'OL';
-    if (HEADING[node.tagName]) mark(HEADING[node.tagName]);
-    else if (node.tagName === 'LI') mark('  '.repeat(Math.max(0, depth - 1)) + '- ');
-    else if (isPre) push('```\n');
-    for (const child of node.childNodes) walk(child, pre || isPre, depth + (list ? 1 : 0));
-    if (isPre) { nl(); push('```'); }
-    // An unflushed marker belongs to a block that turned out to hold nothing;
-    // left standing it would label the next block's text instead.
-    if (block) { pending = ''; nl(); }
-  };
-
-  walk(root, false, 0);
-  return out.join('');
-}
-"""
+# Read once, at import, which is exactly what the string literal this replaces
+# did. Reading per call would make the walker hot-reloadable and make *which
+# code ran* unanswerable, which is worse than the stale-server problem it would
+# be papering over; a running server is restarted after an edit (ticket 034).
+#
+# It also closes the hole the move opened. A data file can go missing from a
+# wheel in a way `pythonImportsCheck` would not otherwise see -- the import
+# succeeds and the first fetch fails -- but both entry points import this
+# module, so a missing `walker.js` now fails the package build instead.
+_DOM_JS = resources.files("ab").joinpath("walker.js").read_text(encoding="utf-8")
 
 
 def article_text(html: str, url: str | None = None) -> str:
@@ -204,7 +104,17 @@ def tidy(raw: str) -> str:
 
 
 def dom_text(page: Any) -> str:
-    """Shell: read visible text, links included, off the live page."""
+    """Shell: read visible text, links included, off the live page.
+
+    The fallback is for a page that cannot answer -- a wedged renderer (ticket
+    012), a navigation mid-flight, a closed target -- and degrading to
+    `inner_text` gets the caller something rather than an error. What it must
+    not do is stand in for a bug in `walker.js`, because `inner_text("body")`
+    usually contains everything an assertion looks for: measured in ticket 034,
+    a walker replaced by a syntax error left two of this module's three tests
+    passing. `tests/test_walker.py` poisons `inner_text` so the fallback is
+    unreachable there and a broken walker fails loudly.
+    """
     try:
         raw = page.evaluate(_DOM_JS, [_STRIP, list(_ROOTS)])
     except Exception:
