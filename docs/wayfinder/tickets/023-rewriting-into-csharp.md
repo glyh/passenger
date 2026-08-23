@@ -152,7 +152,23 @@ Porting it also found a bug in the original, filed as [a tab waiting on a server
 that never answers](042-attach-hangs-on-pending-navigation.md) -- not C#'s
 doing, but rebuilding a mechanism is what made its assumption visible.
 
-**So all four are in, and none of them says no.** What is left is not a
+**A fifth, added when the language was raised as F#.** Everything above
+carries: Patchright .NET and the MCP SDK are .NET libraries, and an F# `Fetch`
+with `[<Optional; DefaultParameterValue>]` and `[<Range>]` generates a schema
+identical to the C# one and to today's Python door. What F# adds that neither
+Python nor C# has is [Fable](https://github.com/fable-compiler/Fable), which
+compiles it to JavaScript -- so `walker.js` can be written in the same language
+as the rest of the tool and still run *in the page*, where `innerText` and
+`checkVisibility()` live. Measured rather than assumed: all 165 lines ported to
+F#, compiled, bundled, injected at `extract._DOM_JS`, and the repo's own walker
+suite passes 13/13 against it -- with a sabotaged bundle failing 13/13, since
+[034](034-broken-walker-passes-its-tests.md) is that exact trap. The cost is
+43 KB bundled against 8 KB hand-written, almost all of it `fable-library`
+because the port used F# `Set`, `Map` and `list`; JS-native structures would cut
+most of that, untested. Packaging is the unmeasured part -- Fable, node and
+esbuild joining a nix flake whose whole history is packaging pain.
+
+**So all five are in, and none of them says no.** What is left is not a
 measurement. The packaging motive was removed by 022, the remaining cost is
 overwhelmingly the extraction port, and no regression was identified once the
 bounds claim was tested rather than grepped. Whether that is worth a hobby project's evenings is the

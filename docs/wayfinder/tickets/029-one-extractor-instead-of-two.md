@@ -191,7 +191,18 @@ everything else here is conditional on.
    detect repeated siblings to strip moonofalabama's comments, and emit tables.
    Keeping that in an unstructurable string is a much larger ask.
 
-   The joint to push on is 030's claim that any harness without a live browser
+   **Fable is a third answer, and it was not on the table when either ticket
+   was written.** F# compiles to JavaScript, so the extractor can be written in
+   the tool's own language, with types and unit tests, and still run in the
+   page where `innerText` and `checkVisibility()` are the browser's real ones.
+   That dissolves the choice this decision was framed as -- no snapshot, so no
+   recording-versus-stub question at all. Measured on the current walker: 165
+   lines of F#, 13/13 of the repo's walker suite, 43 KB bundled against 8 KB
+   hand-written. See [the port
+   measurements](../assets/023-port-measurements-findings.md).
+
+   If Fable is taken, the joint below stops mattering. It is kept because it is
+   the argument to beat if Fable is *not* taken. The joint is 030's claim that any harness without a live browser
    "stubs" innerText, visibility and layout. A `DOMSnapshot` is a *recording*
    made by a real browser, not a stub -- real computed styles, real bounds,
    real paint order. Except for `innerText`, which is a live layout computation

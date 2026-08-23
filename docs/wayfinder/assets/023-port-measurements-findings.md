@@ -1,8 +1,9 @@
 # Port measurements: patchright-dotnet and the MCP C# SDK
 
 Asset for [Whether this moves to C#](../tickets/023-rewriting-into-csharp.md).
-The ticket's three measurements, plus a fourth that measurement 3 left owed --
-the async rewrite of the browser half. 1 and 2 are desk research, run first so
+The ticket's three measurements, a fourth that measurement 3 left owed (the
+async rewrite of the browser half), and a fifth added when the target language
+was raised as F# rather than C#. 1 and 2 are desk research, run first so
 that either could kill the port cheaply; neither did. 3 and 4 needed C# actually
 running against a Chrome.
 
@@ -260,6 +261,77 @@ viral. Every caller of an async function becomes async, and the CLI's entry
 points are the end of that chain. On the MCP side it costs nothing, since that
 server is async already; on the CLI side it means `cyclopts` commands become
 `async Task`, which is supported but was not tried here.
+
+## 5. F#, and Fable -- a capability neither Python nor C# has
+
+*Measured 2026-08-24, after the four above, when the target language was raised
+as F# rather than C#.*
+
+**Everything measured so far carries over unchanged.** Patchright .NET and the
+MCP SDK are .NET libraries, and F# consumes .NET libraries. The one place that
+could plausibly have broken is the SDK's tool registration, which is reflection
+over method parameters -- and F# shapes parameters differently, needing
+`[<Optional; DefaultParameterValue(1500)>]` where C# writes `= 1500`. Tested:
+an F# `Fetch` with `[<Description>]` and `[<Range(0, 30000)>]` generates a
+schema **identical** to the C# one and to the Python door's today, defaults,
+bounds and all. Measurement 2 holds for F#.
+
+**The interesting part is [Fable](https://github.com/fable-compiler/Fable),
+which compiles F# to JavaScript.** 5.13.0 released July 2026, releases roughly
+weekly, MIT, ten years old, 3.1k stars. That matters here because of one
+specific thing: `walker.js` is a string of JavaScript that must run *in the
+page*, and the whole of [030](../tickets/030-the-walker-reads-a-snapshot.md)
+turned on the fact that its semantics are `innerText`, `checkVisibility()` and
+layout -- facts only the live browser has.
+
+Fable makes "written in a real language" and "runs in the page" stop being
+opposites.
+
+**Ported and tested, not sketched.** All 165 lines of `walker.js` were
+rewritten in F# (~130 lines), compiled with Fable, bundled to a single IIFE
+with esbuild, and injected as one expression at `extract._DOM_JS` -- the walker's
+one call site. Then the repo's own walker suite was run against it:
+
+    13 passed in 2.75s
+
+Including 028's decoy-root fixture and 035's `display:none` /
+`visibility:hidden` / `opacity` case, which is the one that most depends on the
+live browser.
+
+**And the swap was verified, because [034](../tickets/034-broken-walker-passes-its-tests.md)
+is exactly this trap.** The same bundle asked for a function that does not
+exist:
+
+    13 failed in 4.89s
+
+So the 13 passes were the F# code running, not the fallback or a no-op.
+
+**The cost is size.**
+
+| | bytes |
+|---|---|
+| `walker.js` today (incl. ~2.5 KB of comments) | 8,060 |
+| Fable output before bundling | 8,055 |
+| bundled + minified, with `fable-library` | **43,160** |
+
+Five times the payload, and effectively all of it is `fable-library`: the port
+was written idiomatically, with F# `Set`, `Map` and `list`, each of which drags
+in a runtime implementation. Rewriting those three as JS-native `Set`, object
+and array would cut most of it. **Not measured** -- worth doing before the
+number is quoted as a deterrent.
+
+**What the size does and does not mean.** It is not a network cost: the string
+goes over CDP to a local browser, though it is re-sent on every `evaluate`.
+[029](../tickets/029-one-extractor-instead-of-two.md) rejected Blazor/WASM
+partly for injecting a multi-megabyte runtime into the page, and that argument
+does not obviously reach 43 KB in patchright's isolated execution context, which
+page JavaScript cannot see. **That is reasoning, not a measurement**, and it
+should be measured if it becomes load-bearing.
+
+**Unmeasured and owed:** packaging. Fable, node and esbuild become build
+dependencies, and this project is a nix flake whose whole history is packaging
+pain. A generated `walker.js` could be committed so the build chain is a
+developer dependency rather than a runtime one -- but nobody has tried it.
 
 ## Where this leaves the go/no-go
 
