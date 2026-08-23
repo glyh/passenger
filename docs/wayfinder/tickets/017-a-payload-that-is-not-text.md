@@ -3,7 +3,7 @@ id: 017
 title: A payload that is not text
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: glyh
 blocked_by: []
 ---
 
