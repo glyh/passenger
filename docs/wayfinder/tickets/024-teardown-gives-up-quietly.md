@@ -1,5 +1,5 @@
 ---
-id: 023
+id: 024
 title: Teardown gives up quietly
 labels: [wayfinder:task]
 status: open

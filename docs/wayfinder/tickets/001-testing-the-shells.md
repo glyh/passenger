@@ -175,4 +175,4 @@ with a real socket the same way `free_port` is, and is the obvious next
 one if this suite grows.
 
 Surfaced while grilling and split out: [Teardown gives up
-quietly](023-teardown-gives-up-quietly.md).
+quietly](024-teardown-gives-up-quietly.md).
