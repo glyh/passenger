@@ -2,7 +2,7 @@
 id: 039
 title: The dom extractor returns nothing where inner_text returns a page
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -72,3 +72,46 @@ To decide:
    to `inner_text` on an empty result would be `auto` again
    ([021](021-remove-auto-mode.md)) wearing a different hat -- guessing on the
    caller's behalf, and hiding the very signal this ticket is about.
+
+## Answer
+
+**Closed undone.** Nothing was investigated and nothing was built: the probe in
+decision 1 was never run, so whether this is one site's markup or a class of
+JS-populated tables is still unknown. This records a disposition, not a finding.
+
+The case for closing is that the caller-side story is already complete. The
+`railway-12306` skill in the Notes vault documents all three behaviours -- `dom`
+at 0 characters, `article`'s skeleton, `inner_text` as the way through -- and
+routes every caller down the working path before they can hit the broken one. Two
+agents found that path unaided, which is the evidence that the failure is legible
+from outside even though this side does not name it. Nobody is blocked, and the
+one page known to be affected is handled.
+
+What stays wrong is unchanged and worth saying plainly, because closing a ticket
+is not the same as the problem going away: `char_count: 0` on a page whose DOM
+holds 2647 characters is this side reporting on its own extractor while appearing
+to report on the page, and `article`'s 22 rows with every identifying column empty
+is worse than the zero, because it looks like a result. A caller who has not read
+the vault skill has no way to tell either from a genuinely empty page.
+
+Two things were learned from the skill rather than from a probe, and are recorded
+here so a later session does not re-derive them:
+
+1. **Which cells survive `article`.** 余票 and 预订 come through; 车次, 出发站,
+   到达站, 出发时间, 到达时间 and 历时 do not. The surviving cells are static
+   markup and the dead ones are template-filled, which is a hypothesis about the
+   seam -- and a prediction the probe could test, if other JS-table pages fail
+   along the same line.
+2. **`inner_text` has a production caller.** Decision 3 asked whether callers
+   relying on it are relying on an accident. They are relying on it deliberately,
+   on this skill's instruction. That question is answered even though the ticket
+   is not: the escape hatch is load-bearing, and if `script`'s scope is ever
+   narrowed, this is what breaks.
+
+Decision 4 stands untouched and should stay that way whenever this is reopened: no
+fallback. An extractor that silently switched to `inner_text` on an empty result
+is [`auto`](021-remove-auto-mode.md) wearing a different hat.
+
+**What would reopen it:** a second page that fails the same way, which turns one
+instance into a class -- or a caller who hits the `article` skeleton without the
+vault skill in context and believes it.

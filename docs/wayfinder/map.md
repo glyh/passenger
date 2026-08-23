@@ -408,6 +408,14 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   one with an optional selection: a destructive call must not express
   "everything" as an omitted argument.
 
+- [The dom extractor returns nothing where inner_text returns a page](tickets/039-extractor-returns-nothing-on-12306.md)
+  — closed undone. `dom` reads 0 characters and `article` a 22-row skeleton with
+  every train number empty, on a 12306 page whose DOM holds 2647; nothing was
+  probed and nothing was built, because the `railway-12306` vault skill already
+  routes every caller down `inner_text` and nobody is blocked. What it settles by
+  accident: that escape hatch has a production caller, so narrowing `script`'s
+  scope would break it.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
@@ -523,3 +531,13 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   authority is what made the skill win. One skill for this server makes the
   document in front of it the right one, which is a remedy for this instance
   and not for the shape.
+
+- **An extraction that came back empty cannot say so.** 039 closed without
+  building it. The tool measures a page and hands back `char_count`, and when the
+  extractor finds nothing in a document that has something, that zero is a
+  measurement of this side wearing the page's clothes -- and `article`'s
+  half-filled table is the same admission, harder to see. It needs no phrase
+  table and no language list, only a comparison of two numbers already in hand,
+  which is what separates it from the four heuristics that were deleted for
+  ruling on meaning. What is missing is not a design but a second instance: one
+  site is not a class, and the probe that would settle it was never run.
