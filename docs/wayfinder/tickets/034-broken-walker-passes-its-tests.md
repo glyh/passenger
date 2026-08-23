@@ -2,7 +2,7 @@
 id: 034
 title: A broken walker passes its own tests
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -169,3 +169,83 @@ coverage bar 001 refused.
 All eight are written against the JavaScript as it stands today, and green,
 *before* a line of it moves. A test written after a refactor pins the
 refactor, not the behaviour.
+
+## Answer
+
+Done, and the measurement that opened the ticket now runs the other way.
+Replacing the walker's JavaScript with a syntax error:
+
+    before   1 failed, 2 passed
+    after   13 failed
+
+### The fallback is unreachable in a test, and unchanged in production
+
+The `page` fixture replaces `page.inner_text` with something that raises. That
+is the whole mechanism -- three lines -- and it is what makes every test below
+honest by construction rather than by each author remembering to assert
+something `inner_text("body")` could not have produced.
+
+`dom_text`'s `except` stays exactly as it was. Ticket 012's wedged renderer
+really does stop answering, and a caller is better served by degraded text
+than by an exception. The docstring now says what the fallback is for and what
+it must not do, and names the measurement, so the next person to widen that
+`except` knows what it costs.
+
+Load-time validation turned out to be unnecessary as a separate mechanism. A
+syntax error in `walker.js` now fails thirteen tests in `nix flake check`,
+which is the gate that matters; adding `node --check` would have put a node
+toolchain in the flake to re-detect what the suite already catches.
+
+### Eight tests, and five that were already there
+
+Thirteen in `test_walker.py`, all through `dom_text`. The new ones: block
+boundaries after the detached-clone bug (007), a relative href resolved
+against a real document URL (007), a signed query string surviving
+byte-for-byte (007), a fragment link emitted as prose rather than a link
+(007), the histogram rule in both directions (007), labels from `aria-label` /
+`title` / `img[alt]`, the orphaned list marker and its unflushed twin (025),
+a fence keeping its indentation (025), and what `checkVisibility()` actually
+filters.
+
+One fixture is not `set_content`. Under it the document is `about:blank`,
+where a relative href resolves to nothing `^https?:` matches -- so link
+*resolution*, half of what 007 settled, was invisible to any test. A `served`
+fixture fulfils a local route so one page has an origin and a directory,
+offline.
+
+Captured real pages were rejected on a mechanical point rather than a
+preference: `set_content` loads no external CSS, so a saved page arrives
+without the stylesheet, and every CSS-dependent behaviour becomes untestable
+or -- worse -- passes for the wrong reason.
+
+### `ab/walker.js`, and the packaging hole that was real
+
+224 lines of `extract.py` became 115. The closures became named function
+declarations; nothing was exported and no JavaScript runner entered the flake.
+
+Equivalence was measured, not assumed: old and new evaluated against ten
+fixtures -- the decoy page, blocks, links, labels, nested lists, headings,
+`pre`, the three hiding mechanisms, the strip selectors, and
+blockquote/details/figure -- byte-identical on all ten.
+
+The packaging hole predicted above turned out to be more than theoretical.
+`nix build` failed with `FileNotFoundError: .../ab/walker.js` on the first
+attempt, because a flake's source is the git tree and the new file was
+untracked. That is exactly the failure the read-at-import decision was
+supposed to catch, caught by the mechanism it was supposed to be caught by --
+both entry points import `ab.extract`, so `pythonImportsCheck` performs the
+read. No new machinery was needed and none was added.
+
+### Surfaced while doing this
+
+`checkVisibility()` called with no arguments defaults `visibilityProperty`,
+`opacityProperty` and `contentVisibilityAuto` to false, so it filters
+`display:none` and nothing else -- `visibility:hidden`, `opacity:0` and
+`content-visibility` all leak into every extraction today. 030 had assumed the
+opposite and would have preserved the gap faithfully. Pinned here rather than
+fixed, because widening the filter could drop an entrance animation's content
+or a long article's below-the-fold body, and that is a measurement against
+025's pages: [checkVisibility() catches only
+display:none](035-checkvisibility-only-catches-display-none.md).
+
+`nix flake check` green: 43 tests, `mypy --strict` clean over 20 files.

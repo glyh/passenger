@@ -269,6 +269,19 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   right about is that the walker is untested, which is [A broken walker passes
   its own tests](tickets/034-broken-walker-passes-its-tests.md).
 
+- [A broken walker passes its own
+  tests](tickets/034-broken-walker-passes-its-tests.md)
+  — it did: with the walker's JavaScript replaced by a syntax error, two of
+  its three tests still passed, because `dom_text` fell back to
+  `inner_text("body")` and the assertions could not tell. The fixture poisons
+  `inner_text` now, so the fallback is unreachable in a test and the same
+  experiment fails all thirteen; the fallback itself stays, because 012's
+  wedged renderer really does stop answering. The walker moved to
+  `ab/walker.js` — 224 lines of `extract.py` down to 115, closures given
+  names, no seam and no JavaScript runner — verified byte-identical against
+  ten fixtures. Read once at import, which also made `pythonImportsCheck`
+  catch the file missing from the wheel, as it promptly did.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
