@@ -3,7 +3,7 @@ id: 047
 title: Delete fetch, and make script the only door
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
