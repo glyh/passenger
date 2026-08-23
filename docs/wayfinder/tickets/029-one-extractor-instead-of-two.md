@@ -4,7 +4,7 @@ title: One extractor instead of two
 labels: [wayfinder:grilling]
 status: open
 assignee:
-blocked_by: [023]
+blocked_by: []
 ---
 
 ## Question
@@ -141,13 +141,52 @@ A cost to weigh: the snapshot is five to seven times the HTML as JSON. It
 never leaves the process and is not the payload, so this is memory and parse
 time, not the caller's context budget.
 
+### The edge to 023 is cut, and two sections above are stale
+
+*Recorded 2026-08-24, when the port measurements came in.*
+
+**Why the block went.** This ticket was `blocked_by: [023]` on the reading that
+reimplementing the extractor presupposes the port happening at all. That edge
+points the wrong way. [023](023-rewriting-into-csharp.md)'s four measurements
+found no blocker and no win -- every one came back parity -- so what is left
+there is a preference call whose only remaining cost of any size is *this*
+ticket's subject. The port cannot be priced until the extractor's shape is
+known, and the extractor's shape does not depend on the port: this ticket's own
+instruction is **"establish it before writing any C#"**, and the test it names
+is Python against 025's five pages. Blocking the cheap Python experiment on the
+expensive language decision had it backwards.
+
+**What 030's closure did to the body above.** "Where it runs: measured, and it
+is C#" was written when [the walker reading a
+snapshot](030-the-walker-reads-a-snapshot.md) was live. It closed **no**: the
+walker stays a string of JavaScript in the page, because that string is the one
+part of `extract.py` that survives a port unchanged, and because the
+real-browser fixture harness it would have replaced turned out to be the only
+correct harness rather than a compromise. So:
+
+- The `DOMSnapshot.captureSnapshot` measurements stand as *measurements* -- the
+  snapshot really does carry bounds, computed styles and paint order -- but the
+  conclusion drawn from them, that the extractor is "ordinary C# over a JSON
+  structure", was refused.
+- "waits on 030 for the substrate and the fixtures" is dead. There is no
+  substrate coming. The fixtures exist already, in `tests/test_walker.py`, built
+  by [028](028-the-root-heuristic-picks-a-decoy.md) and pinned in `flake.nix`.
+- Decision 2 below is therefore **reopened**, not answered.
+
+**None of that touches decision 1**, which is what makes this takeable now. Can
+one DOM-native mode keep a listing, keep the markers of withheld content, see
+what is invisible, *and* strip moonofalabama's hundred comments? That question is
+answerable in Python, against fixtures that already exist, and it is the one
+everything else here is conditional on.
+
 ### To decide
 
 1. **Whether one mode is actually reachable.** The moonofalabama test above.
    Everything else is conditional on it.
-2. ~~**Where the algorithm runs.**~~ Answered above: C# over a
-   `DOMSnapshot`, with no JavaScript in the page. What remains is
-   verifying the snapshot carries every fact the current walker uses.
+2. **Where the algorithm runs.** *Reopened.* The answer recorded above -- C#
+   over a `DOMSnapshot`, no JavaScript in the page -- was overturned when 030
+   closed no. The walker stays JavaScript for now, and where a *new* extractor
+   runs is open again.
 3. **What the correctness bar is.** Trafilatura is checkable against its own
    published evaluation; that evaluation scores article extraction only, and
    scores nothing about keeping a listing. An extractor asked to do both has

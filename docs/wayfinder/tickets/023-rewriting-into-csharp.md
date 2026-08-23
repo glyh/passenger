@@ -70,8 +70,12 @@ two](029-one-extractor-instead-of-two.md) proposes reimplementing rather
 than porting, strong enough that `article` and `dom` collapse into one
 mode -- and observes that a DOM-native algorithm has to run where the DOM
 is, which would remove the XPath library and most of the 5,500 lines
-along with it. That ticket is blocked on this one, since it presupposes
-the port happens at all; the price recorded above is the upper bound.
+along with it. That ticket *was* blocked on this one, since it presupposes
+the port happens at all; the price recorded above is the upper bound. **That
+edge was cut on 2026-08-24**, once the measurements showed extraction to be the
+only remaining cost of any size: this ticket cannot be priced until 029's shape
+is known, and 029's own instruction is to establish it in Python before any C#
+is written. The dependency ran the wrong way.
 
 **It lands alongside, not big-bang.** The C# implementation is built in
 this repo next to the Python one, which keeps working and shipping
