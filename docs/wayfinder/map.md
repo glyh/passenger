@@ -357,6 +357,22 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   way 019 trimmed it before, which made it the third copy found, not the
   seventh.
 
+- [The vault stops restating this
+  side](tickets/037-vault-skills-cite-the-skill.md)
+  — done in `~/Documents/Notes`. The six scraping skills lost every copy of the
+  `blocked` / `show_browser` / `close_tabs` paragraph and now name
+  `using-agent-browser`, keeping only what is theirs: Xiaohongshu's wall
+  arriving as 「登录后查看搜索结果」, 58.com's self-made captcha showing up as a
+  `title` that is not the target city, aqicn's global page under a different
+  `<title>`. The vault's `CLAUDE.md` stays as bootstrap, because it is the only
+  thing that fires before any skill or schema loads — but it lost the one line
+  of tool behaviour it carried, `blocked` → a human must solve it, which was
+  duplicated *and* wrong in the direction that matters. It gains the rule:
+  vault skills carry site knowledge and cite tool knowledge by name. Cited in
+  backticks rather than by wikilink, since a skill outside the vault has no
+  path there and an unresolvable link is the dangling pointer this ticket
+  deleted.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
