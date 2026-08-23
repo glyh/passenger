@@ -1,5 +1,5 @@
 [project]
-name = "agent-browser"
+name = "passenger"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
@@ -12,8 +12,8 @@ dependencies = [
 ]
 
 [project.scripts]
-agent-browser = "ab.cli:main"
-agent-browser-mcp = "ab.mcp_server:main"
+passenger = "ab.cli:main"
+passenger-mcp = "ab.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -19,7 +19,7 @@ import os
 import socket
 import tempfile
 
-_STATE = tempfile.mkdtemp(prefix="agent-browser-tests-")
+_STATE = tempfile.mkdtemp(prefix="passenger-tests-")
 
 
 def _unused_port() -> int:
@@ -29,5 +29,5 @@ def _unused_port() -> int:
         return int(probe.getsockname()[1])
 
 
-os.environ["AGENT_BROWSER_STATE"] = _STATE
-os.environ["AGENT_BROWSER_VNC_PORT"] = str(_unused_port())
+os.environ["PASSENGER_STATE"] = _STATE
+os.environ["PASSENGER_VNC_PORT"] = str(_unused_port())

@@ -18,7 +18,7 @@ from .errors import AgentBrowserError, ErrorCode
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
 app = cyclopts.App(
-    name="agent-browser",
+    name="passenger",
     help="Fetch web context through a real, logged-in Chrome, "
          "with a human handoff when a site puts up a challenge.",
 )
@@ -186,7 +186,7 @@ def open(url: str, *, show: bool = False) -> None:  # noqa: A001
                 page.bring_to_front()
             except Exception:
                 pass
-    hint = "" if show else " -- run `agent-browser show` to log in there"
+    hint = "" if show else " -- run `passenger show` to log in there"
     print(f"opened {url}{hint}")
 
 
@@ -255,7 +255,7 @@ def status() -> None:
           f"(vnc {host}:{port})")
     print(f"profile:   {settings.profile_dir}")
     # What the tool can call `blocked` -- a fixed table, so it belongs to no
-    # session and needs no command of its own. `agent-browser signatures` was
+    # session and needs no command of its own. `passenger signatures` was
     # that command, and it existed to curate a learned list that ticket 019
     # removed; printing a constant was all it had left to do. It says the
     # useful half here, where a human already looks when a fetch surprised

@@ -172,7 +172,7 @@ class Session:
         if not is_up():
             raise DaemonError(ErrorCode.DAEMON_NOT_RUNNING,
                               "browser not running",
-                              detail="start it with: agent-browser serve")
+                              detail="start it with: passenger serve")
         self._playwright = sync_playwright().start()
         self.browser = self._attach()
         self.context = self.browser.contexts[0]
@@ -211,7 +211,7 @@ class Session:
                     "twice",
                     detail=(", ".join(page.url for page in stuck) if stuck else
                             "no tab was stuck mid-navigation, so this is "
-                            "something else; try: agent-browser stop")) from again
+                            "something else; try: passenger stop")) from again
 
     def _restart_driver(self) -> None:
         try:

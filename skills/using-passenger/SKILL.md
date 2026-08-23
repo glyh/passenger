@@ -1,11 +1,11 @@
 ---
-name: using-agent-browser
-description: Use when fetching or driving web pages through the agent-browser MCP server -- its `fetch`, `script`, `show_browser`, `list_tabs` and `close_tabs` tools. Covers what the `blocked` verdict does and does not catch, recognising a login wall or captcha the tool cannot name and handing the page to a human, why a fetch is only the first screen, why reading a page beats driving it, and what the tool will not remember for you. Use it before the first call in a session, and whenever a fetch comes back thinner than the page looked.
+name: using-passenger
+description: Use when fetching or driving web pages through the passenger MCP server -- its `fetch`, `script`, `show_browser`, `list_tabs` and `close_tabs` tools. Covers what the `blocked` verdict does and does not catch, recognising a login wall or captcha the tool cannot name and handing the page to a human, why a fetch is only the first screen, why reading a page beats driving it, and what the tool will not remember for you. Use it before the first call in a session, and whenever a fetch comes back thinner than the page looked.
 ---
 
-# Using agent-browser
+# Using passenger
 
-`agent-browser` fetches pages through a real, logged-in Chrome that sites
+`passenger` fetches pages through a real, logged-in Chrome that sites
 cannot distinguish from an ordinary browser. Reach for it over a plain HTTP
 fetch when a page needs a login, sits behind anti-bot protection, or renders
 its content with JavaScript.

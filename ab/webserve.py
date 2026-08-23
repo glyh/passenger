@@ -26,7 +26,7 @@ _NOVNC_CANDIDATES = ("/usr/share/webapps/novnc", "/usr/share/novnc",
 def novnc_root() -> Path | None:
     """Where noVNC's modules live, or None if this machine has none.
 
-    AGENT_BROWSER_NOVNC first, which is what the flake sets to a store path
+    PASSENGER_NOVNC first, which is what the flake sets to a store path
     holding just the static files; the well-known distribution paths after it,
     so a system-installed noVNC works without configuration.
     """
@@ -112,7 +112,7 @@ def _sleep() -> None:
 def main() -> None:
     root = novnc_root()
     if root is None:
-        raise SystemExit("no noVNC installation found; set AGENT_BROWSER_NOVNC")
+        raise SystemExit("no noVNC installation found; set PASSENGER_NOVNC")
     port = int(sys.argv[1]) if len(sys.argv) > 1 else settings.novnc_port
     os.chdir("/")
     serve(port, root)

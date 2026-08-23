@@ -235,7 +235,7 @@ def test_pids_running_matches_on_the_command_line():
     which is how the first draft of this test failed against the process that
     wrote it.
     """
-    tag = f"agent-browser-test-{uuid.uuid4().hex}"
+    tag = f"passenger-test-{uuid.uuid4().hex}"
     # Announced rather than polled for: between fork and exec the child's
     # cmdline is not yet its own, so reading /proc straight away is a race.
     # The announcement closes it, because the kernel sets the cmdline at exec

@@ -139,10 +139,10 @@ class WindowPresenter:
         # rectangle that looks exactly like a broken stack.
         if live is None:
             raise WindowError(ErrorCode.NO_PRESENTER, "no live browser session",
-                              detail="start it with: agent-browser serve")
+                              detail="start it with: passenger serve")
         if not webserve.ensure(settings.novnc_port):
             raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
-                              detail="no noVNC found; set AGENT_BROWSER_NOVNC")
+                              detail="no noVNC found; set PASSENGER_NOVNC")
         prepared = _prepared(live)
         self._open(browser)
         return f"opened {browser} on {page_url()}{prepared}"
@@ -152,7 +152,7 @@ class WindowPresenter:
         args = [f"--app={page_url()}",
                 f"--user-data-dir={settings.viewer_profile}",
                 "--no-first-run", "--no-default-browser-check",
-                "--class=agent-browser-viewer"]
+                "--class=passenger-viewer"]
         spawned = subprocess.Popen([browser, *args], stdout=subprocess.DEVNULL,
                                    stderr=subprocess.DEVNULL,
                                    start_new_session=True)
@@ -207,7 +207,7 @@ class LinkPresenter:
         live = session.live()
         if not webserve.ensure(settings.novnc_port):
             raise WindowError(ErrorCode.NO_PRESENTER, "cannot serve the viewer",
-                              detail="no noVNC found; set AGENT_BROWSER_NOVNC")
+                              detail="no noVNC found; set PASSENGER_NOVNC")
         prepared = _prepared(live)
         return f"open {page_url()} to take over the browser{prepared}"
 

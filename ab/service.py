@@ -171,7 +171,7 @@ def _look(page: Any, request: ScriptRequest, tab: str) -> FetchOutcome | None:
     if blocker is None:
         return _fetched(page, extraction)
     return _blocked(blocker, tab,
-                    "show_browser with this tab and a wait, or `agent-browser "
+                    "show_browser with this tab and a wait, or `passenger "
                     "show`; solve it, then call again with this same tab -- it "
                     "is still open, and still there")
 
@@ -213,7 +213,7 @@ def _resolve(page: Any, blocker: Blocker, request: FetchRequest,
             return _blocked(blocker, tab,
                             f"nobody solved it within {timeout.seconds}s")
     return _blocked(blocker, tab,
-                    "show_browser with this tab and a wait, or `agent-browser "
+                    "show_browser with this tab and a wait, or `passenger "
                     "show`; solve it, then fetch again -- the profile keeps "
                     "the result")
 

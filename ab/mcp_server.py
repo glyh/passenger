@@ -14,7 +14,7 @@ the tool design:
 
 The docstrings here carry the *call contract* and nothing else. Operating
 knowledge -- what `blocked` misses, how to recognise a wall, that a fetch is
-one screen -- lives in the `using-agent-browser` skill, shipped from this repo
+one screen -- lives in the `using-passenger` skill, shipped from this repo
 under `skills/`. It used to live here too, and six skills in the owner's notes
 had hand-copied it by the time anyone noticed; ticket 032 found that a
 docstring and these instructions arrive on the same event, so a second copy
@@ -32,7 +32,7 @@ from .config import settings
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
 server = MCPServer(
-    name="agent-browser",
+    name="passenger",
     instructions=(
         "Fetch web pages through a real, logged-in Chrome that sites cannot "
         "distinguish from an ordinary browser. Use this instead of a plain "
@@ -41,7 +41,7 @@ server = MCPServer(
         "How to operate it -- what `blocked` does and does not catch, "
         "recognising a wall it cannot name, why a fetch is only the first "
         "screen, and why reading beats driving -- is the "
-        "`using-agent-browser` skill. Load it before the first call."
+        "`using-passenger` skill. Load it before the first call."
     ),
 )
 

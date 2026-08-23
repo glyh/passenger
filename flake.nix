@@ -1,5 +1,5 @@
 {
-  description = "agent-browser: web context through a real, logged-in Chrome";
+  description = "passenger: web context through a real, logged-in Chrome";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -45,7 +45,7 @@
         # flake is pinned; the browser is the one thing that should keep
         # updating on the vendor's schedule.
         chromeNote = ''
-          agent-browser uses the host's Chrome (AGENT_BROWSER_CHROME,
+          passenger uses the host's Chrome (PASSENGER_CHROME,
           default google-chrome-stable) so it keeps its own update cadence.
         '';
 
@@ -90,9 +90,9 @@
           # same store path the wrapper does.
           NOVNC_STATIC = novncStatic;
           shellHook = ''
-            export AGENT_BROWSER_NOVNC="''${AGENT_BROWSER_NOVNC:-${novncStatic}}"
+            export PASSENGER_NOVNC="''${PASSENGER_NOVNC:-${novncStatic}}"
             {
-              echo "agent-browser dev shell"
+              echo "passenger dev shell"
               echo "${chromeNote}"
               echo "run: python -m ab.cli status"
             } >&2
@@ -105,7 +105,7 @@
         # checkPhase deliberately: these tests spawn processes and bind a
         # loopback port, and an environment fault should read as a failing
         # check rather than an unbuildable package.
-        checks.default = pkgs.runCommand "agent-browser-tests"
+        checks.default = pkgs.runCommand "passenger-tests"
           {
             nativeBuildInputs = [
               (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
@@ -122,7 +122,7 @@
           }
           ''
             cd ${source}
-            export AGENT_BROWSER_CHROME=${pkgs.chromium}/bin/chromium
+            export PASSENGER_CHROME=${pkgs.chromium}/bin/chromium
             # HOME is unset in the sandbox, and Settings' state_dir defaults to
             # a path under it. conftest.py overrides that anyway; this keeps
             # import time from failing before conftest gets to run.
@@ -139,7 +139,7 @@
         # first use -- reproducible only in the sense that uv.lock was pinned,
         # and unbuildable offline.
         packages.default = python.pkgs.buildPythonApplication {
-          pname = "agent-browser";
+          pname = "passenger";
           version = "0.1.0";
           pyproject = true;
           src = source;
@@ -162,11 +162,11 @@
             for exe in $out/bin/*; do
               wrapProgram "$exe" \
                 --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
-                --set-default AGENT_BROWSER_NOVNC ${novncStatic}
+                --set-default PASSENGER_NOVNC ${novncStatic}
             done
           '';
 
-          meta.mainProgram = "agent-browser";
+          meta.mainProgram = "passenger";
         };
 
         # The MCP server is the second entry point, and the one that gets
@@ -174,12 +174,12 @@
         # rather than an argv suffix.
         apps.mcp = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/agent-browser-mcp";
+          program = "${self.packages.${system}.default}/bin/passenger-mcp";
         };
 
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/agent-browser";
+          program = "${self.packages.${system}.default}/bin/passenger";
         };
       });
 }

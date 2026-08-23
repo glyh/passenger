@@ -36,7 +36,7 @@ class DesktopNotifier:
 
 
 class WebhookNotifier:
-    """POSTs to whatever AGENT_BROWSER_WEBHOOK points at -- ntfy, Slack, etc.
+    """POSTs to whatever PASSENGER_WEBHOOK points at -- ntfy, Slack, etc.
 
     This is what makes a headless deployment usable: the browser can be on a
     server and still reach you when a challenge needs solving.

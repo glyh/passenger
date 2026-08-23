@@ -1,6 +1,6 @@
 """Imperative shell: the environment boundary.
 
-Every AGENT_BROWSER_* variable is read exactly once, here, into a frozen model.
+Every PASSENGER_* variable is read exactly once, here, into a frozen model.
 No other module touches os.environ (except window.py's backend override, which
 must be read before a backend exists to hold it).
 """
@@ -14,7 +14,7 @@ from .models import PresenterName
 
 class Settings(BaseModel, frozen=True):
     state_dir: Path = Field(default_factory=lambda: Path.home()
-                            / ".local/share/agent-browser")
+                            / ".local/share/passenger")
     cdp_port: int = Field(default=9222, ge=1, le=65535)
     chrome_binary: str = "google-chrome-stable"
     handoff_timeout_s: int = Field(default=300, ge=1)
@@ -41,19 +41,19 @@ class Settings(BaseModel, frozen=True):
     @classmethod
     def from_env(cls) -> "Settings":
         raw = {
-            "state_dir": os.environ.get("AGENT_BROWSER_STATE"),
-            "cdp_port": os.environ.get("AGENT_BROWSER_PORT"),
-            "chrome_binary": os.environ.get("AGENT_BROWSER_CHROME"),
-            "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
-            "attach_timeout_s": os.environ.get("AGENT_BROWSER_ATTACH_TIMEOUT"),
-            "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
-            "vnc_port": os.environ.get("AGENT_BROWSER_VNC_PORT"),
-            "vnc_scale": os.environ.get("AGENT_BROWSER_VNC_SCALE"),
-            "novnc_port": os.environ.get("AGENT_BROWSER_NOVNC_PORT"),
-            "novnc_dir": os.environ.get("AGENT_BROWSER_NOVNC"),
-            "viewer_browser": os.environ.get("AGENT_BROWSER_VIEWER"),
-            "presenter": os.environ.get("AGENT_BROWSER_PRESENTER"),
-            "webhook_url": os.environ.get("AGENT_BROWSER_WEBHOOK"),
+            "state_dir": os.environ.get("PASSENGER_STATE"),
+            "cdp_port": os.environ.get("PASSENGER_PORT"),
+            "chrome_binary": os.environ.get("PASSENGER_CHROME"),
+            "handoff_timeout_s": os.environ.get("PASSENGER_HANDOFF_TIMEOUT"),
+            "attach_timeout_s": os.environ.get("PASSENGER_ATTACH_TIMEOUT"),
+            "vnc_host": os.environ.get("PASSENGER_VNC_HOST"),
+            "vnc_port": os.environ.get("PASSENGER_VNC_PORT"),
+            "vnc_scale": os.environ.get("PASSENGER_VNC_SCALE"),
+            "novnc_port": os.environ.get("PASSENGER_NOVNC_PORT"),
+            "novnc_dir": os.environ.get("PASSENGER_NOVNC"),
+            "viewer_browser": os.environ.get("PASSENGER_VIEWER"),
+            "presenter": os.environ.get("PASSENGER_PRESENTER"),
+            "webhook_url": os.environ.get("PASSENGER_WEBHOOK"),
         }
         # Pydantic coerces the strings; unset keys fall back to the defaults.
         return cls.model_validate({k: v for k, v in raw.items() if v is not None})

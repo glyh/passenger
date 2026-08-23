@@ -1,26 +1,36 @@
-# agent-browser
+# passenger
 
 Generic web-context fetching through a real, logged-in Chrome that sites can't
 distinguish from your daily driver — with a human handoff when a site puts up a
 challenge the agent shouldn't (and shouldn't try to) solve.
 
-    agent-browser serve                  # start the hidden Chrome daemon
-    agent-browser fetch <url>            # → markdown on stdout
-    agent-browser fetch <url> --json     # → {url,title,char_count,markdown}
-    agent-browser open <url>             # park a URL in a tab, no window
-    agent-browser open <url> --show      # ...and show it, to log in by hand
-    agent-browser fetch <url> --close-tabs   # ...and tidy up after
-    agent-browser close-tabs             # clear tabs orphaned by earlier runs
-    agent-browser show | hide | stop | status
+    passenger serve                      # start the hidden Chrome daemon
+    passenger fetch <url>                # → markdown on stdout
+    passenger fetch <url> --json         # → {url,title,char_count,markdown}
+    passenger open <url>                 # park a URL in a tab, no window
+    passenger open <url> --show          # ...and show it, to log in by hand
+    passenger fetch <url> --close-tabs   # ...and tidy up after
+    passenger close-tabs                 # clear tabs orphaned by earlier runs
+    passenger show | hide | stop | status
 
 ## As an MCP server
 
-    agent-browser-mcp        # stdio
+    passenger-mcp        # stdio
 
 Register it with Claude Code for every project:
 
-    claude mcp add agent-browser --scope user -- \
-      nix run /path/to/agent-browser#mcp
+    claude mcp add passenger --scope user -- \
+      nix run /path/to/passenger#mcp
+
+This tool was called `agent-browser` until ticket 033. The rename changes the
+tool names an agent sees -- `mcp__agent-browser__fetch` became
+`mcp__passenger__fetch` -- so an existing registration has to be removed and
+added again under the new name, and any agent memory that spells the old tool
+names is stale. The `PASSENGER_*` variables were `AGENT_BROWSER_*`, and the
+state dir moved with them: a machine that has the old
+`~/.local/share/agent-browser` keeps its logged-in Chrome profile by
+symlinking `~/.local/share/passenger` at it, which is safe with the daemon up
+because nothing is copied.
 
 The flake builds a real derivation, so the wrapper already carries cage and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
@@ -49,7 +59,7 @@ Two things differ from the CLI, both deliberate:
   summoning one is a tool. It waits until they *close the viewer*, which is
   the only "done" signal this side can observe without ruling on the page.
 
-**Operating knowledge for the agent lives in `skills/using-agent-browser`,**
+**Operating knowledge for the agent lives in `skills/using-passenger`,**
 not in the tool docstrings, which carry the call contract and stop there. That
 skill is the one place that says what `blocked` does not catch, how to
 recognise a wall this side cannot name, that a fetch is only the first screen,
@@ -76,11 +86,11 @@ lives in the shell.
             probe.py     measuring a live page into a PageProbe
             handoff.py   summon, notify, poll for a human
             window.py    hide/show backends (Protocol)
-            config.py    the AGENT_BROWSER_* env boundary
+            config.py    the PASSENGER_* env boundary
             cli.py       cyclopts; the only place a failure becomes terminal output
             mcp_server.py  the MCP frontend over the same service layer
 
-    skill   skills/using-agent-browser/SKILL.md   how an agent operates this
+    skill   skills/using-passenger/SKILL.md      how an agent operates this
 
 Detection is pure because the shell measures first: `probe.probe()` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
@@ -182,7 +192,7 @@ IP + User-Agent, which is why this runs locally rather than on a VPS.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
 DataDome, PerimeterX, login walls. Cheap, exact, and the only thing that can
-mark a page blocked. `agent-browser status` prints the table; it is fixed at
+mark a page blocked. `passenger status` prints the table; it is fixed at
 build time and is the same on every machine.
 
 There was a second tier: anything extracting to under `--min-words` was
@@ -233,9 +243,9 @@ fingerprint is unchanged. The one delta is `screen: 1280x720`, cage's default
 headless output — plausible but fixed. Swap cage for `sway --headless` if you
 need to control it (`swaymsg output HEADLESS-1 resolution 1920x1080`).
 
-Selectable via `AGENT_BROWSER_WM`:
+Selectable via `PASSENGER_WM`:
 
-### Presenters (`AGENT_BROWSER_PRESENTER`)
+### Presenters (`PASSENGER_PRESENTER`)
 
 | value   | how you take over | notes |
 |---------|-------------------|-------|
@@ -250,7 +260,7 @@ native client here did: the lightweight ones stretch whatever they are sent
 and freeze that aspect at connect time, and the one that does resize costs
 1.2 GiB against noVNC's 1.8 MB.
 
-### Launch (`AGENT_BROWSER_WM`)
+### Launch (`PASSENGER_WM`)
 
 | value    | mechanism               | notes |
 |----------|-------------------------|-------|
@@ -264,16 +274,16 @@ own compositor sidesteps that whole class of breakage.
 
 ## Environment
 
-    AGENT_BROWSER_STATE     state dir (default ~/.local/share/agent-browser)
-    AGENT_BROWSER_PORT      CDP port (default 9222)
-    AGENT_BROWSER_CHROME    chrome binary (default google-chrome-stable)
-    AGENT_BROWSER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
-    AGENT_BROWSER_WM        window backend
-    AGENT_BROWSER_VNC_HOST/PORT    default 127.0.0.1:5900 (websocket)
-    AGENT_BROWSER_NOVNC_PORT       viewer page (default 6080)
-    AGENT_BROWSER_NOVNC     noVNC install dir (the flake sets this)
-    AGENT_BROWSER_VIEWER    browser for the viewer window (default: the Chrome above)
-    AGENT_BROWSER_VNC_SCALE nested output scale (default: the host screen's)
+    PASSENGER_STATE         state dir (default ~/.local/share/passenger)
+    PASSENGER_PORT          CDP port (default 9222)
+    PASSENGER_CHROME        chrome binary (default google-chrome-stable)
+    PASSENGER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
+    PASSENGER_WM            window backend
+    PASSENGER_VNC_HOST/PORT default 127.0.0.1:5900 (websocket)
+    PASSENGER_NOVNC_PORT    viewer page (default 6080)
+    PASSENGER_NOVNC         noVNC install dir (the flake sets this)
+    PASSENGER_VIEWER        browser for the viewer window (default: the Chrome above)
+    PASSENGER_VNC_SCALE     nested output scale (default: the host screen's)
 
 ## Install
 
@@ -284,13 +294,13 @@ own compositor sidesteps that whole class of breakage.
 The flake pins everything except the browser, Python dependencies included --
 `nix/python-overlay.nix` carries the two that nixpkgs lacks or has too old,
 and `nix build` needs neither a network nor a compiler. Chrome deliberately comes from
-the host (`AGENT_BROWSER_CHROME`, default `google-chrome-stable`): pinning it
+the host (`PASSENGER_CHROME`, default `google-chrome-stable`): pinning it
 would freeze its version, and the version string is one of the most visible
 fingerprint fields there is -- a browser months behind what real users run is a
 tell in itself, and stops getting security updates.
 
 Without nix, install the equivalents yourself: `cage wayvnc` plus a copy of
-noVNC (`AGENT_BROWSER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
+noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
 
 ### Why not Docker
 
