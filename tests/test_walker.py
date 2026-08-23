@@ -1,20 +1,30 @@
 """The DOM walker, run against fixture documents in a real browser.
 
-The walker is JavaScript over a live DOM, so unlike the rest of `extract` it
-cannot be reached from Python. Ticket 025 measured it against live pages
-instead, and ticket 028 is the bug that hid in the gap: a page whose furniture
-matches `article` thirty times over, where the walker started from a promo
-card and returned it as the document.
+The walker is JavaScript evaluated in the page, so unlike the rest of
+`extract` it cannot be reached from Python. Ticket 025 measured it against
+live pages instead, and ticket 028 is the bug that hid in the gap: a page
+whose furniture matches `article` thirty times over, where the walk started
+from a promo card and returned it as the document.
 
-Nothing here fetches anything. The failure is entirely in which element the
-walk begins at, so the pages are `set_content` fixtures -- the smallest thing
-that reproduces a shape.
+Nothing here fetches anything. The pages are `set_content` fixtures -- the
+smallest thing that reproduces a shape -- and synthetic rather than captured,
+because `set_content` loads no external CSS: a saved real page arrives without
+its stylesheet, which is fatal for anything testing what is visible. Where the
+behaviour under test depends on CSS, the fixture carries it inline. Ticket
+025's five real pages stay an acceptance run recorded in `assets/`, not a test.
 
 This is the first test in the suite that starts a browser. Ticket 001 ruled
 that the suite starts no Chrome, and meant the nested cage/wayvnc stack; a
 headless browser handed a string of HTML shares none of that cost. The flake
 pins one for `nix flake check` so this does not quietly skip in the one
 command that gates the repo.
+
+Every test here enters through `dom_text`, which is the only call site that
+exists in production. There is deliberately no seam into the JavaScript --
+ticket 001 refused one for `_alive` on the same grounds, and the argument is
+stronger here, since `label()`'s whole behaviour is `innerText`, `getAttribute`
+and a descendant query. A seam would let a test pass against a mock and fail
+against Chrome, which is the failure a seam exists to prevent, inverted.
 """
 import shutil
 
@@ -33,6 +43,10 @@ _BODY = ("<div class='main_information'><p>" + "The real piece. " * 60
 DECOY_PAGE = ("<body><div class='grid'>"
               + "".join(_CARD.format(i=i) for i in range(30))
               + _BODY + "</div></body>")
+
+# Every fixture below needs its root to clear `dom`'s 40-character emptiness
+# guard before anything else can be asserted about the walk.
+FILLER = "<p>Enough prose here to clear the emptiness guard comfortably.</p>"
 
 
 @pytest.fixture(scope="module")
@@ -59,9 +73,46 @@ def browser():
 
 @pytest.fixture
 def page(browser):
+    """A page whose `inner_text` is poisoned, so no test can pass on a fallback.
+
+    `dom_text` catches everything the evaluate can raise and degrades to
+    `page.inner_text("body")`, which for most fixtures still contains every
+    string a test looks for. Measured before this fixture existed: replacing
+    the walker's JavaScript with a syntax error left two of the three tests
+    then in this file passing, including the one ticket 028 was written for.
+    A test that cannot tell a working walker from a dead one is not a test.
+
+    The fallback itself is deliberate and stays -- ticket 012's wedged
+    renderer really does stop answering. What it must not do is stand in for
+    our own bugs, so here it is unreachable and a broken walker fails loudly.
+    """
     opened = browser.new_page()
+
+    def poisoned(*_args, **_kwargs):
+        raise AssertionError(
+            "dom_text fell back to inner_text: the walker did not run")
+
+    opened.inner_text = poisoned
     yield opened
     opened.close()
+
+
+@pytest.fixture
+def served(page):
+    """A page served from a real https URL, for the one rule that needs one.
+
+    `set_content` leaves the document at `about:blank`, where a relative href
+    resolves to nothing `^https?:` matches -- so link *resolution*, which is
+    half of what ticket 007 settled, is invisible under it. Fulfilling the
+    route locally keeps the suite offline while giving the document an origin
+    and a directory to resolve against.
+    """
+    def _serve(html: str, url: str = "https://ex.test/dir/page"):
+        page.route("**/*", lambda route: route.fulfill(
+            body=html, content_type="text/html"))
+        page.goto(url)
+        return page
+    return _serve
 
 
 def test_many_articles_are_a_listing_not_a_document(page):
@@ -97,3 +148,166 @@ def test_an_empty_container_is_not_the_root(page):
     page.set_content("<body><main></main><p>" + "Content elsewhere. " * 10
                      + "</p></body>")
     assert "Content elsewhere." in dom_text(page)
+
+
+def test_adjacent_blocks_do_not_run_together(page):
+    """Ticket 007's real bug, which the link work uncovered.
+
+    The walk used to run over a detached clone, where `innerText` is
+    `textContent` -- so `dom` never had block boundaries at all and returned
+    one unbroken run of prose. Every paragraph in a document ran into the
+    next.
+    """
+    page.set_content("<body><main>"
+                     "<p>First paragraph of the piece.</p>"
+                     "<p>Second paragraph of the piece.</p>"
+                     "</main></body>")
+    text = dom_text(page)
+    assert "piece.Second" not in text
+    assert "First paragraph of the piece." in text.splitlines()
+    assert "Second paragraph of the piece." in text.splitlines()
+
+
+def test_a_relative_href_is_resolved_against_the_document(served):
+    """Ticket 007: a listing read through `dom` had no link targets.
+
+    Resolution is against the document, so a relative href becomes reachable
+    rather than a fragment nobody can follow.
+    """
+    text = dom_text(served(
+        "<body><main>" + FILLER
+        + "<p><a href='../other/thing'>Somewhere else</a></p>"
+        "</main></body>"))
+    assert "[Somewhere else](https://ex.test/other/thing)" in text
+
+
+def test_a_signed_query_string_survives_byte_for_byte(page):
+    """Ticket 007 forbade normalising, and named why: a signed query string
+    *is* the URL. Percent-encoding that a normaliser would helpfully decode
+    is the case that breaks a signature."""
+    signed = "https://ex.test/o?sig=aB%2FcD%3D%3D&amp;e=1"
+    page.set_content("<body><main>" + FILLER
+                     + f"<p><a href='{signed}'>Signed target</a></p></main></body>")
+    assert "[Signed target](https://ex.test/o?sig=aB%2FcD%3D%3D&e=1)" in dom_text(page)
+
+
+def test_a_fragment_link_is_not_emitted_as_a_link(page):
+    """`node.href` resolves `#section` into a link back to this same page,
+    which is cost without a target. The label survives as prose; the URL does
+    not survive at all."""
+    page.set_content("<body><main>" + FILLER
+                     + "<p><a href='#section'>Jump to section</a></p></main></body>")
+    text = dom_text(page)
+    assert "Jump to section" in text
+    assert "#section" not in text
+    assert "](" not in text
+
+
+def test_an_unlabelled_anchor_goes_only_when_something_else_points_there(page):
+    """Ticket 007's histogram rule, both directions.
+
+    A URL with no label is cost without information -- unless nothing else on
+    the page points there, in which case dropping it loses the target
+    outright. That kept the one search result whose card is a bare cover
+    image, and dropped the other nineteen cover anchors that merely repeat
+    their card's title link.
+    """
+    page.set_content(
+        "<body><main>" + FILLER
+        + "<p><a href='https://ex.test/note'><img src='cover.png'></a>"
+        "<a href='https://ex.test/note'>The note title</a></p>"
+        "<p><a href='https://ex.test/lonely'><img src='only.png'></a></p>"
+        "</main></body>")
+    text = dom_text(page)
+    # Twice-pointed-at: the labelled anchor stands for both.
+    assert text.count("https://ex.test/note") == 1
+    assert "[The note title](https://ex.test/note)" in text
+    # Once-pointed-at: kept unlabelled rather than lost.
+    assert "[](https://ex.test/lonely)" in text
+
+
+def test_an_anchor_with_no_text_takes_its_label_from_an_attribute(page):
+    """`extract.py`'s `label()` reads `innerText` first and reaches the
+    attributes only when that is empty -- an icon link carries its label in
+    `aria-label`, an image link in `alt`. Ticket 030's own inventory of what
+    the walker does omitted this path entirely, which is how easy it is to
+    forget."""
+    page.set_content(
+        "<body><main>" + FILLER
+        + "<p><a href='https://ex.test/a' aria-label='Open the menu'></a>"
+        "<a href='https://ex.test/b' title='Share this'></a>"
+        "<a href='https://ex.test/c'><img src='p.png' alt='A photograph'></a>"
+        "</p></main></body>")
+    text = dom_text(page)
+    assert "[Open the menu](https://ex.test/a)" in text
+    assert "[Share this](https://ex.test/b)" in text
+    assert "[A photograph](https://ex.test/c)" in text
+
+
+def test_a_list_marker_waits_for_the_text_it_marks(page):
+    """Ticket 025's orphaned marker.
+
+    `- ` written the moment an `<li>` opens lands alone on its line as soon as
+    the item's first child is a block -- and on documentation most of them
+    are, so a whole list came out as bare dashes standing above their items.
+    """
+    page.set_content("<body><main>" + FILLER
+                     + "<ul><li><div>First item body</div></li>"
+                     "<li><div>Second item body</div></li></ul></main></body>")
+    lines = dom_text(page).splitlines()
+    assert "- First item body" in lines
+    assert "- Second item body" in lines
+    assert "-" not in [line.strip() for line in lines]
+
+
+def test_a_marker_for_an_empty_block_does_not_label_the_next_one(page):
+    """The other half of the deferred marker, same commit.
+
+    An unflushed marker belongs to a block that turned out to hold nothing.
+    Left standing it labels whatever text arrives next, which is a different
+    block entirely.
+    """
+    page.set_content("<body><main>" + FILLER
+                     + "<ul><li></li></ul>"
+                     "<p>Prose that follows the list</p></main></body>")
+    lines = dom_text(page).splitlines()
+    assert "Prose that follows the list" in lines
+    assert "- Prose that follows the list" not in lines
+
+
+def test_a_code_block_is_fenced_with_its_indentation_intact(page):
+    """Ticket 025 gave `dom` fences; ticket 009 found them to be the one axis
+    on which an extractor visibly wins, which makes them the axis a
+    documentation page is lost on. A sample whose body has been flattened
+    against its `def` is not the sample."""
+    page.set_content("<body><main>" + FILLER
+                     + "<pre>def f(x):\n    return x + 1</pre></main></body>")
+    text = dom_text(page)
+    assert text.count("```") == 2
+    assert "    return x + 1" in text.splitlines()
+
+
+def test_display_none_is_filtered_and_nothing_else_is(page):
+    """What `checkVisibility()` actually does, which is less than it looks.
+
+    Ticket 025 recorded `dom` correctly dropping gmw's hidden WeChat share
+    overlay where trafilatura swallowed it, and that difference is part of why
+    025 kept both extractors. The mechanism is narrower than the name suggests:
+    called with no arguments, `checkVisibility()` defaults `visibilityProperty`,
+    `opacityProperty` and `contentVisibilityAuto` all to false, so it reports
+    only `display:none`. The other three hiding mechanisms leak into the
+    extraction today -- measured, not assumed -- and this test pins that
+    rather than wishing otherwise. Widening it changes what every page
+    returns, so it is ticket 035's to measure, not this one's to slip in.
+    """
+    page.set_content(
+        "<body><main>" + FILLER
+        + "<p style='display:none'>Hidden by display</p>"
+        "<p style='visibility:hidden'>Hidden by visibility</p>"
+        "<p style='opacity:0'>Hidden by opacity</p>"
+        "</main></body>")
+    text = dom_text(page)
+    assert "Hidden by display" not in text
+    # Not an endorsement. See the docstring and ticket 035.
+    assert "Hidden by visibility" in text
+    assert "Hidden by opacity" in text
