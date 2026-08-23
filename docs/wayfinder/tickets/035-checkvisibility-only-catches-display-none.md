@@ -3,7 +3,7 @@ id: 035
 title: checkVisibility() catches only display:none
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
