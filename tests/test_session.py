@@ -35,6 +35,34 @@ def _state(pid: int) -> str:
     return open(f"/proc/{pid}/stat").read().rpartition(")")[2].split()[0]
 
 
+def _announcing(source: str, *args: str) -> subprocess.Popen:
+    """A python child that prints `ready` once it is, returned once it has.
+
+    Every child here has to reach some state before the assertion means
+    anything -- its argv has to be its own, its socket has to be bound -- and
+    the tests used to wait for that by polling for the effect, 200 times at
+    10ms. Two seconds is a guess at a fork, an exec and an interpreter start:
+    it held on this machine and lost in the nix sandbox, where `nix flake
+    check` went red on a test that nothing in the commit reached and green on
+    an immediate re-run. A gate that is re-run until it passes is not one.
+
+    A child that says when it is ready removes the guess instead of enlarging
+    it. The line cannot be printed before the state exists, because the child
+    prints it afterwards, so there is no window left to size. If the child
+    dies first the pipe closes and the read returns empty, so a broken child
+    fails the test rather than hanging it.
+    """
+    child = subprocess.Popen([sys.executable, "-c", source, *args],
+                             stdout=subprocess.PIPE)
+    assert child.stdout is not None
+    line = child.stdout.readline()
+    if line != b"ready\n":
+        child.kill()
+        child.wait()
+        pytest.fail(f"child never announced itself: {line!r}")
+    return child
+
+
 @pytest.fixture
 def zombie():
     """A pid that is exited-but-unreaped, which is what Chrome leaves in cage.
@@ -44,11 +72,20 @@ def zombie():
     the thing under test. The state letter is read straight out of /proc
     instead.
     """
-    child = subprocess.Popen(["true"])
+    child = subprocess.Popen(["true"], stdout=subprocess.PIPE)
+    assert child.stdout is not None
+    # A child cannot announce the state this fixture wants -- being dead is
+    # not something it can say -- but the empty read is the next best thing:
+    # the pipe reaches EOF when the kernel closes the child's descriptors,
+    # which is inside the same exit that makes it a zombie. So what the poll
+    # below still waits for is the tail of one kernel call, not a fork, an
+    # exec and a scheduler under load; two seconds bounds it comfortably
+    # where, waiting on the whole exit, it did not. See `_announcing`.
+    assert child.stdout.read() == b""
     for _ in range(200):
-        time.sleep(0.01)
         if _state(child.pid) == "Z":
             break
+        time.sleep(0.01)
     else:
         child.kill(); child.wait(); pytest.fail("no zombie to test with")
     yield child.pid
@@ -124,19 +161,14 @@ def test_teardown_gives_the_port_back_before_it_returns():
     test would pass even if `_stop_all` never waited at all, and would be
     green for the wrong reason.
     """
-    slow = subprocess.Popen([
-        sys.executable, "-c",
+    slow = _announcing(
         "import socket, signal, sys, time\n"
         "s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()\n"
         "signal.signal(signal.SIGTERM, lambda *_: (time.sleep(0.5), sys.exit(0)))\n"
+        "print('ready', flush=True)\n"
         "time.sleep(30)\n",
-        settings.vnc_host, str(settings.vnc_port)])
-    for _ in range(200):          # wait until it really holds the port
-        time.sleep(0.01)
-        if session.free_port() != settings.vnc_port:
-            break
-    else:
-        slow.kill(); pytest.fail("child never took the port")
+        settings.vnc_host, str(settings.vnc_port))
+    assert session.free_port() != settings.vnc_port  # it really holds it
 
     try:
         session._stop_all(_record(vnc_pid=slow.pid, cage_pid=slow.pid))
@@ -204,17 +236,16 @@ def test_pids_running_matches_on_the_command_line():
     wrote it.
     """
     tag = f"agent-browser-test-{uuid.uuid4().hex}"
-    child = subprocess.Popen(
-        [sys.executable, "-c", f"import time; time.sleep(30)  # {tag}"])
+    # Announced rather than polled for: between fork and exec the child's
+    # cmdline is not yet its own, so reading /proc straight away is a race.
+    # The announcement closes it, because the kernel sets the cmdline at exec
+    # and the child prints only after -- and it closes it exactly, where the
+    # poll it replaces only outran it. Walking all of /proc is also the
+    # slowest possible way to ask, so that poll got slower under precisely
+    # the load that made it necessary.
+    child = _announcing(
+        f"import time; print('ready', flush=True); time.sleep(30)  # {tag}")
     try:
-        # Waited for rather than asserted immediately: between fork and exec
-        # the child's cmdline is not yet its own, so reading /proc straight
-        # away is a race. It happens to win on a fast machine and loses in
-        # the nix sandbox, which is the worst way round to find out.
-        for _ in range(200):
-            if child.pid in session.pids_running(tag):
-                break
-            time.sleep(0.01)
         assert child.pid in session.pids_running(tag)
         assert session.pids_running(f"absent-{uuid.uuid4().hex}") == []
     finally:
@@ -229,18 +260,15 @@ def _stubborn(port: int) -> subprocess.Popen:
     budget, so it cannot reach the case where the budget runs out. This one
     never leaves on its own.
     """
-    child = subprocess.Popen([
-        sys.executable, "-c",
+    child = _announcing(
         "import socket, signal, sys, time\n"
         "s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()\n"
         "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "print('ready', flush=True)\n"
         "time.sleep(60)\n",
-        settings.vnc_host, str(port)])
-    for _ in range(200):
-        time.sleep(0.01)
-        if session.free_port() != port:
-            return child
-    child.kill(); child.wait(); pytest.fail("child never took the port")
+        settings.vnc_host, str(port))
+    assert session.free_port() != port
+    return child
 
 
 def test_teardown_kills_what_will_not_terminate():
