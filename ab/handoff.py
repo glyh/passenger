@@ -36,7 +36,7 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
         how = presenter.present()
     except WindowError as exc:
         how = f"{exc.message} -- {exc.detail}"
-    _bring_to_front(page)
+    bring_to_front(page)
     notify.select().notify("Agent browser needs you", f"{message}\n{how}")
     print(f"   {how}", file=sys.stderr)
     print(f"   waiting up to {timeout_s}s...", file=sys.stderr)
@@ -57,6 +57,33 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
             presenter.dismiss()
 
 
+def wait_for_dismissal(presenter: present.Presenter, timeout_s: int) -> str:
+    """Block until the human closes the viewer, and say what ended the wait.
+
+    The deliberate half of asking for a human (ticket 018). Nothing here looks
+    at the page: with no signature to re-check there is no fact this side can
+    read that says "solved", and every proxy for one -- the URL changed, the
+    word count moved -- is the guess ticket 005 deleted, made again on weaker
+    evidence. The caller recognised the wall well enough to ask for a human;
+    it can read the page afterwards and see whether the wall is gone.
+
+    So the only thing waited on is the human saying they are done, which they
+    say by closing the window. A presenter that cannot see its own window is
+    told to poll instead of being handed a wait that would return instantly.
+    """
+    if not presenter.observes_presence:
+        return (f"cannot wait on the {presenter.name.value} presenter: it "
+                "cannot see whether the viewer is open. Poll the tab with "
+                "`script` instead")
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        time.sleep(_POLL_INTERVAL_S)
+        if not presenter.presented():
+            waited = int(timeout_s - (deadline - time.time()))
+            return f"viewer closed after {waited}s"
+    return f"still open after {timeout_s}s"
+
+
 def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
     """One poll. None means the signature still matches (or mid-navigation)."""
     try:
@@ -70,11 +97,12 @@ def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
     return None
 
 
-def _bring_to_front(page: Any) -> None:
+def bring_to_front(page: Any) -> None:
     try:
         page.bring_to_front()
     except Exception:
         pass
 
 
-__all__ = ["wait_for_human", "Extractor"]
+__all__ = ["wait_for_human", "wait_for_dismissal", "bring_to_front",
+           "Extractor"]

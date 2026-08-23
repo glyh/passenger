@@ -40,6 +40,11 @@ class Blocked(BaseModel, frozen=True):
     name: str
     kind: SignatureKind
     url: str
+    # The tab the wall is on, so the caller can act on it without guessing.
+    # `Ran` and `Failed` always carried one; this did not, which left an agent
+    # that wanted to summon a human deliberately reading `list_tabs` and
+    # matching on a URL (ticket 018).
+    tab: str = ""
     hint: str = ""
 
 
@@ -105,9 +110,15 @@ def fetch(request: FetchRequest) -> FetchOutcome:
         if blocker is None:
             outcome = _fetched(page, extraction)
         else:
-            outcome = _resolve(page, blocker, request, extractor)
+            outcome = _resolve(page, blocker, request, extractor,
+                               session.target_id(page))
 
-        if not request.keep_tab and page.url != "about:blank":
+        # A blocked tab is never blanked, whatever `keep_tab` says. It is the
+        # one outcome whose tab the caller still needs: the wall is on it, the
+        # record now names it, and summoning a human to a tab this side had
+        # just navigated away from would hand them a blank page (ticket 018).
+        if (not request.keep_tab and outcome.type != "blocked"
+                and page.url != "about:blank"):
             page.goto("about:blank")
         if request.close_tabs:
             session.close_other_tabs(keep=page)
@@ -142,20 +153,21 @@ def run(request: ScriptRequest) -> ScriptOutcome:
         except ScriptError as failure:
             return Failed(tab=tab, code=failure.code.value,
                           error=failure.message, where=failure.detail or "",
-                          page=_look(page, request))
-        return Ran(tab=tab, returned=returned, page=_look(page, request))
+                          page=_look(page, request, tab))
+        return Ran(tab=tab, returned=returned, page=_look(page, request, tab))
 
 
-def _look(page: Any, request: ScriptRequest) -> FetchOutcome | None:
+def _look(page: Any, request: ScriptRequest, tab: str) -> FetchOutcome | None:
     """What the tab holds now, in the shape `fetch` returns -- if asked."""
     if not request.read_page:
         return None
     extraction, blocker = inspect(page, request.extract_mode)
     if blocker is None:
         return _fetched(page, extraction)
-    return _blocked(blocker,
-                    "run `agent-browser show`, solve it, then call again "
-                    "with this same tab -- it is still open, and still there")
+    return _blocked(blocker, tab,
+                    "show_browser with this tab and a wait, or `agent-browser "
+                    "show`; solve it, then call again with this same tab -- it "
+                    "is still open, and still there")
 
 
 def _fetched(page: Any, extraction: Extraction) -> Fetched:
@@ -168,7 +180,7 @@ def _fetched(page: Any, extraction: Extraction) -> Fetched:
 
 
 def _resolve(page: Any, blocker: Blocker, request: FetchRequest,
-             extractor: handoff.Extractor) -> FetchOutcome:
+             extractor: handoff.Extractor, tab: str) -> FetchOutcome:
     """Either wait for a human or report the block.
 
     Reached only on a signature match now. That is what makes presenting the
@@ -182,12 +194,14 @@ def _resolve(page: Any, blocker: Blocker, request: FetchRequest,
                 page, blocker, extractor, request.handoff_timeout_s)
             return _fetched(page, extraction)
         except HandoffTimeout as timeout:
-            return _blocked(blocker, f"nobody solved it within {timeout.seconds}s")
-    return _blocked(blocker,
-                    "run `agent-browser show`, solve it, then fetch again -- "
-                    "the profile keeps the result")
+            return _blocked(blocker, tab,
+                            f"nobody solved it within {timeout.seconds}s")
+    return _blocked(blocker, tab,
+                    "show_browser with this tab and a wait, or `agent-browser "
+                    "show`; solve it, then fetch again -- the profile keeps "
+                    "the result")
 
 
-def _blocked(blocker: Blocker, hint: str) -> Blocked:
+def _blocked(blocker: Blocker, tab: str, hint: str) -> Blocked:
     return Blocked(name=blocker.signature.name, kind=blocker.signature.kind,
-                   url=blocker.probe.url, hint=hint)
+                   url=blocker.probe.url, tab=tab, hint=hint)

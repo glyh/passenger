@@ -175,7 +175,24 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   `teardown` and `reap_stale` now return what would not go, and the CLI prints
   it.
 
+- [Asking for a human, rather than being guessed at](tickets/018-asking-for-a-human.md)
+  — `show_browser` grew `tab`, `wait_seconds` and `notify_human`; still seven
+  tools. The wait ends when the human closes the viewer, never on a reading of
+  the page: with no signature to re-check, every "is it solved" signal is 005's
+  deleted tier in new clothes, so the agent polls and judges. A presenter that
+  cannot see its own window refuses the wait rather than reporting it over
+  instantly. `Blocked` now names its tab, and a blocked fetch stops blanking it.
+
 ## Fog
+
+- **A headless MCP deployment may have no way to reach a human.** 018 made
+  notifying an explicit choice, which is right, but `notify.select()` fans out
+  to stderr, `notify-send` and a webhook — and on the MCP door stderr is the
+  server's log, which nobody reads, while `notify-send` needs a desktop. So a
+  container with no `AGENT_BROWSER_WEBHOOK` set can be told to summon a human
+  and reach nobody, then block for the full wait. Whether the tool should say
+  so when asked to notify with nothing that can, or whether that is the
+  deployment's problem, is unexamined.
 
 - **The C# port itself, once it is a go.** [Whether this moves to
   C#](tickets/023-rewriting-into-csharp.md) decides *whether*, and the

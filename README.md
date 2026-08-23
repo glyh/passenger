@@ -45,6 +45,16 @@ Two things differ from the CLI, both deliberate:
   again -- the profile kept the result. `wait_seconds` opts into blocking.
 - **The daemon starts on demand.** A human runs `serve` first; an agent should
   not have to know that.
+- **`show_browser` is also how an agent asks for a human deliberately.** Only
+  the vendors in the signature table come back as `blocked`; a login wall or a
+  challenge nobody has a signature for arrives as thin content, and the agent
+  reading it can see perfectly well what it is. `show_browser(tab, wait_seconds,
+  notify_human)` brings that tab to the front, optionally goes and finds
+  someone, and waits -- until they *close the viewer*, which is the only
+  "done" signal this side can observe without ruling on the page. It never
+  says whether the challenge was solved. Read the tab afterwards with
+  `script` and judge. The CLI has none of this on purpose: there, the caller
+  is the human.
 
 ## Layout
 

@@ -69,6 +69,12 @@ def page_url() -> str:
 @runtime_checkable
 class Presenter(Protocol):
     name: PresenterName
+    # Whether presented() is a real observation or a standing guess. Only a
+    # presenter that can see its own window may be waited on: the human
+    # closing the viewer is the one completion signal this tool does not have
+    # to infer, and a presenter that always answers False would report it the
+    # instant the wait began (ticket 018).
+    observes_presence: bool
 
     def available(self) -> bool: ...
     def present(self) -> str: ...
@@ -101,6 +107,7 @@ class WindowPresenter:
     """Open the viewer page in a chromeless window on this machine."""
 
     name = PresenterName.LOCAL
+    observes_presence = True
 
     def browser(self) -> str | None:
         candidates = ((settings.viewer_browser,) if settings.viewer_browser
@@ -183,6 +190,7 @@ class LinkPresenter:
     """
 
     name = PresenterName.WEB
+    observes_presence = False
 
     def available(self) -> bool:
         """Only if the page can actually be served.
@@ -209,6 +217,7 @@ class LinkPresenter:
 
 class NullPresenter:
     name = PresenterName.NONE
+    observes_presence = False
 
     def available(self) -> bool:
         return True

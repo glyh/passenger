@@ -17,7 +17,8 @@ from typing import Annotated
 from mcp.server import MCPServer
 from pydantic import Field
 
-from . import browser, present, service, session as session_mod, targets
+from . import (browser, handoff, notify, present, service,
+               session as session_mod, targets)
 from .config import settings
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
@@ -29,9 +30,11 @@ server = MCPServer(
         "HTTP fetch when a page needs a login, is behind anti-bot protection, "
         "or renders its content with JavaScript.\n\n"
         "If a fetch returns type='blocked', a human must solve a challenge: "
-        "tell the user what is blocking, ask them to run `agent-browser show` "
-        "(or open the noVNC URL) and solve it, then call fetch again. Never "
-        "try to solve a captcha yourself.\n\n"
+        "tell the user what is blocking, then use `show_browser` with the "
+        "tab from that reply to put it in front of them. Solve nothing "
+        "yourself. Only known vendors come back as 'blocked' -- when a page "
+        "instead reads as a login wall or a challenge you recognise, "
+        "`show_browser` is how you ask for a human anyway.\n\n"
         "For anything a plain fetch cannot reach -- a search box, a tab, the "
         "next page of a list -- use `script`, which runs Playwright code "
         "against a real tab. Prefer reading over driving: after a human has "
@@ -131,10 +134,46 @@ def list_tabs() -> list[dict[str, str]]:
 
 
 @server.tool()
-def show_browser() -> str:
-    """Put the browser on screen so the user can log in or solve a challenge."""
+def show_browser(
+    tab: Annotated[str | None, Field(description=(
+        "Bring this tab to the front first, from a previous reply or from "
+        "list_tabs, so the human lands on the page you mean."))] = None,
+    wait_seconds: Annotated[int, Field(
+        description="Block until the human closes the viewer, up to this "
+                    "long. 0 (default) returns as soon as it is on screen.",
+        ge=0, le=900)] = 0,
+    notify_human: Annotated[bool, Field(
+        description="Send a desktop notification or webhook. Set this when "
+                    "the human is not watching this conversation -- running "
+                    "unattended, or on a machine they are not sitting at.")]
+        = False,
+) -> str:
+    """Put the browser on screen so the user can log in or solve a challenge.
+
+    Also the way to ask for a human deliberately. A `blocked` reply means a
+    known vendor was recognised, but plenty of walls are not in that table:
+    if a page comes back as thin content that plainly says "verify you are
+    human", or wants a login, you have seen enough -- call this with that
+    tab and a wait, tell the user what is in the way, and read the tab again
+    with `script` afterwards.
+
+    The wait ends when the human closes the viewer window, or the budget runs
+    out; it says which. It never inspects the page, so it cannot tell you
+    whether the challenge was solved -- read the tab and judge for yourself.
+    Whatever you learn about the site is worth remembering; this tool will
+    not remember it for you.
+    """
     _ensure_daemon()
-    return present.select().present()
+    if tab is not None:
+        with browser.Session() as session:
+            handoff.bring_to_front(session.page_for(tab))
+    presenter = present.select()
+    how = presenter.present()
+    if notify_human:
+        notify.select().notify("Agent browser needs you", how)
+    if wait_seconds == 0:
+        return how
+    return f"{how} -- {handoff.wait_for_dismissal(presenter, wait_seconds)}"
 
 
 @server.tool()
