@@ -3,7 +3,7 @@ id: 028
 title: The root heuristic picks a decoy
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
