@@ -188,6 +188,11 @@ class Pictures(BaseModel, frozen=True):
 
 class FetchRequest(BaseModel, frozen=True):
     url: str
+    # Which lane opens and owns the tab (ticket 040). Required, and not
+    # defaulted: a caller that is isolated by accident cannot tell which lane
+    # it is in, and an implicit lane keyed by process was rejected for exactly
+    # that -- it isolates without the caller ever asking.
+    lane: str
     # Required, and deliberately: see ExtractMode.
     extract_mode: ExtractMode
     wait_until: WaitUntil = WaitUntil.DOM_CONTENT_LOADED
@@ -195,6 +200,8 @@ class FetchRequest(BaseModel, frozen=True):
     allow_handoff: bool = True
     reuse_tab: bool = True
     keep_tab: bool = False
+    # Close this lane's other tabs afterwards. It used to close every tab in
+    # the browser; under lanes it can only reach its own.
     close_tabs: bool = False
     as_json: bool = False
     handoff_timeout_s: int = Field(default=300, ge=1)
@@ -210,8 +217,10 @@ class ScriptRequest(BaseModel, frozen=True):
     """
 
     source: str
+    lane: str
     # None means "a blank tab", which is the one-shot case. A targetId
-    # continues a sequence, or picks up the tab a human just navigated.
+    # continues a sequence, or picks up the tab a human just navigated. It
+    # must be a tab this lane owns; another lane's is refused as absent.
     tab: str | None = None
     extract_mode: ExtractMode
     # A sequence that pages a listing should not pay a full read per step.

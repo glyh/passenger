@@ -22,6 +22,7 @@ class ErrorCode(str, Enum):
     SCRIPT_RAISED = "SCRIPT_RAISED"
     SCRIPT_RETURN_NOT_JSON = "SCRIPT_RETURN_NOT_JSON"
     TAB_NOT_FOUND = "TAB_NOT_FOUND"
+    LANE_NOT_FOUND = "LANE_NOT_FOUND"
 
 
 class PassengerError(Exception):
@@ -66,10 +67,36 @@ class ScriptError(PassengerError):
 
 
 class TabNotFound(PassengerError):
-    """The tab a call named is gone -- closed, or from a browser since restarted."""
+    """The tab a call named is not in this lane.
 
-    def __init__(self, tab: str, open_tabs: tuple[str, ...]) -> None:
-        super().__init__(ErrorCode.TAB_NOT_FOUND, f"no tab {tab}",
-                         detail=("open now: " + ", ".join(open_tabs)
-                                 if open_tabs else "no tabs are open"))
+    Gone -- closed, or from a browser since restarted -- or open and owned by
+    somebody else, which a caller cannot tell apart and must not be able to.
+    A lane sees only its own tabs (ticket 040), so a tab id it was never given
+    has to be indistinguishable from one that does not exist; naming the
+    difference would leak the fact that another lane is holding something.
+
+    The detail used to list every open tab in the browser. Under lanes that is
+    both a leak and useless advice, since none of those ids would be usable.
+    """
+
+    def __init__(self, tab: str, lane: str, open_tabs: tuple[str, ...]) -> None:
+        super().__init__(ErrorCode.TAB_NOT_FOUND, f"no tab {tab} in lane {lane}",
+                         detail=("open in this lane: " + ", ".join(open_tabs)
+                                 if open_tabs else "this lane has no tabs"))
         self.tab = tab
+        self.lane = lane
+
+
+class LaneNotFound(PassengerError):
+    """The lane a call named does not exist, or its clock ran out.
+
+    Not distinguished from "expired", deliberately: a lane whose TTL passed
+    has had its tabs closed, so there is nothing left for the caller to do
+    with the id either way. Both answers are "open a new one".
+    """
+
+    def __init__(self, lane: str) -> None:
+        super().__init__(ErrorCode.LANE_NOT_FOUND, f"no lane {lane}",
+                         detail="it expired, or never existed; "
+                                "open one with open_lane")
+        self.lane = lane

@@ -1,6 +1,6 @@
 ---
 name: using-passenger
-description: Use when fetching or driving web pages through the passenger MCP server -- its `fetch`, `script`, `show_browser`, `list_tabs` and `close_tabs` tools. Covers what the `blocked` verdict does and does not catch, recognising a login wall or captcha the tool cannot name and handing the page to a human, why a fetch is only the first screen, why reading a page beats driving it, and what the tool will not remember for you. Use it before the first call in a session, and whenever a fetch comes back thinner than the page looked.
+description: Use when fetching or driving web pages through the passenger MCP server -- its `open_lane`, `fetch`, `script`, `show_browser`, `list_tabs` and `close_tabs` tools. Covers opening a lane before the first fetch, what the `blocked` verdict does and does not catch, recognising a login wall or captcha the tool cannot name and handing the page to a human, why a fetch is only the first screen, why reading a page beats driving it, and what the tool will not remember for you. Use it before the first call in a session, and whenever a fetch comes back thinner than the page looked.
 ---
 
 # Using passenger
@@ -14,6 +14,27 @@ This skill is the operating knowledge: the things that are true before any
 particular call. What each argument means is in the tool schemas, and is not
 repeated here -- read `mode`'s description before choosing one, because that
 choice is the difference between a listing and its footer.
+
+## Open a lane first
+
+    lane = open_lane()
+
+Every tab-touching tool takes it. A lane owns the tabs opened in it: no other
+caller can see them, list them or close them, and nothing you do reaches
+theirs. This matters more than it sounds -- one Chrome is shared by every
+agent on the machine, including your own subagents, and the tab-closing verb
+used to take no argument at all: it closed everything but one blank tab,
+whoever was driving it.
+
+A lane collects itself after **30 minutes with no calls**, closing its tabs.
+Every call naming the lane restarts that clock, so work in progress is safe;
+what is not safe is a wait you start and then leave. Before asking a human for
+something slow, say how long you are prepared to wait:
+
+    set_ttl(lane, 120)                # minutes; or show_browser(..., ttl_minutes=120)
+
+Say `destroy_lane(lane)` when you are finished, rather than leaving tabs
+parked until the clock reaches them.
 
 ## The tool measures; you judge
 
@@ -45,7 +66,7 @@ What to notice -- examples, not a checklist:
 When you see one, you have seen enough. Do not fetch again hoping for a
 different verdict.
 
-    show_browser(tab, wait_seconds, notify_human)
+    show_browser(lane, tab, wait_seconds, notify_human)
 
 Tell the user what is in the way. `notify_human` is for when they are not
 watching this conversation. Then -- and this is the part most often missed --
@@ -105,14 +126,43 @@ So: navigate by hand where you can, drive only where you must, and prefer one
 
 ## Housekeeping
 
-Call `close_tabs` after a batch of fetches. Tabs left open cost memory in a
-browser that is meant to stay warm for weeks.
+Three verbs, and the differences between them are deliberate:
 
-## The tool remembers nothing
+    close_tabs(lane, [tab, ...])   the ones you name
+    close_all_tabs(lane)           every tab in your lane; the lane survives
+    destroy_lane(lane)             the tabs, then the lane itself
 
-There is no state between calls. It will not learn that this site walls the
-third request, that this listing needs `dom`, that this domain redirects
-logged-out readers to a signup page.
+There is no "close everything" you can reach by leaving an argument out. That
+was the old shape and it is what closed other callers' tabs.
+
+Clean up after a batch of fetches: tabs left open cost memory in a browser
+meant to stay warm for weeks. The TTL is a backstop for the calls you never
+got to make, not the plan.
+
+**The screen is shared, and refcounted.** `show_browser` claims it; the viewer
+stays up until every lane that claimed it has called `hide_browser`. So your
+`hide_browser` cannot take the window away from someone else's human -- and
+theirs cannot take it from yours.
+
+**`orphan` is a junk drawer anyone may open.** Tabs a page opened by itself
+join the lane that caused them, but a tab a *human* opened during a handoff has
+no opener for Chrome to trace, so it lands in `orphan` -- readable and closable
+by any caller, and never collected on a timer. Look before you empty it:
+somebody may be halfway through a login in there.
+
+**What lanes do not isolate.** One profile means one Chrome and one attach, and
+attaching initialises every open tab. So a tab wedged mid-navigation in *any*
+lane slows or fails calls in every lane, and freeing it can stop a navigation
+another lane was making. Lanes partition ownership, not availability. When it
+happens the tool says which lanes it touched; it cannot prevent it.
+
+## The tool remembers nothing about a site
+
+Your lane and its tabs are bookkeeping, and they are the only thing kept
+between calls -- you can read all of it back with `list_tabs`, and it is gone
+when the browser restarts. Nothing else is remembered. The tool will not learn
+that this site walls the third request, that this listing needs `dom`, that
+this domain redirects logged-out readers to a signup page.
 
 **That is yours to remember**, in your own memory or in a site-scoped skill.
 Anything durable you discover about a *site* belongs there. A tool that

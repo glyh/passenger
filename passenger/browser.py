@@ -10,6 +10,7 @@ navigator.webdriver) is simply never passed.
 """
 import os
 import shutil
+import sys
 import socket
 import subprocess
 import time
@@ -21,10 +22,10 @@ from patchright.sync_api import Error as PlaywrightError
 from patchright.sync_api import TimeoutError as PlaywrightTimeout
 from patchright.sync_api import sync_playwright
 
-from . import launch, session, targets
+from . import lanes, launch, session, targets
 from .config import ATTACH_TIMEOUT_S, CDP_PORT, CDP_URL, CHROME_BIN, PROFILE_DIR
 from .errors import DaemonError, ErrorCode, TabNotFound
-from .models import BackendName
+from .models import BackendName, Target
 
 _STARTUP_POLLS = 60
 _POLL_INTERVAL_S = 0.5
@@ -59,6 +60,10 @@ def start(detach: bool = True, hidden: bool = True) -> str:
     # claim that port and the stale server keeps answering viewers with the
     # empty compositor it is still attached to.
     reaped = session.reap_stale()
+    # Every row in the lane registry names a CDP target id from the browser
+    # that just went away, and Chrome never hands those ids out again. Kept,
+    # they would make `list_tabs` promise tabs that cannot exist.
+    lanes.reset()
 
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     argv: tuple[str, ...] = (
@@ -165,6 +170,12 @@ def stop() -> str | None:
     return session.teardown()
 
 
+def _lanes_of(pages: tuple[Target, ...]) -> str:
+    """Which lanes these tabs belong to, for saying whose work was touched."""
+    owners = sorted({lanes.owner(page.id) or lanes.ORPHAN for page in pages})
+    return "lane " + ", ".join(owners) if owners else "no lane"
+
+
 class Session:
     """Attaches patchright to the running Chrome and hands back pages."""
 
@@ -202,6 +213,16 @@ class Session:
             # is still stuck is freed, and the retry starts from nothing.
             self._restart_driver()
             stuck = targets.unstick()
+            if stuck:
+                # Lanes partition ownership, not availability: one attach
+                # initialises every open tab, so a tab wedged in any lane hangs
+                # every lane, and freeing it can stop a navigation that another
+                # lane is in the middle of. Ticket 012 closed on exactly that
+                # trade, a year before lanes existed. It cannot be prevented
+                # while one profile means one Chrome -- so it is said out loud
+                # instead, and a lane whose fetch died learns why.
+                print(f"   freed a wedged tab in {_lanes_of(stuck)}",
+                      file=sys.stderr)
             try:
                 return self._connect()
             except PlaywrightTimeout as again:
@@ -209,7 +230,8 @@ class Session:
                     ErrorCode.ATTACH_TIMEOUT,
                     f"could not attach to chrome within {ATTACH_TIMEOUT_S}s, "
                     "twice",
-                    detail=(", ".join(page.url for page in stuck) if stuck else
+                    detail=(f"stuck in {_lanes_of(stuck)}: "
+                            + ", ".join(page.url for page in stuck) if stuck else
                             "no tab was stuck mid-navigation, so this is "
                             "something else; try: passenger stop")) from again
 
@@ -224,13 +246,24 @@ class Session:
         return self._playwright.chromium.connect_over_cdp(
             CDP_URL, timeout=ATTACH_TIMEOUT_S * 1000)
 
-    def page(self, reuse: bool = True) -> Any:
-        """Reuse a blank tab if one is lying around, else open a new one."""
+    def page(self, lane: str, reuse: bool = True) -> Any:
+        """A tab in this lane -- a blank one it already owns, or a new one.
+
+        Reuse is lane-scoped, and that is the whole point. It used to search
+        every open tab for an `about:blank`, so one caller's fetch could be
+        handed the blank tab another caller had opened a moment ago and not yet
+        navigated: two callers, one tab, and neither aware of the other.
+        """
         if reuse:
+            mine = set(lanes.tabs_of(lane))
             for existing in self.context.pages:
-                if existing.url in ("about:blank", "chrome://newtab/"):
+                if existing.url not in ("about:blank", "chrome://newtab/"):
+                    continue
+                if self.target_id(existing) in mine:
                     return existing
-        return self.context.new_page()
+        opened = self.context.new_page()
+        lanes.adopt(self.target_id(opened), lane)
+        return opened
 
     def target_id(self, page: Any) -> str:
         """The tab's CDP id -- the handle a caller holds between calls.
@@ -242,35 +275,37 @@ class Session:
             "Target.getTargetInfo")
         return str(info["targetInfo"]["targetId"])
 
-    def page_for(self, tab: str | None) -> Any:
-        """The tab a call named, or a blank one when it named none."""
+    def page_for(self, lane: str, tab: str | None) -> Any:
+        """The tab a call named, if this lane owns it, else a blank one.
+
+        Ownership is checked before the browser is: a tab belonging to another
+        lane and a tab that never existed have to be the same answer, or the
+        refusal itself tells the caller that somebody else is holding it.
+        """
         if tab is None:
-            return self.page(reuse=True)
+            return self.page(lane, reuse=True)
+        if lanes.owner(tab) != lane:
+            raise TabNotFound(tab, lane, lanes.tabs_of(lane))
         open_now = {self.target_id(page): page for page in self.context.pages}
         if tab not in open_now:
             # Closed, or from a browser that has restarted since. Either way
             # the caller is holding a handle to something gone, and needs to
-            # know which tabs there are rather than a bare failure.
-            raise TabNotFound(tab, tuple(open_now))
+            # know which of its own tabs there are rather than a bare failure.
+            raise TabNotFound(tab, lane, lanes.tabs_of(lane))
         return open_now[tab]
 
-    def close_other_tabs(self, keep: Any) -> int:
-        """Close every tab except `keep`. Returns how many were closed.
+    def close_others(self, lane: str, keep: Any) -> int:
+        """Close this lane's other tabs. Returns how many were closed.
 
-        Chrome exits when its last tab closes, which would take the daemon and
-        the warm session with it -- so this is expressed as "keep that one"
-        rather than "close all", making it impossible to ask for zero.
+        Was `close_other_tabs`, which closed every tab in the browser except
+        one -- the global sweep that made one caller's cleanup another's
+        interrupted fetch. It kept a tab back because Chrome exits when it
+        loses its last one; that invariant now lives in `lanes.close_tabs`,
+        which every closing path goes through.
         """
-        closed = 0
-        for page in list(self.context.pages):
-            if page is keep:
-                continue
-            try:
-                page.close()
-            except Exception:
-                continue  # already gone, or mid-navigation
-            closed += 1
-        return closed
+        kept = self.target_id(keep)
+        doomed = tuple(tab for tab in lanes.tabs_of(lane) if tab != kept)
+        return lanes.close_tabs(lane, doomed)
 
     def __exit__(self, exc_type: type[BaseException] | None,
                  exc: BaseException | None,

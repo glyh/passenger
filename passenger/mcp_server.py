@@ -26,7 +26,7 @@ from typing import Annotated
 from mcp.server import MCPServer
 from pydantic import Field
 
-from . import (browser, handoff, notify, present, service,
+from . import (browser, handoff, lanes, notify, present, service,
                session as session_mod, targets)
 from .config import settings
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
@@ -38,6 +38,8 @@ server = MCPServer(
         "distinguish from an ordinary browser. Use this instead of a plain "
         "HTTP fetch when a page needs a login, is behind anti-bot protection, "
         "or renders its content with JavaScript.\n\n"
+        "Call `open_lane` first: every tab you open lives in your lane, and "
+        "no other caller can see or close it.\n\n"
         "How to operate it -- what `blocked` does and does not catch, "
         "recognising a wall it cannot name, why a fetch is only the first "
         "screen, and why reading beats driving -- is the "
@@ -54,6 +56,9 @@ def _ensure_daemon() -> None:
 @server.tool()
 def fetch(
     url: Annotated[str, Field(description="Page to fetch.")],
+    lane: Annotated[str, Field(description=(
+        "Your lane, from open_lane. Tabs opened here are yours: no other "
+        "caller sees them, and none can close them."))],
     mode: Annotated[ExtractMode, Field(
         description="Which extractor reads the page, and there is no default "
                     "because the choice is yours to make: `article` removes "
@@ -78,6 +83,7 @@ def fetch(
     _ensure_daemon()
     request = FetchRequest(
         url=url,
+        lane=lane,
         extract_mode=mode,
         wait_until=WaitUntil.DOM_CONTENT_LOADED,
         settle_ms=settle_ms,
@@ -100,6 +106,9 @@ def script(
         description="How read(page) and the page report extract content. Same "
                     "choice as on `fetch`: `article` for a document, `dom` "
                     "for a listing or a feed.")],
+    lane: Annotated[str, Field(description=(
+        "Your lane, from open_lane. Tabs opened here are yours: no other "
+        "caller sees them, and none can close them."))],
     tab: Annotated[str | None, Field(description=(
         "Which tab to run against, from a previous reply or from list_tabs. "
         "Omit for a fresh blank tab."))] = None,
@@ -119,20 +128,104 @@ def script(
     """
     _ensure_daemon()
     return service.run(ScriptRequest(
-        source=source, tab=tab, extract_mode=mode, read_page=read_page,
-        timeout_s=timeout_seconds))
+        source=source, lane=lane, tab=tab, extract_mode=mode,
+        read_page=read_page, timeout_s=timeout_seconds))
 
 
 @server.tool()
-def list_tabs() -> list[dict[str, str]]:
-    """List the open tabs, so a script can be pointed at one of them."""
+def open_lane() -> str:
+    """Open a lane and return its id. Call this before anything else.
+
+    A lane owns the tabs opened in it. Nothing outside it can see or close
+    them, and nothing it does reaches another caller's tabs. It collects
+    itself after 30 minutes of no calls, closing its tabs -- `set_ttl` when
+    you know you will be waiting longer than that.
+    """
     _ensure_daemon()
+    lanes.sweep()
+    return lanes.open_lane()
+
+
+@server.tool()
+def set_ttl(
+    lane: Annotated[str, Field(description="The lane, from open_lane.")],
+    minutes: Annotated[int, Field(
+        description="Quiet time before this lane and its tabs are collected.",
+        ge=1, le=1440)],
+) -> str:
+    """Change how long this lane may sit idle before it is collected.
+
+    Every call naming the lane restarts its clock, so this is for waits you
+    are about to start rather than for work in progress -- asking a human for
+    something slow, most often.
+    """
+    lanes.set_ttl(lane, minutes * 60)
+    return f"lane {lane} expires after {minutes} min of quiet"
+
+
+@server.tool()
+def list_tabs(
+    lane: Annotated[str, Field(description=(
+        "Whose tabs to list. Your own lane, or 'orphan' for tabs no lane "
+        "claims -- what a page opened by itself, or a human opened during a "
+        "handoff."))],
+) -> list[dict[str, str]]:
+    """List the tabs in a lane, so a script can be pointed at one of them."""
+    _ensure_daemon()
+    lanes.sweep()
+    lanes.touch(lane)
+    mine = set(lanes.tabs_of(lane))
     return [{"tab": page.id, "url": page.url, "title": page.title}
-            for page in targets.pages()]
+            for page in targets.pages() if page.id in mine]
+
+
+@server.tool()
+def close_tabs(
+    lane: Annotated[str, Field(description="The lane the tabs are in.")],
+    tabs: Annotated[list[str], Field(description=(
+        "Which tabs to close, from list_tabs or a previous reply. Naming them "
+        "is required: closing is not something to ask for by omission."))],
+) -> str:
+    """Close the tabs you name, keeping the session and every other tab alive."""
+    _ensure_daemon()
+    lanes.sweep()
+    lanes.touch(lane)
+    return f"closed {lanes.close_tabs(lane, tuple(tabs))} tab(s)"
+
+
+@server.tool()
+def close_all_tabs(
+    lane: Annotated[str, Field(description="The lane to empty.")],
+) -> str:
+    """Close every tab in this lane. The lane stays open and reusable."""
+    _ensure_daemon()
+    lanes.sweep()
+    lanes.touch(lane)
+    return f"closed {lanes.close_tabs(lane, lanes.tabs_of(lane))} tab(s)"
+
+
+@server.tool()
+def destroy_lane(
+    lane: Annotated[str, Field(description="The lane to end.")],
+) -> str:
+    """Close this lane's tabs and end the lane. The id stops working.
+
+    Say this when you are done, rather than leaving tabs parked until the TTL
+    reaches them.
+    """
+    _ensure_daemon()
+    lanes.sweep()
+    closed = lanes.close_tabs(lane, lanes.tabs_of(lane))
+    lanes.destroy(lane)
+    return f"closed {closed} tab(s), lane {lane} is gone"
 
 
 @server.tool()
 def show_browser(
+    lane: Annotated[str, Field(description=(
+        "Your lane. It holds a claim on the screen until you call "
+        "hide_browser, so another caller finishing its work cannot take the "
+        "window away from the person you just asked for help."))],
     tab: Annotated[str | None, Field(description=(
         "Bring this tab to the front first, from a previous reply or from "
         "list_tabs, so the human lands on the page you mean."))] = None,
@@ -145,6 +238,11 @@ def show_browser(
                     "the human is not watching this conversation -- running "
                     "unattended, or on a machine they are not sitting at.")]
         = False,
+    ttl_minutes: Annotated[int | None, Field(
+        description="Raise the lane's idle timeout for this handoff. A human "
+                    "who wanders off for longer than the lane's TTL comes "
+                    "back to a tab that was collected.",
+        ge=1, le=1440)] = None,
 ) -> str:
     """Put the browser on screen so the user can log in or solve a challenge.
 
@@ -153,21 +251,37 @@ def show_browser(
     closes the viewer, and it says which.
     """
     _ensure_daemon()
+    lanes.sweep()
+    if ttl_minutes is not None:
+        lanes.set_ttl(lane, ttl_minutes * 60)
+    lanes.touch(lane)
+    lanes.claim_screen(lane)
     if tab is not None:
         with browser.Session() as session:
-            handoff.bring_to_front(session.page_for(tab))
+            handoff.bring_to_front(session.page_for(lane, tab))
     presenter = present.select()
     how = presenter.present()
     if notify_human:
         notify.select().notify("Agent browser needs you", how)
     if wait_seconds == 0:
+        lanes.touch(lane)
         return how
-    return f"{how} -- {handoff.wait_for_dismissal(presenter, wait_seconds)}"
+    waited = handoff.wait_for_dismissal(presenter, wait_seconds)
+    lanes.touch(lane)
+    return f"{how} -- {waited}"
 
 
 @server.tool()
-def hide_browser() -> str:
-    """Tuck the browser away again once the user is done."""
+def hide_browser(
+    lane: Annotated[str, Field(description=(
+        "The lane releasing the screen. The viewer stays up while any other "
+        "lane still holds a claim."))],
+) -> str:
+    """Release your claim on the screen, tucking the browser away if you were
+    the last one holding it."""
+    lanes.touch(lane)
+    if not lanes.release_screen(lane):
+        return f"still shown: {len(lanes.screen_claims())} other claim(s)"
     present.select().dismiss()
     return "dismissed"
 
@@ -178,6 +292,7 @@ def browser_status() -> dict[str, str]:
     presenter = present.select()
     live = session_mod.live()
     host, port = present.endpoint()
+    open_tabs, orphaned = lanes.counts()
     return {
         "daemon": "up" if browser.is_up() else "down",
         "presenter": presenter.name.value,
@@ -187,18 +302,13 @@ def browser_status() -> dict[str, str]:
         # session reads "stale" is looking at a compositor with nothing in it.
         "session": "live" if live is not None else "stale",
         "vnc": f"{host}:{port}",
+        # The only number that reveals a lane you do not own. Without it
+        # nothing in this tool can show tabs piling up, since every listing is
+        # scoped to the caller. A count, deliberately: ids and owners would be
+        # a listing, and a lane's tabs are nobody else's business.
+        "tabs": f"{open_tabs} open, {orphaned} orphan",
+        "screen_claims": str(len(lanes.screen_claims())),
     }
-
-
-@server.tool()
-def close_tabs() -> str:
-    """Close tabs left behind by earlier fetches, keeping the session alive."""
-    _ensure_daemon()
-    with browser.Session() as session:
-        keep = session.page(reuse=True)
-        if keep.url != "about:blank":
-            keep.goto("about:blank")
-        return f"closed {session.close_other_tabs(keep=keep)} tab(s)"
 
 
 def main() -> None:

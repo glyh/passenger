@@ -10,7 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from . import browser, handoff, pictures, probe as probe_mod, script
+from . import (browser, handoff, lanes, pictures, probe as probe_mod,
+               script, targets)
 from .detect import classify
 from .errors import HandoffTimeout, ScriptError
 from .extract import extract
@@ -102,8 +103,11 @@ def inspect(page: Any,
 
 
 def fetch(request: FetchRequest) -> FetchOutcome:
+    lanes.require(request.lane)
+    lanes.sweep()
+    lanes.touch(request.lane)
     with browser.Session() as session:
-        page = session.page(reuse=request.reuse_tab)
+        page = session.page(request.lane, reuse=request.reuse_tab)
         page.goto(request.url, wait_until=request.wait_until.value, timeout=60000)
         page.wait_for_timeout(request.settle_ms)
 
@@ -127,7 +131,11 @@ def fetch(request: FetchRequest) -> FetchOutcome:
                 and page.url != "about:blank"):
             page.goto("about:blank")
         if request.close_tabs:
-            session.close_other_tabs(keep=page)
+            session.close_others(request.lane, keep=page)
+        # On return as well as on entry: a fetch that waited out a handoff can
+        # outlast the lane's whole TTL, and expiring underneath itself would
+        # close the tab it is about to hand back.
+        lanes.touch(request.lane)
         return outcome
 
 
@@ -141,8 +149,11 @@ def run(request: ScriptRequest) -> ScriptOutcome:
     `fetch` gives -- so a challenge met halfway through a sequence comes back
     as `blocked`, not as a puzzling empty string.
     """
+    lanes.require(request.lane)
+    lanes.sweep()
+    lanes.touch(request.lane)
     with browser.Session() as session:
-        page = session.page_for(request.tab)
+        page = session.page_for(request.lane, request.tab)
         # Every Playwright call inside the script inherits this, so a wait on
         # a selector that never appears ends the call instead of the session.
         # A script that loops without calling Playwright is not interruptible;
@@ -157,10 +168,20 @@ def run(request: ScriptRequest) -> ScriptOutcome:
         try:
             returned = script.execute(request.source, page, read)
         except ScriptError as failure:
-            return Failed(tab=tab, code=failure.code.value,
-                          error=failure.message, where=failure.detail or "",
+            outcome: ScriptOutcome = Failed(
+                tab=tab, code=failure.code.value, error=failure.message,
+                where=failure.detail or "", page=_look(page, request, tab))
+        else:
+            outcome = Ran(tab=tab, returned=returned,
                           page=_look(page, request, tab))
-        return Ran(tab=tab, returned=returned, page=_look(page, request, tab))
+        # A script may have opened tabs of its own -- window.open, or a link
+        # with target="_blank". Attributing them to the lane that caused them
+        # is what keeps them from becoming invisible and uncollectable.
+        lanes.reconcile(tuple(session.target_id(open_page)
+                              for open_page in session.context.pages),
+                        targets.openers())
+        lanes.touch(request.lane)
+        return outcome
 
 
 def _look(page: Any, request: ScriptRequest, tab: str) -> FetchOutcome | None:

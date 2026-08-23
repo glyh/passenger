@@ -51,6 +51,21 @@ this side matches. Four mechanisms have now been deleted for crossing that line
 Fetched that says this reads like a
 wall](tickets/038-a-fetched-that-says-this-reads-like-a-wall.md).
 
+**A lane is bookkeeping, not memory.** Ticket 019 forbids the tool holding
+durable knowledge about a *site* behind the agent's back. Lane membership is a
+different animal and the distinction is now load-bearing: it is about this
+session's own tabs, the caller can read all of it back with `list_tabs`, and it
+does not survive a Chrome restart. State that fails any of those three is 019's
+problem again. See [A lane owns its
+tabs](tickets/040-a-lane-owns-its-tabs.md).
+
+**Lanes partition ownership, not availability.** One profile is one Chrome and
+one attach, and attaching initialises every open tab — so a tab wedged in any
+lane still costs every lane, and freeing it can stop another lane's navigation
+(ticket 012's closing trade). Not fixable short of separate profiles, which
+would throw away the warm session, so it is measured and named rather than
+prevented.
+
 **The layer stays thin.** The agent does the work; this side hands over the
 capability and gets out of the way. Ticket 004 settled that for verbs — one
 door with `page` bound, rather than a tool per Playwright call — and the same
@@ -381,6 +396,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   by a hand-made symlink, so nothing in the tree names the old path. The MCP
   registration has to be re-run: it pointed at `ab.mcp_server`, so an
   unchanged one does not start at all.
+- [A lane owns its tabs](tickets/040-a-lane-owns-its-tabs.md) — a caller opens
+  a lane and every tab it opens lives there; nobody else can see, list or close
+  them. A sqlite registry under `state_dir`, because stdio means two
+  `passenger-mcp` processes write it at once; a 30-minute TTL whose expiry
+  closes the tabs; reserved `cli` and `orphan` lanes; a refcounted screen, so
+  one lane's `hide_browser` cannot take the window from another's human. Tab
+  bookkeeping left patchright entirely and goes through the CDP HTTP endpoint,
+  which is what made a sweep cheap enough to run on every call. Eleven MCP
+  tools where there were seven, and the closing verbs are separate rather than
+  one with an optional selection: a destructive call must not express
+  "everything" as an omitted argument.
 
 ## Fog
 
@@ -485,8 +511,10 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 - **Nothing notices a session dying mid-fetch.** `reap_stale` runs at
   start. A crash between fetches is only discovered on the next one. The tab
   half of this is answered; a Chrome that died between fetches, or a compositor
-  that outlived it, is still unexamined -- as is the fact that nothing reports
-  what tabs are open until something goes wrong.
+  that outlived it, is still unexamined. The reporting half is answered as far
+  as it goes: `status` and `browser_status` now carry a tab count (040). It is
+  a count and not a listing on purpose, so it says that tabs are piling up
+  without saying whose.
 
 - **An agent treats the document in front of it as the whole procedure.**
   What 032 could not fix, and may not be this repo's to fix. The six copied

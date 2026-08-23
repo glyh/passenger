@@ -2,8 +2,8 @@
 id: 040
 title: A lane owns its tabs, and no caller closes another caller's
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -184,20 +184,55 @@ anywhere in this tool that reveals a lane you do not own, and 012 closed with
 "Left standing: `browser_status` reports nothing about tabs." A count is a
 measurement, which is the side of the line this tool is allowed on.
 
-## Still open
+## Answer
 
-1. **Implementation order.** The registry and lane-scoped `page(reuse=)` are
-   the floor; the screen refcount, opener adoption and the `browser_status`
-   count each stand alone on top of it. Whether this stays one ticket or spawns
-   children is a question for whoever picks it up.
-2. **Testing.** The registry is testable without a browser, which is most of
-   the new logic. What is not: opener adoption, the refcount under two real
-   processes, and expiry actually closing tabs. [001](001-testing-the-shells.md)
-   is the standing question about how the shells get tested at all.
-3. **The keeper tab.** Chrome exits when its last tab closes, so the daemon
-   holds one `about:blank` that belongs to no lane and no sweep touches. It
-   already exists -- `start()` passes `about:blank` as argv's tail -- but
-   nothing today names or protects it.
-4. **`FetchRequest.close_tabs`** (`models.py:198`) predates all of this and
-   means "close every other tab". Reachable only from the CLI. It becomes
-   lane-scoped or it goes.
+Built as designed. `passenger/lanes.py` is the whole registry -- sqlite under
+`state_dir`, dropped by `browser.start()` alongside `session.reap_stale()`.
+
+**Closing left patchright entirely.** The design said a lane's tabs would be
+closed through a `Session`, and that turned out to be both slower and wrong:
+an attach initialises every open tab, which is a strange price for closing one,
+and it is the thing that hangs when a renderer is wedged. `targets.py` already
+existed for exactly that reason, so `targets.close` (`/json/close/<id>`) and
+`targets.openers` (`Target.getTargets` over the browser socket, for `openerId`)
+were added there, and no tab bookkeeping needs an attach any more. That also
+made the sweep cheap enough to run at the top of every call.
+
+**The keeper became an invariant rather than a tab.** The plan was a permanent
+unowned `about:blank` that no sweep touches. Naming a particular tab as sacred
+turned out to need protecting on every closing path, so the rule lives in
+`lanes.close_tabs` instead: whatever is asked for, one page stays. It lands in
+`orphan` on the next reconcile, which is the right home for a tab that exists
+only so Chrome keeps running.
+
+**`FetchRequest.close_tabs` stayed and became lane-scoped.** `close_other_tabs`
+is now `Session.close_others(lane, keep)`, which can only reach the caller's
+own tabs.
+
+**Two exemptions from the visibility rule were considered and refused.** A
+`passenger lanes` command listing every lane was written and then deleted: a
+view that exists gets used, and then isolation is a convention rather than a
+property. `passenger status` reports the count and nothing else. The other was
+`passenger hide --force`, which *stayed* -- a human overriding another lane's
+screen claim is exactly the escape hatch an agent must not have.
+
+**Measured against the live daemon**, with twelve of the owner's real tabs
+open: those twelve were adopted into `orphan` and never touched; a fetch into
+lane A left its tab invisible to lane B; lane B naming A's tab got
+`TAB_NOT_FOUND`; lane B's `close_all_tabs` closed nothing of A's; and a
+`window.open` from A's tab joined lane A rather than leaking.
+
+75 tests pass, 21 of them new, and `mypy --strict` is clean on `passenger`.
+
+**What this costs.** Eleven MCP tools where there were seven, against
+[020](020-how-thin-can-this-layer-get.md), and a required parameter on the
+90% call. And lanes still do not partition the attach: one profile is one
+Chrome, so a tab wedged in any lane hangs every lane, and freeing it can stop
+another lane's navigation. That is said out loud now -- `unstick` names the
+lanes it touched, in the attach error and on stderr -- and it is not fixed.
+
+**Left standing.** The registry is unit-tested; opener adoption against a real
+popup and the refcount across two live processes are covered only by the smoke
+run above, not by the suite ([001](001-testing-the-shells.md)). And nothing
+enforces that a caller ever calls `destroy_lane`: the TTL is the only
+collection, which is why it is the one number an agent can change.

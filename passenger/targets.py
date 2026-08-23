@@ -94,3 +94,58 @@ def _call(socket: Any, ident: int, method: str,
             return None
         if message.get("id") == ident:
             return message
+
+
+def browser_socket() -> str:
+    """The *browser* process's own websocket, which no page owns.
+
+    `/json/list` describes pages and hands out a socket per page; the browser
+    endpoint is only in `/json/version`, and it is the one that can answer
+    `Target.getTargets` -- the question with `openerId` in the reply.
+    """
+    with urllib.request.urlopen(f"{CDP_URL}/json/version", timeout=5) as response:
+        payload: dict[str, Any] = json.loads(response.read().decode())
+    return str(payload.get("webSocketDebuggerUrl", ""))
+
+
+def openers(deadline_s: float = PROBE_DEADLINE_S) -> dict[str, str]:
+    """Which tab opened which, as Chrome itself records it.
+
+    A page that calls `window.open`, or a link with `target="_blank"`, creates
+    a target nobody asked this tool for. Attributing it to the lane that
+    caused it needs a record of causation, and Chrome has one: `openerId` on
+    `Target.getTargets`. Guessing from timing or URL was the alternative, and
+    it is the kind of heuristic this project keeps deleting.
+
+    Not available from `/json/list`, which is why this goes to the websocket.
+    An empty map on any failure: adoption is an improvement over leaving a tab
+    unowned, never a precondition for the caller's actual work.
+    """
+    try:
+        socket_url = browser_socket()
+        if not socket_url:
+            return {}
+        with connect(socket_url, open_timeout=deadline_s) as socket:
+            reply = _call(socket, 1, "Target.getTargets", deadline_s)
+    except Exception:
+        return {}
+    if reply is None:
+        return {}
+    infos = reply.get("result", {}).get("targetInfos", [])
+    return {info["targetId"]: info["openerId"] for info in infos
+            if info.get("type") == "page" and info.get("openerId")}
+
+
+def close(target_id: str) -> bool:
+    """Close one target through the browser process. True if it answered.
+
+    Goes around patchright for the same reason the rest of this module does:
+    tab bookkeeping must keep working when a renderer does not, and an attach
+    that initialises every open tab is a strange price to pay for closing one.
+    """
+    try:
+        with urllib.request.urlopen(f"{CDP_URL}/json/close/{target_id}",
+                                    timeout=5) as response:
+            return bool(response.status == 200)
+    except Exception:
+        return False

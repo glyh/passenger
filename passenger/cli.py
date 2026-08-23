@@ -11,7 +11,8 @@ from typing import Annotated, assert_never
 
 import cyclopts
 
-from . import browser, launch, present, service, session as session_mod, targets
+from . import (browser, lanes, launch, present, service,
+               session as session_mod, targets)
 from .config import settings
 from .detect import BUILTIN
 from .errors import ErrorCode, PassengerError
@@ -29,6 +30,7 @@ def fetch(
     url: str,
     *,
     mode: Annotated[ExtractMode, cyclopts.Parameter(name=["--mode", "--extract"])],
+    lane: str = lanes.CLI,
     wait: WaitUntil = WaitUntil.DOM_CONTENT_LOADED,
     settle: int = 1500,
     handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
@@ -53,6 +55,11 @@ def fetch(
     ----------
     url
         Page to fetch.
+    lane
+        Which lane owns the tab. Defaults to the reserved `cli` lane, which is
+        what makes `fetch` and then `script --tab` work across two commands
+        typed thirty seconds apart -- a minted id would have to be copied by
+        hand, and a lane per invocation could not see the previous one's tab.
     mode
         Required. article removes boilerplate, and is right for a document --
         an article, a post, a docs page. dom keeps every visible line, and is
@@ -63,13 +70,14 @@ def fetch(
     handoff_enabled
         With --no-handoff, exit on a blocker instead of asking for help.
     close_tabs
-        Close every other tab afterwards, clearing tabs orphaned by earlier
-        runs.
+        Close this lane's other tabs afterwards, clearing tabs orphaned by
+        earlier runs in it.
     json_out
         Emit a JSON record instead of bare markdown.
     """
     request = FetchRequest(
         url=url,
+        lane=lane,
         extract_mode=mode,
         wait_until=wait,
         settle_ms=settle,
@@ -105,6 +113,7 @@ def script(
     file: str = "-",
     *,
     mode: ExtractMode,
+    lane: str = lanes.CLI,
     tab: str | None = None,
     read_page: bool = True,
     timeout: int = 60,
@@ -121,8 +130,12 @@ def script(
         Script to run. Defaults to stdin, so it reads from a heredoc.
     mode
         Required, as on `fetch`: article for a document, dom for a listing.
+    lane
+        Which lane owns the tab. Defaults to the reserved `cli` lane.
     tab
-        Tab id to run against, from `tabs`. Omitted means a fresh blank tab.
+        Tab id to run against, from `tabs`. Must be a tab this lane owns;
+        another lane's is refused exactly as a closed one is. Omitted means a
+        fresh blank tab.
     read_page
         With --no-read-page, skip extracting the ending page.
     timeout
@@ -130,8 +143,8 @@ def script(
     """
     source = sys.stdin.read() if file == "-" else Path(file).read_text()
     outcome = service.run(ScriptRequest(
-        source=source, tab=tab, extract_mode=mode, read_page=read_page,
-        timeout_s=timeout, as_json=json_out))
+        source=source, lane=lane, tab=tab, extract_mode=mode,
+        read_page=read_page, timeout_s=timeout, as_json=json_out))
     _render_script(outcome, json_out)
 
 
@@ -158,14 +171,24 @@ def _render_script(outcome: service.ScriptOutcome, as_json: bool) -> None:
 
 
 @app.command
-def tabs() -> None:
-    """List the open tabs and their ids, for `script --tab`."""
+def tabs(*, lane: str = lanes.CLI) -> None:
+    """List a lane's tabs and their ids, for `script --tab`.
+
+    Parameters
+    ----------
+    lane
+        Whose tabs to list. `orphan` holds the ones no lane claims -- opened
+        by a page itself, or by a human during a handoff.
+    """
+    lanes.sweep()
+    mine = set(lanes.tabs_of(lane))
     for page in targets.pages():
-        print(f"{page.id}  {page.title[:40]:40}  {page.url}")
+        if page.id in mine:
+            print(f"{page.id}  {page.title[:40]:40}  {page.url}")
 
 
 @app.command
-def open(url: str, *, show: bool = False) -> None:  # noqa: A001
+def open(url: str, *, show: bool = False, lane: str = lanes.CLI) -> None:  # noqa: A001
     """Park a URL in a tab, without putting the window on screen.
 
     Navigating and displaying are separate on purpose: the window should only
@@ -176,11 +199,15 @@ def open(url: str, *, show: bool = False) -> None:  # noqa: A001
     ----------
     show
         Also put the browser on screen.
+    lane
+        Which lane owns the tab.
     """
+    lanes.require(lane)
     with browser.Session() as session:
-        page = session.page(reuse=False)
+        page = session.page(lane, reuse=False)
         page.goto(url, wait_until=WaitUntil.DOM_CONTENT_LOADED.value, timeout=60000)
         if show:
+            lanes.claim_screen(lane)
             print(present.select().present(), file=sys.stderr)
             try:
                 page.bring_to_front()
@@ -191,18 +218,26 @@ def open(url: str, *, show: bool = False) -> None:  # noqa: A001
 
 
 @app.command(name="close-tabs")
-def close_tabs_cmd() -> None:
-    """Close orphaned tabs, keeping one blank tab alive.
+def close_tabs_cmd(tabs: list[str] | None = None, *,
+                   lane: str = lanes.CLI) -> None:
+    """Close tabs in a lane, keeping the browser alive.
 
     Tabs outlive the command that opened them by design -- that is what keeps a
     solved challenge warm -- so `open` and interrupted fetches leave them
     behind.
+
+    Parameters
+    ----------
+    tabs
+        Which tabs to close. Omitted means every tab in the lane; on the CLI
+        that is a human saying it out loud, where the MCP surface makes it a
+        separate verb so an agent cannot ask for it by forgetting an argument.
+    lane
+        Which lane to close them in. `orphan` for tabs no lane claims.
     """
-    with browser.Session() as session:
-        keep = session.page(reuse=True)
-        if keep.url != "about:blank":
-            keep.goto("about:blank")
-        print(f"closed {session.close_other_tabs(keep=keep)} tab(s)")
+    lanes.sweep()
+    doomed = tuple(tabs) if tabs else lanes.tabs_of(lane)
+    print(f"closed {lanes.close_tabs(lane, doomed)} tab(s)")
 
 
 @app.command
@@ -225,16 +260,31 @@ def stop() -> None:
 
 
 @app.command
-def show() -> None:
+def show(*, lane: str = lanes.CLI) -> None:
     """Put the browser in front of you."""
+    lanes.require(lane)
+    lanes.claim_screen(lane)
     presenter = present.select()
     print(f"{presenter.present()} [{presenter.name.value}]")
 
 
 @app.command
-def hide() -> None:
-    """Tuck the browser away again."""
+def hide(*, lane: str = lanes.CLI, force: bool = False) -> None:
+    """Tuck the browser away again, if nobody else is still looking.
+
+    Parameters
+    ----------
+    force
+        Dismiss even while another lane holds a claim. The human's override:
+        an agent has no equivalent, because taking the window from somebody
+        mid-captcha is the interference lanes exist to stop.
+    """
     presenter = present.select()
+    last = lanes.release_screen(lane)
+    if not last and not force:
+        print(f"still shown: {len(lanes.screen_claims())} other claim(s) "
+              "-- pass --force to dismiss anyway")
+        return
     presenter.dismiss()
     print(f"dismissed [{presenter.name.value}]")
 
@@ -262,9 +312,14 @@ def status() -> None:
     # them, and everything not on this line arrives as ordinary content.
     print("recognises: " + ", ".join(s.name for s in BUILTIN))
     if up:
-        with browser.Session() as session:
-            for page in session.context.pages:
-                print(f"  tab: {page.url[:100]}")
+        # A count, not a listing. A lane sees only its own tabs, and that
+        # holds for a human at a terminal too -- the alternative was a global
+        # view here, and it was rejected: a view that exists gets used, and
+        # then the isolation is a convention rather than a property. What is
+        # owed instead is a number big enough to notice, so tabs piling up in
+        # a lane nobody is watching are at least visible as a total.
+        open_tabs, orphaned = lanes.counts()
+        print(f"tabs:      {open_tabs} open, {orphaned} orphan")
 
 
 _EXIT_CODES = {

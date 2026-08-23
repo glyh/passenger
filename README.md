@@ -10,8 +10,16 @@ challenge the agent shouldn't (and shouldn't try to) solve.
     passenger open <url>                 # park a URL in a tab, no window
     passenger open <url> --show          # ...and show it, to log in by hand
     passenger fetch <url> --close-tabs   # ...and tidy up after
-    passenger close-tabs                 # clear tabs orphaned by earlier runs
+    passenger tabs                       # this lane's tabs and their ids
+    passenger tabs --lane orphan         # ...tabs no lane claims
+    passenger close-tabs                 # close this lane's tabs
+    passenger close-tabs <id> <id>       # ...or just these
     passenger show | hide | stop | status
+
+Every tab command takes `--lane` and defaults to the reserved `cli` lane,
+which is what lets `fetch` and then `script --tab <id>` work across two
+commands typed thirty seconds apart. `--lane orphan` reaches the tabs no lane
+claims -- what a page opened by itself, or a human opened during a handoff.
 
 ## As an MCP server
 
@@ -32,11 +40,20 @@ the shellHook to **stdout**, which corrupts any stdio protocol. This flake's
 hook prints to stderr for that reason. `nix run` does not run the hook at all,
 which is why the registration above is the simpler of the two.
 
-Tools: `fetch`, `script`, `list_tabs`, `show_browser`, `hide_browser`,
-`browser_status`, `close_tabs`.
+Tools: `open_lane`, `set_ttl`, `fetch`, `script`, `list_tabs`, `close_tabs`,
+`close_all_tabs`, `destroy_lane`, `show_browser`, `hide_browser`,
+`browser_status`.
 
-Two things differ from the CLI, both deliberate:
+Four things differ from the CLI, all deliberate:
 
+- **An agent opens a lane first.** One Chrome is shared by every agent on the
+  machine -- two sessions are two processes, and subagents of one session share
+  a single process, so nothing in the transport tells the likely colliders
+  apart. A lane owns the tabs opened in it: nobody else can see, list or close
+  them. It collects itself after 30 minutes of quiet, closing its tabs. On the
+  CLI the caller is a human who can be trusted with a shared default; over MCP
+  the parameter is required, because a caller isolated by accident cannot tell
+  which lane it is in.
 - **`fetch` does not wait for a human by default.** A tool call that hangs for
   five minutes while someone hunts for a captcha is a bad citizen, so a blocked
   page comes straight back as `type="blocked"` with what is in the way and how
