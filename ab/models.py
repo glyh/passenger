@@ -9,7 +9,6 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
-from .text import count_words, unlinked
 
 
 class SignatureKind(str, Enum):
@@ -141,19 +140,29 @@ class Extraction(BaseModel, frozen=True):
     mode_used: ExtractMode
 
     @property
-    def word_count(self) -> int:
-        """How much the page *said*, reported for the caller's information.
+    def char_count(self) -> int:
+        """How big this is, for a caller sizing it against a context budget.
 
-        Nothing decides anything with this any more. `classify` stopped
-        reading a word count in ticket 005 and `choose` went with `auto` in
-        021, which leaves it a display field on `Fetched` -- and ticket 022
-        with the question of what a display field should be counting.
+        It was a word count until ticket 022, segmented by ICU so that Chinese
+        and Thai did not read as one word each (ticket 008). Both things that
+        *decided* with the number are gone -- `classify`'s word tier in 005,
+        `choose` with `auto` in 021 -- and a dictionary segmenter, this
+        project's only native dependency, is not worth carrying for a number
+        nobody rules on. `len(text.split())` was the one forbidden
+        replacement: that is 008's bug restored, and silent now that no
+        behaviour would visibly break.
 
-        Link targets are stripped first: they are markup, and counting them
-        would let a nav bar's worth of hrefs stand in for the text an
-        extractor actually kept.
+        Characters are script-independent and need nothing, and they track
+        tokens more closely than words do across scripts, which is the only
+        question the caller actually has.
+
+        Link targets are counted, unlike before: they are in the markdown the
+        caller receives and cost it context like everything else. `unlinked`
+        existed to keep a nav bar's hrefs from standing in for content when
+        `choose` was comparing two extractions; nothing compares now, and
+        measuring what the caller was not handed would be the lie.
         """
-        return count_words(unlinked(self.text))
+        return len(self.text)
 
 
 class FetchRequest(BaseModel, frozen=True):

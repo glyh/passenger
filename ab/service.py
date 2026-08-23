@@ -23,7 +23,7 @@ class Fetched(BaseModel, frozen=True):
     url: str
     title: str
     mode_used: ExtractMode
-    word_count: int
+    char_count: int
     markdown: str
 
 
@@ -176,7 +176,7 @@ def _fetched(page: Any, extraction: Extraction) -> Fetched:
     except Exception:
         title = ""
     return Fetched(url=page.url, title=title, mode_used=extraction.mode_used,
-                   word_count=extraction.word_count, markdown=extraction.text)
+                   char_count=extraction.char_count, markdown=extraction.text)
 
 
 def _resolve(page: Any, blocker: Blocker, request: FetchRequest,

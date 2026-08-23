@@ -6,7 +6,7 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 
     agent-browser serve                  # start the hidden Chrome daemon
     agent-browser fetch <url>            # → markdown on stdout
-    agent-browser fetch <url> --json     # → {url,title,words,markdown}
+    agent-browser fetch <url> --json     # → {url,title,char_count,markdown}
     agent-browser open <url>             # park a URL in a tab, no window
     agent-browser open <url> --show      # ...and show it, to log in by hand
     agent-browser fetch <url> --close-tabs   # ...and tidy up after
@@ -183,7 +183,7 @@ There was a second tier: anything extracting to under `--min-words` was
 treated as blocked, screenshotted, and turned into a proposed signature. It is
 gone. A signature match is a positive claim made from things the caller cannot
 see — a third-party challenge iframe, a title, a URL. A low word count is not:
-its whole evidence is a number already reported back as `word_count`, so the
+its whole evidence is a number already reported back as `char_count`, so the
 tool was ruling on something the caller could see for itself, and ruling badly.
 
 It was wrong in three ways at once. The count came from whichever extractor
@@ -194,8 +194,8 @@ screen and block for five minutes. And the rules it guessed were worse than
 nothing: a thin page once taught it `^Example Domain`, which then "blocked"
 every later fetch of that site.
 
-So a short page is now simply a short page. You get the content and the word
-count, and you decide.
+So a short page is now simply a short page. You get the content and its size in
+characters, and you decide.
 
 ## Hiding the window
 

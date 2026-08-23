@@ -58,7 +58,7 @@ def classify(probe: PageProbe,
     `min_words` was reported as an unrecognised blocker. It was removed in
     ticket 005 because it was a verdict with no privileged information behind
     it. Its entire evidence was a number the caller already had, on
-    `Fetched.word_count` -- and worse, that number came from whichever
+    `Fetched.char_count` -- and worse, that number came from whichever
     extraction the caller's `mode` happened to produce, so the same page came
     back as content or as blocked depending on a presentation choice.
 

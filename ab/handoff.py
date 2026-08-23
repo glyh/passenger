@@ -47,7 +47,7 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
             time.sleep(_POLL_INTERVAL_S)
             resolved = _recheck(page, extractor)
             if resolved is not None:
-                print(f"   resolved ({resolved.word_count} words)\n",
+                print(f"   resolved ({resolved.char_count} characters)\n",
                       file=sys.stderr)
                 return resolved
         print("   timed out waiting for you\n", file=sys.stderr)
