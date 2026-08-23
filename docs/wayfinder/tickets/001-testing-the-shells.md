@@ -3,7 +3,7 @@ id: 001
 title: What the test suite covers, and how the shells get tested
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
