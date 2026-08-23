@@ -166,6 +166,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   and `conftest.py` redirects state before import, without which a test would
   SIGTERM the developer's own session.
 
+- [Teardown gives up quietly](tickets/024-teardown-gives-up-quietly.md)
+  — SIGTERM is escalated to SIGKILL, and the record is kept in the one case
+  where even that fails. The old wait ended in a shrug: the budget ran out and
+  the record was unlinked anyway, which is the port drift 5275197 fixed with
+  the pid that causes it made unowned. Leaving the record for `reap_stale`
+  alone does not converge, since that path only sends another SIGTERM. Both
+  `teardown` and `reap_stale` now return what would not go, and the CLI prints
+  it.
+
 ## Fog
 
 - **The C# port itself, once it is a go.** [Whether this moves to
@@ -200,7 +209,9 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   after enough churn, a recorded pid could belong to something else
   entirely -- and `teardown` would SIGTERM it. A start time or cgroup
   check would pin identity properly. Unclear yet whether this is a real
-  risk or a theoretical one.
+  risk or a theoretical one. 024 met the other side of it: a pid that
+  survives SIGKILL is most likely one that was never ours, and teardown now
+  keeps the record and says so rather than signalling further.
 - **One browser at a time is assumed everywhere.** The CDP port, the
   profile directory, and the session record are all single-valued. If
   concurrent sessions are ever wanted, that assumption is load-bearing

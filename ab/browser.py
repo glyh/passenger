@@ -58,7 +58,7 @@ def start(detach: bool = True, hidden: bool = True) -> str:
     # still holding the VNC port. Left alone, the session starting here cannot
     # claim that port and the stale server keeps answering viewers with the
     # empty compositor it is still attached to.
-    session.reap_stale()
+    reaped = session.reap_stale()
 
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     argv: tuple[str, ...] = (
@@ -100,7 +100,11 @@ def start(detach: bool = True, hidden: bool = True) -> str:
         if is_up():
             unfullscreen()
             state = "hidden" if hidden else "visible"
-            return f"chrome up on {CDP_URL} [{state}] (profile: {PROFILE_DIR})"
+            up = f"chrome up on {CDP_URL} [{state}] (profile: {PROFILE_DIR})"
+            # A reap that could not finish is said out loud here: it means
+            # something is still holding the old VNC port, so this session
+            # advertises a different one than the last.
+            return f"{up}\n{reaped}" if reaped else up
         time.sleep(_POLL_INTERVAL_S)
     raise DaemonError(ErrorCode.DAEMON_START_FAILED,
                       "chrome did not expose CDP in time",
@@ -149,8 +153,8 @@ def unfullscreen() -> None:
         return
 
 
-def stop() -> None:
-    """Stop this tool's browser, and nothing else.
+def stop() -> str | None:
+    """Stop this tool's browser, and nothing else. Returns what would not go.
 
     Scoped to the recorded session and to our own profile directory. The
     previous `pkill -x cage` matched on the program name, so it also killed
@@ -158,7 +162,7 @@ def stop() -> None:
     """
     for pid in session.pids_running(f"--user-data-dir={PROFILE_DIR}"):
         session.terminate(pid)
-    session.teardown()
+    return session.teardown()
 
 
 class Session:

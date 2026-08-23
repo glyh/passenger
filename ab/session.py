@@ -31,6 +31,7 @@ SESSION_FILE = STATE_DIR / "session.env"
 VIEWER_FILE = STATE_DIR / "viewer.pid"
 _PORT_SCAN = 64
 _EXIT_POLLS = 20
+_KILL_POLLS = 20
 _POLL_INTERVAL_S = 0.1
 
 
@@ -130,34 +131,76 @@ def reap_stale() -> str | None:
     session = current()
     if session is None or session.alive:
         return None
-    _stop_all(session)
-    return f"reaped stale session on :{session.vnc_port}"
+    survived = _stop_all(session)
+    reaped = f"reaped stale session on :{session.vnc_port}"
+    return f"{reaped}; {survived}" if survived else reaped
 
 
-def teardown() -> None:
-    """Stop only the processes this record names."""
+def teardown() -> str | None:
+    """Stop only the processes this record names. Returns what would not go."""
     session = current()
     if session is None:
-        return
-    _stop_all(session)
+        return None
+    return _stop_all(session)
 
 
-def _stop_all(session: NestedSession) -> None:
-    """Stop a session's processes and wait for the port to come back.
+def _stop_all(session: NestedSession) -> str | None:
+    """Stop a session's processes. Returns a note if any of them survived.
 
     Waited on rather than fired and forgotten: SIGTERM is asynchronous, so a
     session started immediately afterwards would still find the old listener
     holding the port and quietly claim a different one, drifting upward on
     every restart.
+
+    The wait used to end in a shrug -- the budget ran out and the record was
+    unlinked regardless, which is that same drift with the record that names
+    the surviving pid deleted, so `reap_stale` could not clean up after it
+    either. SIGTERM is now escalated, and the record is kept in the one case
+    where even that fails, because an unowned listener is the worse half of
+    the bug.
     """
-    for pid in (session.vnc_pid, session.cage_pid):
+    # Deduplicated so a record that names one process twice cannot report it
+    # twice in the note.
+    pids = list(dict.fromkeys((session.vnc_pid, session.cage_pid)))
+    for pid in pids:
         _terminate(pid)
-    for _ in range(_EXIT_POLLS):
-        if not any(_alive(pid) for pid in (session.vnc_pid, session.cage_pid)):
-            break
-        time.sleep(_POLL_INTERVAL_S)
+    survivors = _wait_for_exit(pids, _EXIT_POLLS)
+    if not survivors:
+        _forget(session)
+        return None
+    for pid in survivors:
+        _kill(pid)
+    survivors = _wait_for_exit(survivors, _KILL_POLLS)
+    if not survivors:
+        _forget(session)
+        return None
+    # Deliberately keeps the record, and with it the control socket the
+    # survivor may still be serving: it is the only thing that ties this port
+    # to a session anyone can name, and `reap_stale` reads it on the next run.
+    return (f"pid {', '.join(str(pid) for pid in survivors)} survived SIGKILL; "
+            f":{session.vnc_port} is still held, session record kept")
+
+
+def _forget(session: NestedSession) -> None:
+    """Drop the per-port state, now that nothing is left to own it."""
     session.ctl_socket.unlink(missing_ok=True)
     SESSION_FILE.unlink(missing_ok=True)
+
+
+def _wait_for_exit(pids: list[int], polls: int) -> list[int]:
+    """Poll until every pid is gone, and report those that are not."""
+    for _ in range(polls):
+        if not any(_alive(pid) for pid in pids):
+            return []
+        time.sleep(_POLL_INTERVAL_S)
+    return [pid for pid in pids if _alive(pid)]
+
+
+def _kill(pid: int) -> None:
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        return
 
 
 def _terminate(pid: int) -> None:

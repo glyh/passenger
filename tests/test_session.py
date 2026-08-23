@@ -220,3 +220,64 @@ def test_pids_running_matches_on_the_command_line():
     finally:
         child.kill()
         child.wait()
+
+
+def _stubborn(port: int) -> subprocess.Popen:
+    """A child that holds the VNC port and ignores SIGTERM outright.
+
+    The slow child above dies in 0.5s, comfortably inside the two-second
+    budget, so it cannot reach the case where the budget runs out. This one
+    never leaves on its own.
+    """
+    child = subprocess.Popen([
+        sys.executable, "-c",
+        "import socket, signal, sys, time\n"
+        "s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "time.sleep(60)\n",
+        settings.vnc_host, str(port)])
+    for _ in range(200):
+        time.sleep(0.01)
+        if session.free_port() != port:
+            return child
+    child.kill(); child.wait(); pytest.fail("child never took the port")
+
+
+def test_teardown_kills_what_will_not_terminate():
+    """The bug: the SIGTERM budget ran out and the record was unlinked anyway.
+
+    That is the port drift of `test_teardown_gives_the_port_back_before_it_
+    returns` all over again, and worse -- with the record gone the surviving
+    pid is unowned, so `reap_stale` cannot clean up after it either. It needs
+    only a wayvnc that takes longer than two seconds to die.
+    """
+    child = _stubborn(settings.vnc_port)
+    _write(_record(vnc_pid=child.pid, cage_pid=child.pid))
+    try:
+        assert session._stop_all(_record(vnc_pid=child.pid, cage_pid=child.pid)) is None
+        assert session.free_port() == settings.vnc_port
+        assert session.current() is None
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait()
+        session.SESSION_FILE.unlink(missing_ok=True)
+
+
+def test_a_pid_that_survives_even_sigkill_keeps_its_record(running, monkeypatch):
+    """Nothing in userspace survives SIGKILL, so `_alive` is stubbed here --
+    the state is real (a pid in uninterruptible sleep, or one that is not
+    ours) but it cannot be produced honestly from a test.
+
+    What matters is that the record stays: unlinking it is what makes the pid
+    unowned, and a record `reap_stale` can still read is the only thing that
+    keeps the port attributable to a session someone can name.
+    """
+    monkeypatch.setattr(session, "_alive", lambda pid: True)
+    _write(_record(vnc_pid=running, cage_pid=running))
+    try:
+        note = session._stop_all(_record(vnc_pid=running, cage_pid=running))
+        assert note is not None and str(running) in note
+        assert session.current() is not None
+    finally:
+        session.SESSION_FILE.unlink(missing_ok=True)

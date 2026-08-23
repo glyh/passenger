@@ -213,8 +213,8 @@ def serve(*, foreground: bool = False, visible: bool = False) -> None:
 @app.command
 def stop() -> None:
     """Kill the daemon and its compositor."""
-    browser.stop()
-    print("stopped")
+    survived = browser.stop()
+    print(survived if survived else "stopped")
 
 
 @app.command
