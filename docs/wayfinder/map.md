@@ -150,6 +150,13 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   a renderer does not, and presenting a compositor is not reachable from
   `page` at all.
 
+- [A listing clears the yield floor on a footer](tickets/011-listing-clears-the-yield-floor.md)
+  — the floor is not the bug, `auto` is. Which extractor is right depends on
+  the page's *type*, which is not in the two blobs of text `choose` is handed,
+  so volume, overlap and link density are all proxies for a thing they cannot
+  measure. Every consumer already pins the mode by URL shape. Superseded by
+  [Remove auto mode](tickets/021-remove-auto-mode.md).
+
 ## Fog
 
 - **A page can defer content and say nothing.** A page that withholds content

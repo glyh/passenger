@@ -2,8 +2,8 @@
 id: 011
 title: A listing clears the yield floor on a footer
 labels: [wayfinder:research]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -104,3 +104,39 @@ Note also what the same skill says about `fetch` against `script`:
 questions are answered by the first screen. That is [How thin can this
 layer get](020-how-thin-can-this-layer-get.md)'s decision to keep `fetch`,
 confirmed from the outside.
+
+## Answer
+
+The floor is not the bug. `auto` is.
+
+The ticket's first question -- whether volume is the right signal at all
+-- turns out to be the whole thing, and the answer is that no signal
+computed from the two extractions can work, because the information
+needed is not in them. Which extractor is right depends on what *kind of
+page* this is: a listing wants `dom`, an article wants `article`, a
+profile wants `dom`. `choose` is handed two blobs of text and asked to
+infer that, and every candidate signal in this ticket -- volume, overlap,
+link density -- is a proxy for page type rather than a measure of it.
+
+Proxies fail quietly here, and that is what disqualifies them. The
+footer case is the polite failure: 0.39 against a 0.35 floor, and the
+caller gets boilerplate. The impolite one is downstream's Bing
+observation -- `article` returning content that is coherent, on-topic in
+shape, and entirely unrelated to the query. A wrong page type does not
+degrade the answer, it replaces it.
+
+Nudging the floor would move which pages fail. Overlap and link density
+would move it again, better on the cases measured and unknown on the
+rest. None of them make the number mean the thing it needs to mean.
+
+Meanwhile the caller *does* know the page type -- every consumer of this
+tool already pins the mode by URL shape, and has done since before this
+ticket existed. So the honest move is not a better heuristic. It is to
+stop guessing and let the caller say, which is the same conclusion 005
+reached about `min_words` and 016 reached about deferred content: this
+layer keeps trying to decide things the caller is better placed to
+decide.
+
+Superseded by [Remove auto mode](021-remove-auto-mode.md), which is the
+removal and its consequences -- including what is left of the word
+counting once nothing decides anything with it.
