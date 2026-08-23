@@ -110,3 +110,39 @@ price list in the photo. `script` cures that only for a caller who already
 suspects. Closing this ticket is a decision that the cure is enough and the
 warning is not worth building now; the risk is recorded in the map's Fog so it
 stays visible rather than lost.
+
+## Update, after 013 landed
+
+Point 4 is answered, and the answer is worse than feared: the CDN URLs
+cannot be retrieved outside the rendering page at all. Measured against
+`sns-webpic-qc.xhscdn.com`, through `page.request.get` inside the warm
+logged-in session:
+
+    Referer: <the image host>        403
+    Referer: https://www.xiaohongshu.com/   403
+    no Referer                      403
+
+Navigating a tab straight to the URL fails the same way
+(`ERR_HTTP_RESPONSE_CODE_FAILURE`), and `imageList[].urlDefault` out of
+`__INITIAL_STATE__` will not even load as an `<img>`. Only a `src` taken
+off the *live* rendered page loads, and only inside that page.
+
+So the working recipe is: read `img.src` from the DOM, inject it into a
+full-viewport `<div>` on the same origin, and screenshot that element.
+That yields the full-resolution image (1080x1440 measured), which a
+vision-capable caller can then read -- price lists, maps and timetables
+included. Screenshotting the carousel's own `.swiper-slide img` also
+works but times out on the slides that are not currently displayed.
+
+This makes point 1 sharper rather than moot. Emitting `![alt](src)` from
+`dom` would hand callers URLs that 403 everywhere except the page they
+came from -- pointers that look actionable and are not, which is the
+same trap as the token-less `/explore/` link in [Only the first screen
+exists](015-only-the-first-screen-exists.md). If images are surfaced at
+all, the useful form is probably not a URL but a way to *get the pixels*
+-- a screenshot-that-element affordance, or at minimum a note on the
+`Fetched` record that N images were present and are unreachable by URL.
+
+Point 5 (say when the payload was a `<video>`) is untouched and still
+worth doing: a video note's body extracts to nothing at all, and that is
+indistinguishable from an empty page without it.
