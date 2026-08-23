@@ -3,7 +3,7 @@ id: 025
 title: Whether dom alone is enough
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
