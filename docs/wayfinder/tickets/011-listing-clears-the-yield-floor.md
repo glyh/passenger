@@ -45,3 +45,62 @@ To decide:
    [The extract mode decides whether a page counts as blocked](005-mode-decides-blocked.md).
    Both are the same shape of problem -- a threshold on a word count
    standing in for a judgement about what the page is.
+
+## Update: downstream already gave up on `auto`
+
+Checked the consumers in `~/Documents/Notes/skills`. Two of them use
+agent-browser for reading pages, and both independently concluded that
+`auto` cannot be trusted -- before this ticket was written, and without
+reference to it.
+
+`xiaohongshu/SKILL.md` heads its rules with **"模式按页面类型钉死，不要用
+auto"** -- pin the mode to the page type, do not use auto -- and carries a
+table of which mode each page needs:
+
+    /search_result      dom       article/auto return only the ICP footer
+                                  and the filter words, not one card
+    /explore/<id>       article   dom glues the whole recommendation feed
+                                  in front of the note body
+    /user/profile/<id>  dom       article loses the note list
+    /explore            dom       article leaves only navigation words
+
+It then diagnoses this ticket exactly, unprompted: *"它靠两种抽取的词数比
+来决定，而搜索页的比值 0.39 刚好越过 0.35 的回退地板"* -- it decides on the
+word-count ratio of the two extractions, and the search page's ratio of
+0.39 just clears the 0.35 fallback floor. Same numbers, arrived at from
+the outside.
+
+`web-search/SKILL.md` is blunter -- **"`mode: "dom"`，永远"**, mode dom,
+forever -- and reports a worse failure than the footer. On Bing, `article`
+returns *plausible unrelated content*: a query about an airport's
+construction progress came back with Instagram troubleshooting and GPU
+tier lists, described as *"看着像正常结果，实际全是噪音"* -- looks like
+normal results, actually all noise. Of Google it says `auto` sometimes
+works by luck but loses results, *"别赌"* -- don't gamble.
+
+### What this does to the question
+
+It reframes it. The ticket asks whether volume is the right signal, or
+whether overlap or link density would be better. The evidence says the
+signal may not be the problem: **the right mode is a function of page
+type, and page type is something the caller knows and the tool cannot.**
+A site-specific skill knows it is on a search results page. `choose` has
+to infer it from two blobs of text, and the failure when it infers wrong
+is not a near miss -- it is a confident footer, or noise that reads like
+an answer.
+
+That makes a fourth option worth weighing against the first three:
+
+4. Whether `auto` should stop being the default, or stop existing. Every
+   real consumer pins the mode already, so `auto` is serving nobody except
+   a caller with no site knowledge -- and for that caller it produces
+   exactly the silent wrong answer this codebase has spent 005, 010 and
+   016 removing. Against: it is the current default, so this is an output
+   contract change, and a caller who genuinely does not know the page type
+   has to be given something better than a coin flip.
+
+Note also what the same skill says about `fetch` against `script`:
+*"默认用 fetch——大多数问题第一屏就答完了"* -- default to fetch, most
+questions are answered by the first screen. That is [How thin can this
+layer get](020-how-thin-can-this-layer-get.md)'s decision to keep `fetch`,
+confirmed from the outside.
