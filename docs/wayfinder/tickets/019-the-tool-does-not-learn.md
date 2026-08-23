@@ -3,7 +3,7 @@ id: 019
 title: The tool does not learn; the agent remembers
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: [018]
 ---
 
