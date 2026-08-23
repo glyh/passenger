@@ -162,10 +162,11 @@ as the rest of the tool and still run *in the page*, where `innerText` and
 `checkVisibility()` live. Measured rather than assumed: all 165 lines ported to
 F#, compiled, bundled, injected at `extract._DOM_JS`, and the repo's own walker
 suite passes 13/13 against it -- with a sabotaged bundle failing 13/13, since
-[034](034-broken-walker-passes-its-tests.md) is that exact trap. The cost is
-43 KB bundled against 8 KB hand-written, almost all of it `fable-library`
-because the port used F# `Set`, `Map` and `list`; JS-native structures would cut
-most of that, untested. Packaging is the unmeasured part -- Fable, node and
+[034](034-broken-walker-passes-its-tests.md) is that exact trap. Sized and timed: written idiomatically it is 43 KB and 2.2x slower on the walk,
+but writing the tag tables as `match` expressions instead of F# `Set` and `Map`
+brings it to 5,727 B -- smaller than the JavaScript it replaces -- at no
+measurable latency cost. What Fable costs here is knowing which three F#
+constructs to avoid. Packaging is the unmeasured part -- Fable, node and
 esbuild joining a nix flake whose whole history is packaging pain.
 
 **So all five are in, and none of them says no.** What is left is not a

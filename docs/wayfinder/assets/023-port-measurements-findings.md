@@ -306,27 +306,52 @@ exist:
 
 So the 13 passes were the F# code running, not the fallback or a no-op.
 
-**The cost is size.**
+**Timed, because size is not the question -- latency is.** All medians, 25
+evaluates each, on a generated 3,204-node page, splitting the cost of shipping
+and parsing the source from the cost of the walk itself. CDP round-trip with no
+source is ~1.5 ms.
 
-| | bytes |
-|---|---|
-| `walker.js` today (incl. ~2.5 KB of comments) | 8,060 |
-| Fable output before bundling | 8,055 |
-| bundled + minified, with `fable-library` | **43,160** |
+Written idiomatically first, with F# `Set`, `Map` and `list`:
 
-Five times the payload, and effectively all of it is `fable-library`: the port
-was written idiomatically, with F# `Set`, `Map` and `list`, each of which drags
-in a runtime implementation. Rewriting those three as JS-native `Set`, object
-and array would cut most of it. **Not measured** -- worth doing before the
-number is quoted as a deterrent.
+| | bundle | load only | walk alone |
+|---|---|---|---|
+| `walker.js` | 8,060 B | 2.13 ms | 7.58 ms |
+| Fable, idiomatic | 43,160 B | 4.31 ms | 16.49 ms |
 
-**What the size does and does not mean.** It is not a network cost: the string
-goes over CDP to a local browser, though it is re-sent on every `evaluate`.
-[029](../tickets/029-one-extractor-instead-of-two.md) rejected Blazor/WASM
-partly for injecting a multi-megabyte runtime into the page, and that argument
-does not obviously reach 43 KB in patchright's isolated execution context, which
-page JavaScript cannot see. **That is reasoning, not a measurement**, and it
-should be measured if it becomes load-bearing.
+Loading costs **+2.2 ms**, which is small and constant. The real cost was the
+walk: **2.2x slower**, because `FSharpSet.Contains` is a tree lookup per node
+where JavaScript's `Set.has` is a hash, and `FSharpMap.TryFind` runs on every
+element for the heading table.
+
+**Both costs are avoidable, and the fix is ordinary F#.** The tag tables become
+`match` expressions -- which compile to a switch and pull in no runtime library
+at all -- `Dictionary` becomes a JS `Map`, and the F# `list` in `label` becomes
+two conditionals:
+
+| | bundle | load only | walk alone |
+|---|---|---|---|
+| `walker.js` | 8,060 B | 2.2 ms | 12.1 - 16.6 ms |
+| Fable, lean | **5,727 B** | 1.4 - 2.4 ms | 7.8 - 16.1 ms |
+
+The lean bundle is **smaller than the JavaScript it replaces** (which carries
+~2.5 KB of comments), so it loads slightly *faster*. On the walk, three repeated
+runs put the difference at -6.8, -0.5 and +0.4 ms -- while `walker.js` itself
+varied by 4.5 ms between those same runs. **There is no measurable penalty.**
+The honest statement is parity, not a win.
+
+So the cost of Fable here is not bytes or milliseconds. It is knowing which
+three F# constructs to avoid, which is the sort of thing a comment in the source
+can carry.
+
+**A caveat about how this was verified, which is itself a finding.** The first
+port passed 13/13 while its raw output *differed* from `walker.js`: it dropped a
+trailing space, because `walker.js` squashes whitespace in a text node without
+trimming it -- only `label()` trims -- and the port used one function for both.
+`tidy()` normalises that away before any assertion sees it, so the suite is
+blind to whitespace differences in the walker's raw output. The bug was found by
+diffing raw evaluate output during the benchmark, not by the tests. It is fixed,
+and the outputs are now byte-identical on all three pages; but a rewrite of the
+walker in any language would hit the same blind spot.
 
 **Unmeasured and owed:** packaging. Fable, node and esbuild become build
 dependencies, and this project is a nix flake whose whole history is packaging
