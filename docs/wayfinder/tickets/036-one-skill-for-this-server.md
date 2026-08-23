@@ -3,7 +3,7 @@ id: 036
 title: One skill for this server, and docstrings cut to the contract
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: glyh
 blocked_by: []
 ---
 

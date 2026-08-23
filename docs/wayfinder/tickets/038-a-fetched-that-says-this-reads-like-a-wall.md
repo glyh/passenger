@@ -3,7 +3,7 @@ id: 038
 title: A Fetched that says this reads like a wall
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: glyh
 blocked_by: []
 ---
 

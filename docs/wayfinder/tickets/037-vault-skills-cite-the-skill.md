@@ -3,7 +3,7 @@ id: 037
 title: The vault stops restating this side
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: glyh
 blocked_by: [036]
 ---
 
