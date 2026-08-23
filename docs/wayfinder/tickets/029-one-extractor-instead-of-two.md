@@ -81,24 +81,66 @@ after all and `article` stays. **Establish it before writing any C#** -- the
 test is Python, against 025's five pages, and moonofalabama is the one that
 decides.
 
-### It may not be C# at all
+### Where it runs: measured, and it is C#
 
-The strong version of this dissolves half of 023's second phase. Trafilatura's
-algorithm is lxml and XPath over static HTML, which is why porting it needs an
-XPath-capable DOM library. A *DOM-native* algorithm has to run where the DOM
-is -- as JavaScript evaluated in the page, exactly as `_DOM_JS` runs today,
-with C# shipping and calling it. Then there is no lxml stand-in to find, no
-5,500 lines to port, and the extractor is one artifact that both the Python
-and C# sides could call during the alongside period 023 describes.
+The first draft of this ticket argued a DOM-native algorithm has to run *in*
+the page as JavaScript, the way `_DOM_JS` does. That is wrong, and one CDP
+call disproves it.
 
-Whether that is right, or whether enough of the work is post-processing that
-belongs in C#, is the architectural half of this ticket.
+`DOMSnapshot.captureSnapshot` returns the flattened tree -- `parentIndex`,
+`nodeName`, `nodeType`, `nodeValue`, `attributes`, `isClickable` -- and, for
+every node that generated a box, `bounds`, `clientRects`, `offsetRects`,
+`scrollRects`, `paintOrders`, `stackingContexts`, and whichever computed
+styles the caller names. Strings are interned in a table. Measured on the
+live session:
+
+| | docs.python.org | moonofalabama |
+|---|---|---|
+| HTML | 279,633 B | 81,385 B |
+| snapshot JSON | 1,938,881 B | 380,414 B |
+| capture | 566 ms | 143 ms |
+| nodes / laid out | 13,473 / 11,535 | 2,324 / 2,202 |
+
+Every live-DOM fact this walker goes into the page for is in there. So the
+extractor is ordinary C# over a JSON structure, in real files with real types,
+and **there is no JavaScript to structure because there is no JavaScript.**
+
+**Not Blazor.** Running C# in the page is possible -- .NET compiles to
+WebAssembly -- and is the wrong trade twice over. DOM access from WASM goes
+through JS interop per call, so walking 13,473 nodes is 13,473 marshalled
+round trips, which is why Blazor's own renderer batches. And injecting a
+multi-megabyte .NET runtime into the page contradicts the one property the
+whole tool rests on: a session sites cannot distinguish from an ordinary
+browser. Bring the DOM to C#, not C# to the DOM.
+
+**The testability is the prize.** `_DOM_JS` cannot be unit tested: it is a
+string of JavaScript that needs a browser, which is why
+[001](001-testing-the-shells.md)'s rule has never reached it and why the
+markup work in [025](025-whether-dom-alone-is-enough.md) had to be verified
+against live pages instead. A snapshot is a file. Fixtures are saved
+snapshots, the extractor is a pure function from snapshot to markdown, and the
+functional-core/imperative-shell line lands where it belongs -- capture is the
+shell, extraction is the core.
+
+**What is not yet verified**, and is the first task rather than an assumption:
+that every fact the current walker uses survives the trip. Resolved `href`
+(the snapshot carries the raw attribute, so resolution against the document
+URL moves into the extractor), `aria-label`, `title` and `img[alt]` (plain
+attributes), and `checkVisibility()` -- derivable from layout presence plus
+`display`/`visibility`/`opacity`, but *derivable* is not *identical*, and gmw's
+hidden WeChat overlay is the case that must keep being filtered.
+
+A cost to weigh: the snapshot is five to seven times the HTML as JSON. It
+never leaves the process and is not the payload, so this is memory and parse
+time, not the caller's context budget.
 
 ### To decide
 
 1. **Whether one mode is actually reachable.** The moonofalabama test above.
    Everything else is conditional on it.
-2. **Where the algorithm runs** -- in-page JavaScript, or C# over CDP.
+2. ~~**Where the algorithm runs.**~~ Answered above: C# over a
+   `DOMSnapshot`, with no JavaScript in the page. What remains is
+   verifying the snapshot carries every fact the current walker uses.
 3. **What the correctness bar is.** Trafilatura is checkable against its own
    published evaluation; that evaluation scores article extraction only, and
    scores nothing about keeping a listing. An extractor asked to do both has
