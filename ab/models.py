@@ -161,6 +161,31 @@ class Extraction(BaseModel, frozen=True):
         return len(self.text)
 
 
+class Pictures(BaseModel, frozen=True):
+    """What the page renders that is not text (ticket 017).
+
+    Geometry rather than a count, because a bare count is noise on every page
+    ever made. Measured across twelve pages, the largest visible picture as a
+    share of the viewport separates a three-photo note (0.38) from a listing
+    of thirty thumbnails (0.06), while both the count and the summed area call
+    the listing the more picture-borne of the two -- it has thirty boxes and
+    1.72 viewports of them, against three and 1.16.
+
+    `src` is how to reach that picture, not necessarily a URL: two of the five
+    tags measured -- inline `svg` and `canvas` -- have no URL to give, so it
+    falls back to a CSS selector, which `page.locator(sel).screenshot()` takes
+    (ticket 014). A `data:` placeholder parked by a lazy loader does the same.
+    """
+
+    # The largest visible picture's area, over the viewport's. Above 1.0 for
+    # an element rendered larger than the window, which is ordinary on a
+    # marketing page: apple.com's hero measures 1.92.
+    largest: float = Field(ge=0.0)
+    # How many clear `pictures.BIG_ENOUGH` of the viewport.
+    count: int = Field(ge=0)
+    src: str = ""
+
+
 class FetchRequest(BaseModel, frozen=True):
     url: str
     # Required, and deliberately: see ExtractMode.

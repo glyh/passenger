@@ -296,7 +296,33 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   cost; content vanishing is a lie. `contentVisibilityAuto` changed nothing
   anywhere and stays untaken.
 
+- [A payload that is not text](tickets/017-a-payload-that-is-not-text.md)
+  — the tool says so, in three fields, because this is the one thing it holds
+  that the caller structurally cannot see. Geometry rather than a count: the
+  largest visible picture as a share of the viewport splits thirteen pages
+  cleanly (picture-borne 0.21–1.92, text 0–0.10), where a count and a summed
+  area both call a 30-thumbnail listing more picture-borne than a three-photo
+  note. `iframe` counts, because `walker.js` already treats it as opaque —
+  without it apod.nasa.gov, the Astronomy Picture of the Day, measured 0.00.
+  The ticket's own instinct was refused on measurement: "renders on top" is
+  above-the-fold, not rendered, and a tool that never scrolls would lose
+  moonofalabama's photograph entirely. No bucket word and no floor — 005 and
+  021 removed ruling-on-your-own-number everywhere else.
+
 ## Fog
+
+- **A picture measurement can be fooled from both ends.** 017 reports the
+  largest visible picture as a share of the viewport, and took two costs
+  knowingly. A full-window cookie-consent `iframe` reads 0.99 on theguardian,
+  and the filters that would catch it are either same-origin-only -- which
+  excludes the Vimeo embed that *is* apod.nasa.gov -- or the vendor table 019
+  deleted. In the other direction xkcd 2001's comic is 0.06, because a small
+  picture can still be the whole content, and viewport geometry cannot see
+  that; `char_count` beside it is what the caller reads instead. There is also
+  a cold-cache artifact: an unloaded `<img>` that sizes its own box measures
+  zero, so a first visit can under-report where a second does not. Whether any
+  of these is worth a mechanism, or whether the caller judging from
+  `largest_image_src` and `char_count` is the whole answer, is unexamined.
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
   notifying an explicit choice, which is right, but `notify.select()` fans out

@@ -10,12 +10,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from . import browser, handoff, probe as probe_mod, script
+from . import browser, handoff, pictures, probe as probe_mod, script
 from .detect import classify
 from .errors import HandoffTimeout, ScriptError
 from .extract import extract
 from .models import (Blocker, ExtractMode, Extraction, FetchRequest,
-                     ScriptRequest, SignatureKind)
+                     Pictures, ScriptRequest, SignatureKind)
 
 
 class Fetched(BaseModel, frozen=True):
@@ -24,6 +24,14 @@ class Fetched(BaseModel, frozen=True):
     title: str
     mode_used: ExtractMode
     char_count: int
+    # What the page renders that the markdown cannot carry (ticket 017). Flat
+    # rather than nested, because these three sit alongside `char_count` as
+    # answers to one question -- how much of this page did I actually get --
+    # and a caller reading a reply should not have to open a sub-object to
+    # find out that the answer was in a photograph.
+    largest_image: float = 0.0
+    large_images: int = 0
+    largest_image_src: str = ""
     markdown: str
 
 
@@ -169,12 +177,22 @@ def _look(page: Any, request: ScriptRequest, tab: str) -> FetchOutcome | None:
 
 
 def _fetched(page: Any, extraction: Extraction) -> Fetched:
+    """Every successful read passes through here, which is why the pictures
+    are measured here rather than in `inspect`.
+
+    `fetch`, a script's ending page, and the page a human unblocked by hand
+    all build their result on this line; measuring one level up would have
+    left the handoff path silently unmeasured.
+    """
     try:
         title = page.title()
     except Exception:
         title = ""
+    seen: Pictures = pictures.measure(page)
     return Fetched(url=page.url, title=title, mode_used=extraction.mode_used,
-                   char_count=extraction.char_count, markdown=extraction.text)
+                   char_count=extraction.char_count,
+                   largest_image=seen.largest, large_images=seen.count,
+                   largest_image_src=seen.src, markdown=extraction.text)
 
 
 def _resolve(page: Any, blocker: Blocker, request: FetchRequest,

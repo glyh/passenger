@@ -43,6 +43,12 @@ def fetch(
     is not in the output, and the page's own stated count is often the only
     sign. Use `script` to reach the rest.
 
+    What is in a picture is not in the output either, and says nothing at all
+    -- a page whose answer lives in a photograph reads as a short page rather
+    than a truncated one. With --json, `largest_image` is the biggest thing
+    the page renders that is not text, as a share of the window; read it
+    against `char_count`, and reach the picture with `largest_image_src`.
+
     Parameters
     ----------
     url

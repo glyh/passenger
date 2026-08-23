@@ -83,6 +83,17 @@ def fetch(
     listing, look in the markdown for the page's own account of what it kept
     back: a stated total, an expander, a pager. Reaching the rest is `script`.
 
+    What is in a picture is not in the markdown and never was, so a page whose
+    answer lives in a photograph, a menu board or a chart reads as a short
+    page rather than a truncated one. `largest_image` is the biggest thing the
+    page renders that is not text, as a share of the window: 0.0 on a docs
+    page, 0.10 on an illustrated article, 0.27 on a comic, 0.38 on a
+    three-photo note, above 1.0 on a marketing hero. Read it against
+    `char_count` -- a large picture and little text is the case worth acting
+    on -- and reach the picture itself with `script`, either
+    `page.request.get(largest_image_src)` or, when that is a selector rather
+    than a URL, `page.locator(largest_image_src).screenshot(path=...)`.
+
     This tool recognises a fixed table of challenge vendors and nothing else,
     and it learns nothing between calls. A wall it cannot name arrives as
     ordinary content -- yours to recognise, and yours to remember, because
