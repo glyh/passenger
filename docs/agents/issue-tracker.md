@@ -44,10 +44,15 @@ blocked_by: [<ids that must close first>]
 
   The id is claimed by an exclusive create under `docs/wayfinder/ids/`, so
   concurrent callers get different numbers. Those entries are never removed --
-  a spent id stays spent even if the run died before writing the ticket -- and
-  they belong in the same commit as the ticket. Forgetting them is not fatal:
-  the allocator also reads the ticket filenames and git history, so an
-  uncommitted ledger only loses the protection between two live sessions.
+  a spent id stays spent even if the run died before writing the ticket.
+
+  The ledger is local and gitignored. Do not commit it, and do not reach for
+  `git add -f` when git says it is ignored -- entries were tracked once and
+  were deliberately removed in 6c1ab47. It guards one thing only: two live
+  sessions sharing this working tree in the same moment, which is why it need
+  not outlive the tree. Everything longer-lived is already covered, because
+  the allocator reads ticket filenames and git history alongside it, and a
+  committed ticket puts its number out of reach for good.
 
 - **Resolve**: append a `## Answer` section to the ticket, set
   `status: closed`, and add a one-line pointer to the map's
