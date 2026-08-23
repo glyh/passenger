@@ -41,6 +41,16 @@ fixed table about how vendors identify themselves, true regardless of who
 is calling. See [The tool does not learn; the agent
 remembers](tickets/019-the-tool-does-not-learn.md).
 
+**The tool measures; the skill judges.** The tool reports what it *measured* --
+a fraction of the viewport, a character count, a vendor's own markup -- and
+never rules on what a page *means*. Recognition patterns and heuristics live
+in the `agent-browser` skill, where a caller reads them, rather than in a table
+this side matches. Four mechanisms have now been deleted for crossing that line
+(a yield floor, a `min_words` tier, a learned signature registry, a wall hint);
+`BUILTIN` stays, because a vendor either serves that markup or does not. See [A
+Fetched that says this reads like a
+wall](tickets/038-a-fetched-that-says-this-reads-like-a-wall.md).
+
 **The layer stays thin.** The agent does the work; this side hands over the
 capability and gets out of the way. Ticket 004 settled that for verbs — one
 door with `page` bound, rather than a tool per Playwright call — and the same
@@ -323,6 +333,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   `mode`'s as the replacement for deleted code. Point 4 is left live as [A
   Fetched that says this reads like a
   wall](tickets/038-a-fetched-that-says-this-reads-like-a-wall.md).
+
+- [A Fetched that says this reads like a
+  wall](tickets/038-a-fetched-that-says-this-reads-like-a-wall.md)
+  — no, and nothing was built. Matching "verify you are human" is a
+  per-language phrase table, the shape 005, 011 and 019 each deleted after it
+  was wrong invisibly; the one new argument, that a wall reads as ordinary
+  prose, is about attention, which 016 already answered. The product is the
+  rule rather than the refusal: the tool reports what it measured, the skill
+  holds what to look for. It stops at `BUILTIN` — a vendor's own markup is a
+  fixed fact, and taking the rule further would delete the `blocked` outcome
+  and the handoff with it. The wall phrases move into the skill as examples.
 
 ## Fog
 

@@ -34,6 +34,15 @@ are. It holds the operating knowledge that is true before any particular call:
   learn](019-the-tool-does-not-learn.md).
 - `largest_image` read against `char_count`, and how to reach the picture --
   the calibration from [A payload that is not text](017-a-payload-that-is-not-text.md).
+- **The wall phrases**, as examples rather than a table: a short page saying
+  "verify you are human", "请完成验证", or a login prompt where content was
+  expected. [038](038-a-fetched-that-says-this-reads-like-a-wall.md) refused
+  to put these in the tool, which makes the skill the only place they can
+  live, and makes this the part of the skill that carries the most weight.
+
+The standing rule behind all of this, from
+[038](038-a-fetched-that-says-this-reads-like-a-wall.md): the tool reports
+what it measured, the skill holds what to look for.
 
 **Then cut the docstrings to the call contract.** `fetch` loses all four
 paragraphs and becomes two lines; `show_browser` loses its three. Field

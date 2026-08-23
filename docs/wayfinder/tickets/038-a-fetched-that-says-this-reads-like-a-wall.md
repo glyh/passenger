@@ -2,7 +2,7 @@
 id: 038
 title: A Fetched that says this reads like a wall
 labels: [wayfinder:grilling]
-status: open
+status: closed
 assignee: glyh
 blocked_by: []
 ---
@@ -58,3 +58,56 @@ reasons and must not return wearing a hint's clothing.
 
 Worth deciding before 036's cut settles, since a `Fetched` that says this
 would remove the need for the skill to say it at all.
+
+## Answer
+
+**No, and the rule generalises.** `Fetched` gains no wall hint, and nothing is
+built. The tool reports what it measured; recognition patterns live in the
+skill.
+
+The case against was already assembled above and nothing rebutted it. Matching
+"verify you are human" is a per-language, per-site, open-ended phrase table --
+the shape [005](005-mode-decides-blocked.md) deleted, [011](011-listing-clears-the-yield-floor.md)
+deleted again, and [019](019-the-tool-does-not-learn.md) deleted a third time,
+each after it had been wrong in a way the caller could not see. The one new
+argument -- that a wall reads as ordinary prose and an agent might skim it --
+is an argument about attention, and [016](016-the-result-says-what-it-missed.md)
+already answered that exact form: the problem was attention, not information,
+and the remedy is a sentence where the agent will read it rather than
+machinery here.
+
+**The standing rule, which is this ticket's real product.** The tool reports
+what it *measured*; the skill holds what to *look for*. It is the mirror of
+[The tool does not learn](019-the-tool-does-not-learn.md) -- that one keeps
+facts about sites out of the tool, this one keeps recognition heuristics out
+of it -- and it is the general answer to a question that has now arrived four
+times wearing four costumes: a yield floor, a `min_words` tier, a learned
+signature registry, and a wall hint.
+
+The distinction is measurement versus judgement. `largest_image` is a
+measurement: a fraction of the viewport, computed the same way on every page
+in every language, with no bucket word and no floor
+([017](017-a-payload-that-is-not-text.md) shipped it that way deliberately).
+`char_count` is a measurement. "This reads like a wall" is a judgement about
+what a page *is*, and judgements about pages belong to the caller, who knows
+what it asked for.
+
+**The rule stops at `BUILTIN`.** A vendor signature is not a heuristic: a site
+either serves Cloudflare's interstitial markup or it does not, and that is a
+fixed fact about how a vendor identifies itself rather than a guess about what
+a page means -- 019's own reason for keeping it when everything around it
+went. Taking the rule further would delete the `blocked` outcome and the
+handoff path with it, which is the tool's strongest and best-evidenced action.
+So the boundary is: matching a vendor's own markup, yes; reading a page's
+prose and ruling on it, no.
+
+**What moves to the skill instead**, in
+[036](036-one-skill-for-this-server.md): the wall phrases themselves, as
+examples an agent reads rather than a table code matches -- short page saying
+"verify you are human", "请完成验证", a login prompt where content was expected
+-- and the instruction to call `show_browser` on its own judgement rather than
+waiting for a `blocked` verdict that will never come.
+
+This also removes the last thing 032 left hanging over the docstring cut. With
+no wall hint coming, the skill is the only place that knowledge can live, so
+[036](036-one-skill-for-this-server.md) can proceed as written.
