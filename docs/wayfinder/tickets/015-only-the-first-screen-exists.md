@@ -76,3 +76,28 @@ To decide:
    are different mechanisms wearing the same disguise, and the numbers
    above conflate them: of the 158 comments not reached on that note, 105
    are behind expanders and the rest are below the fold.
+
+## Update, after 013 landed
+
+`script` closes the capability gap, measured on the same two pages:
+
+    comments   scroll + click .show-more    177/177, 9 rounds
+    listing    scrollBy(innerHeight*0.9)    22 -> 619 unique notes, 6 rounds
+
+So point 1 is answered by "013 was enough" -- no `scroll` parameter on
+`fetch` is needed for these. Two findings worth keeping:
+
+- The listing **appends**; it does not virtualise. An early read of
+  `.note-item` count suggested recycling (the number hovered near 30 and
+  fell as well as rose), which is what a caller will conclude if they
+  count nodes instead of accumulating identity. Collect ids into a set.
+- Each result card carries *two* anchors: the title link with
+  `?xsec_token=…` and a bare `/explore/<id>` cover link. The bare one
+  silently redirects to the caller's own feed. A naive "collect every
+  note href" gets a set that is half traps.
+
+Point 3 is the part 013 did *not* answer and this ticket should be kept
+open for: nothing in a `fetch` result says the page held more. The page
+states `共 177 条评论`, the extraction contains 19, and the tool reports
+neither the discrepancy nor that scrolling exists. A caller who does not
+already know to reach for `script` still gets a confident 11% answer.
