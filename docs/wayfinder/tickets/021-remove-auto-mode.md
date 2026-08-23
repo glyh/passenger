@@ -59,13 +59,16 @@ To decide:
    character count, or stop being reported? `unlinked` exists only for
    measuring and follows whatever this decides.
 
-   Weigh it honestly against [Word counts assume spaces, so CJK pages
-   read as empty](008-word-counts-assume-spaces.md), which is being
-   partly unwound here. 008 was right when it was made -- two consumers
-   were deciding things from a ruler that read a Chinese paragraph as one
-   word. Removing the ruler now is not a reversal of that judgement, it
-   is the consequence of both consumers going away.
-4. **`PageProbe.word_count` is already dead.** Nothing in `ab/` reads it;
+   **Decided: the dependency comes out.** Carried as [Drop
+   ICU](022-drop-icu.md), which this blocks, so that the auto removal
+   lands without dragging `pyproject.toml`, the flake and the overlay in
+   with it. What remains open there is what `word_count` becomes, not
+   whether ICU stays.
+4. Whether the CLI's `--dom` shorthand survives. It exists because
+   `--mode dom` was tedious to type under an auto default; if `dom`
+   becomes the default it is pointless, and if `article` does it stays
+   useful.
+5. **`PageProbe.word_count` is already dead.** Nothing in `ab/` reads it;
    `classify` was its only consumer. Removing it also means `probe` no
    longer needs the extraction handed to it. Independent of the rest of
    this ticket and true today.
