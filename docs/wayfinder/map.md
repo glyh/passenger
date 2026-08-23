@@ -41,6 +41,12 @@ fixed table about how vendors identify themselves, true regardless of who
 is calling. See [The tool does not learn; the agent
 remembers](tickets/019-the-tool-does-not-learn.md).
 
+**The layer stays thin.** The agent does the work; this side hands over the
+capability and gets out of the way. Ticket 004 settled that for verbs — one
+door with `page` bound, rather than a tool per Playwright call — and the same
+question is owed to every tool that predates it. See [How thin can this layer
+get](tickets/020-how-thin-can-this-layer-get.md).
+
 ## Decisions so far
 
 <!-- one line per closed ticket -->
