@@ -31,10 +31,17 @@ Every call naming the lane restarts that clock, so work in progress is safe;
 what is not safe is a wait you start and then leave. Before asking a human for
 something slow, say how long you are prepared to wait:
 
-    set_ttl(lane, 120)                # minutes; or show_browser(..., ttl_minutes=120)
+    set_ttl(lane, 120)              # minutes
+    show_browser(lane, ttl_minutes=120)   # or say it as you ask
 
 Say `destroy_lane(lane)` when you are finished, rather than leaving tabs
 parked until the clock reaches them.
+
+A lane that ran out comes back as `LANE_NOT_FOUND` on the next call, and its
+tabs are already closed. Nothing is recoverable and retrying will not help:
+open a new lane and start the work again. The usual way to get there is a
+handoff the human took longer over than you allowed for, which is what
+`ttl_minutes` is for.
 
 ## The tool measures; you judge
 
@@ -135,9 +142,15 @@ Three verbs, and the differences between them are deliberate:
 There is no "close everything" you can reach by leaving an argument out. That
 was the old shape and it is what closed other callers' tabs.
 
-Clean up after a batch of fetches: tabs left open cost memory in a browser
-meant to stay warm for weeks. The TTL is a backstop for the calls you never
-got to make, not the plan.
+Repeated `fetch` calls in one lane reuse a single tab, so a long batch of them
+leaves one. Three things do accumulate: `script` without a `tab`, which opens a
+fresh one each call; the popups a page opens for itself; and every fetch that
+came back `blocked`, because that tab keeps its wall on purpose -- it is the
+one the human needs -- so the next fetch cannot reuse it.
+
+Those are what to clean up; tabs left open cost memory in a browser meant to
+stay warm for weeks. The TTL is a backstop for the calls you never got to
+make, not the plan.
 
 **The screen is shared, and refcounted.** `show_browser` claims it; the viewer
 stays up until every lane that claimed it has called `hide_browser`. So your
@@ -147,8 +160,9 @@ theirs cannot take it from yours.
 **`orphan` is a junk drawer anyone may open.** Tabs a page opened by itself
 join the lane that caused them, but a tab a *human* opened during a handoff has
 no opener for Chrome to trace, so it lands in `orphan` -- readable and closable
-by any caller, and never collected on a timer. Look before you empty it:
-somebody may be halfway through a login in there.
+by any caller, and never collected on a timer. `list_tabs("orphan")` is how
+you look, and looking first is the whole etiquette: somebody may be halfway
+through a login in there.
 
 **What lanes do not isolate.** One profile means one Chrome and one attach, and
 attaching initialises every open tab. So a tab wedged mid-navigation in *any*

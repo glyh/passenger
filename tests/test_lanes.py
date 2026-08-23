@@ -237,3 +237,20 @@ def test_a_sweep_leaves_orphan_alone_however_old(chrome: _FakeTargets) -> None:
     time.sleep(1.1)
     assert lanes.sweep() == ()
     assert chrome.closed == []
+
+
+def test_an_expired_lane_is_refused_rather_than_failing_on_a_dangling_row(
+        chrome: _FakeTargets) -> None:
+    """The order bug: `require` before `sweep`.
+
+    A lane that expired between calls is still a row, so checking first let it
+    through; the sweep then destroyed it underneath the call and the first
+    `adopt` hit a foreign key with nothing behind it -- a sqlite IntegrityError
+    reaching the caller instead of LANE_NOT_FOUND. Sweeping first makes the
+    refusal the one the caller can act on.
+    """
+    lane = lanes.open_lane(ttl_s=1)
+    time.sleep(1.1)
+    lanes.sweep()
+    with pytest.raises(LaneNotFound):
+        lanes.require(lane)

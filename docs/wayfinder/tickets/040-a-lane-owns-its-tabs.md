@@ -231,6 +231,13 @@ Chrome, so a tab wedged in any lane hangs every lane, and freeing it can stop
 another lane's navigation. That is said out loud now -- `unstick` names the
 lanes it touched, in the attach error and on stderr -- and it is not fixed.
 
+**One ordering bug, found by re-reading rather than by a test.** `require`
+ran before `sweep`, so a lane that expired *between* calls passed the check --
+it was still a row -- and was then destroyed by the sweep underneath the call,
+leaving the first `adopt` on a foreign key with nothing behind it. The caller
+got a raw `sqlite3.IntegrityError` where the whole point was to get
+`LANE_NOT_FOUND`. Collect first, then ask.
+
 **Left standing.** The registry is unit-tested; opener adoption against a real
 popup and the refcount across two live processes are covered only by the smoke
 run above, not by the suite ([001](001-testing-the-shells.md)). And nothing

@@ -90,9 +90,12 @@ lives in the shell.
 
     shell   service.py   the one fetch orchestration, shared by both frontends
             browser.py   Chrome daemon lifecycle, CDP attach
+            lanes.py     which lane owns which tab, and when its time is up
+            targets.py   Chrome's targets over CDP, going around patchright
             probe.py     measuring a live page into a PageProbe
             handoff.py   summon, notify, poll for a human
-            window.py    hide/show backends (Protocol)
+            launch.py    hide/show backends (Protocol)
+            present.py   putting the hidden browser in front of a human
             config.py    the PASSENGER_* env boundary
             cli.py       cyclopts; the only place a failure becomes terminal output
             mcp_server.py  the MCP frontend over the same service layer

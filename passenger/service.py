@@ -103,8 +103,13 @@ def inspect(page: Any,
 
 
 def fetch(request: FetchRequest) -> FetchOutcome:
-    lanes.require(request.lane)
+    # Sweep *before* the check, not after. A lane that expired between calls
+    # passes `require` -- it is still a row -- and is then destroyed by the
+    # sweep underneath the call, so the first `adopt` hits a foreign key that
+    # no longer resolves and the caller gets a sqlite error instead of
+    # LANE_NOT_FOUND. Collect first, then ask, and the answer is honest.
     lanes.sweep()
+    lanes.require(request.lane)
     lanes.touch(request.lane)
     with browser.Session() as session:
         page = session.page(request.lane, reuse=request.reuse_tab)
@@ -149,8 +154,8 @@ def run(request: ScriptRequest) -> ScriptOutcome:
     `fetch` gives -- so a challenge met halfway through a sequence comes back
     as `blocked`, not as a puzzling empty string.
     """
-    lanes.require(request.lane)
     lanes.sweep()
+    lanes.require(request.lane)
     lanes.touch(request.lane)
     with browser.Session() as session:
         page = session.page_for(request.lane, request.tab)

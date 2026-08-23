@@ -1,7 +1,7 @@
 """Imperative shell: the environment boundary.
 
 Every PASSENGER_* variable is read exactly once, here, into a frozen model.
-No other module touches os.environ (except window.py's backend override, which
+No other module touches os.environ (except launch.py's backend override, which
 must be read before a backend exists to hold it).
 """
 import os

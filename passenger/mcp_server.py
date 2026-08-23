@@ -53,6 +53,24 @@ def _ensure_daemon() -> None:
         browser.start(detach=True, hidden=True)
 
 
+def _housekeep(lane: str | None = None) -> None:
+    """Collect expired lanes, then check the caller's is still one of them.
+
+    Order matters: a lane that expired between calls is still a row until the
+    sweep reaches it, so checking first would let a doomed lane through and
+    fail later on a dangling foreign key rather than saying LANE_NOT_FOUND.
+
+    A lane holding the screen when its clock runs out takes its claim with it,
+    and nothing else would then put the viewer away -- so the sweep that frees
+    the last claim is also what dismisses it.
+    """
+    holders = set(lanes.screen_claims())
+    if holders & set(lanes.sweep()) and not lanes.screen_claims():
+        present.select().dismiss()
+    if lane is not None:
+        lanes.require(lane)
+
+
 @server.tool()
 def fetch(
     url: Annotated[str, Field(description="Page to fetch.")],
@@ -142,7 +160,7 @@ def open_lane() -> str:
     you know you will be waiting longer than that.
     """
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep()
     return lanes.open_lane()
 
 
@@ -159,6 +177,7 @@ def set_ttl(
     are about to start rather than for work in progress -- asking a human for
     something slow, most often.
     """
+    _housekeep(lane)
     lanes.set_ttl(lane, minutes * 60)
     return f"lane {lane} expires after {minutes} min of quiet"
 
@@ -172,7 +191,7 @@ def list_tabs(
 ) -> list[dict[str, str]]:
     """List the tabs in a lane, so a script can be pointed at one of them."""
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep(lane)
     lanes.touch(lane)
     mine = set(lanes.tabs_of(lane))
     return [{"tab": page.id, "url": page.url, "title": page.title}
@@ -188,7 +207,7 @@ def close_tabs(
 ) -> str:
     """Close the tabs you name, keeping the session and every other tab alive."""
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep(lane)
     lanes.touch(lane)
     return f"closed {lanes.close_tabs(lane, tuple(tabs))} tab(s)"
 
@@ -199,7 +218,7 @@ def close_all_tabs(
 ) -> str:
     """Close every tab in this lane. The lane stays open and reusable."""
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep(lane)
     lanes.touch(lane)
     return f"closed {lanes.close_tabs(lane, lanes.tabs_of(lane))} tab(s)"
 
@@ -214,7 +233,7 @@ def destroy_lane(
     reaches them.
     """
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep(lane)
     closed = lanes.close_tabs(lane, lanes.tabs_of(lane))
     lanes.destroy(lane)
     return f"closed {closed} tab(s), lane {lane} is gone"
@@ -251,7 +270,7 @@ def show_browser(
     closes the viewer, and it says which.
     """
     _ensure_daemon()
-    lanes.sweep()
+    _housekeep(lane)
     if ttl_minutes is not None:
         lanes.set_ttl(lane, ttl_minutes * 60)
     lanes.touch(lane)
@@ -279,6 +298,7 @@ def hide_browser(
 ) -> str:
     """Release your claim on the screen, tucking the browser away if you were
     the last one holding it."""
+    lanes.require(lane)
     lanes.touch(lane)
     if not lanes.release_screen(lane):
         return f"still shown: {len(lanes.screen_claims())} other claim(s)"
