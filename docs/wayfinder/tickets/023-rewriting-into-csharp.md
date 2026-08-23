@@ -10,8 +10,8 @@ blocked_by: []
 ## Question
 
 Whether the whole tool -- CLI, MCP server, browser control, extraction,
-compositor management -- is rewritten in C#, and what the port would
-actually cost. Two things make it askable now rather than hypothetical:
+compositor management -- is rewritten in C#. Two things make it askable
+rather than hypothetical:
 
 - **[patchright-dotnet](https://github.com/DevEnterpriseSoftware/patchright-dotnet/)**
   -- a patched `Microsoft.Playwright`, the same idea as the patchright
@@ -20,90 +20,116 @@ actually cost. Two things make it askable now rather than hypothetical:
   -- an official MCP SDK, so the server half has a first-party answer.
 
 The Python side is 2,970 lines across 22 modules, so the port is small
-enough to be real. That is exactly why it should be measured before it is
-started: a rewrite of something this size is a weekend, and a rewrite of
-something this size that discovers a hole in week two is a fork of the
-project.
+enough to be real.
 
-**The motive is unstated.** Nobody has written down what the rewrite is
-*for* -- static typing beyond what strict mypy already gives, a
-single-file deployment with no interpreter, the native-dependency pain
-that put the Python side in nix, or simply preference. The answer to this
-ticket is worth little until that is on paper, because it decides which
-of the costs below are acceptable and which are disqualifying. Start
-there.
+## Settled by grilling
 
-### What to measure
+Recorded here so they are not re-litigated. What remains open is below.
 
-1. **patchright-dotnet's parity, and its cadence.** It is a third-party
-   fork by a different author from the Python patchright this project
-   runs. Establish: does it carry the same evasions (the CDP `Runtime`
+**The motive is maintainability, and it is a hobby project.** Chiefly
+packaging: PyICU compiling against the host's libicu is what moved this
+project to nix at all, and two of seven Python dependencies are missing or
+stale in nixpkgs, which is why `nix/python-overlay.nix` exists. `dotnet`
+carries ICU in the BCL and NuGet needs no overlay. The rest is preference,
+which is a sufficient reason on a project with one developer and no users
+to answer to. Type safety is *not* a motive: strict mypy with
+`warn_unreachable` and frozen pydantic models parsed at every boundary is
+a stricter contract than the C# port would get for free, and item 2 below
+is about not losing it.
+
+**Extraction is decided elsewhere.** [Whether dom alone is
+enough](025-whether-dom-alone-is-enough.md) asks, in Python, whether
+`article` comes out. It must be answered where both extractors can be run
+against the same page.
+
+**Porting trafilatura is live work, not a fallback.** If 024 says `dom`
+alone is not enough, the extraction core goes to C# too -- about 5,500
+reachable lines of trafilatura (`core`, `main_extractor`, `xml`, `xpaths`,
+`htmlprocessing`, `utils`, `settings`, `baseline`, `external`,
+`readability_lxml`, out of 8,877 total), plus justext, plus an
+XPath-capable DOM library standing in for lxml. Roughly twice the size of
+the program it serves. That was first priced as a deterrent and it is not
+one: on a hobby project a large clean port is the appealing part.
+Correctness would be checkable against trafilatura's own published
+evaluation rather than by taste. Before pricing our own, check whether a
+.NET port already exists.
+
+**It lands alongside, not big-bang.** The C# implementation is built in
+this repo next to the Python one, which keeps working and shipping
+throughout -- `trunk` is committed to directly and this tool is in daily
+use, so a big-bang leaves no working browser for however long the port
+takes, which is how hobby ports die. Running both against the same URL is
+also how the comparisons below get made.
+
+**Python is deleted on daily use, not on a green test run.** [What the
+test suite covers](001-testing-the-shells.md) records that the 25 tests
+cover only the pure core; the shells that launch cage, wayvnc and Chrome
+are the part that was silently broken before and are still untested. The
+trigger is all seven tools working in C# against the page set the README
+already measures, and the C# server as the daily driver for a couple of
+weeks with the Python one still sitting there. Then one deletion commit.
+
+**All Python-side work lands first.** [Remove auto
+mode](021-remove-auto-mode.md), [Drop ICU](022-drop-icu.md) and
+[Whether dom alone is enough](025-whether-dom-alone-is-enough.md) each
+remove something, so waiting makes the port strictly smaller and spares
+porting the same code twice.
+
+## What is still open
+
+Three measurements. This ticket is not blocked on the Python work -- the
+measurements can be made now, and they are what decide whether the port is
+attempted at all.
+
+1. **patchright-dotnet's parity, and its cadence.** A third-party fork by
+   a different author from the Python patchright this project runs.
+   Establish: does it carry the same evasions (the `Runtime.enable`
    suppression that is the whole point), does it track upstream Playwright
    and upstream patchright on a schedule anyone can rely on, and does it
-   expose the specific surface already load-bearing here --
-   `connect_over_cdp` against a Chrome this tool launched itself,
-   `page.request.get` (relied on in [Content that lives in
+   expose the surface already load-bearing here -- `connect_over_cdp`
+   against a Chrome this tool launched itself, `page.request.get` (relied
+   on in [Content that lives in
    pictures](014-content-that-lives-in-pictures.md)), and
-   `locator.screenshot()`. A stealth fork that lags upstream by a version
-   is a fingerprint, by the same argument that keeps Chrome unpinned in
+   `locator.screenshot()`. A stealth fork lagging upstream by a version is
+   a fingerprint, by the same argument that keeps Chrome unpinned in
    `flake.nix`.
 
 2. **The MCP SDK against the seven tools.** [How thin can this layer
    get](020-how-thin-can-this-layer-get.md) settled the surface at seven;
-   check each one lands. The specific things to look for are stdio
-   transport, tool schemas generated from records rather than hand-written
-   JSON, and whether the pydantic-shaped discipline this codebase runs on
-   -- parse at every boundary, no raw dicts downstream -- survives the
-   translation to `System.Text.Json` with source generators, or degrades
-   into `JsonNode` at the door.
+   check each one lands. Look for stdio transport, tool schemas generated
+   from records rather than hand-written JSON, and whether parse-at-every-
+   boundary survives into `System.Text.Json` with source generators or
+   degrades into `JsonNode` at the door. Degrading it would forfeit the
+   one thing the Python side is unambiguously good at.
 
-3. **Extraction, which is the hole.** `article` mode is trafilatura, and
-   there is no .NET trafilatura. The readability-family ports that do
-   exist (SmartReader and friends) are the *class of extractor* that
-   [Whether defuddle belongs alongside
-   trafilatura](009-defuddle-as-a-mode.md) already measured and found
-   worse, and [A listing clears the yield
-   floor](011-listing-clears-the-yield-floor.md) turned on trafilatura's
-   particular judgement about what counts as boilerplate. So the options
-   are: accept a measurably worse `article`, keep a Python sidecar for
-   one function (which gives up the interpreter-free deployment that may
-   be the whole motive), or port the judgement. Measure the first against
-   the same pages 009 used before assuming any of them. `dom` mode ports
-   cleanly -- it is a JavaScript string evaluated in the page, and does
-   not care what language sent it.
+3. **`script`, and what the agent has to write.** [The passthrough
+   tool](013-the-passthrough-tool.md) made this the central door, and its
+   caller is an LLM. Two costs, and only the first is mechanical:
+   - **Playwright .NET has no sync API.** The Python side is built on
+     `sync_playwright` throughout -- `browser.py`, `service.py`,
+     `script.py`. .NET is `await page.GotoAsync(...)` with no sync
+     alternative, so the browser half is an async rewrite rather than a
+     transliteration, and every caller-supplied script becomes async C#.
+   - **Fluency.** C# has no `exec`; the equivalent is Roslyn scripting,
+     which handles the mechanics fine including the per-script line
+     numbers 013 promised. The open risk is that
+     `await page.Locator(...).ClickAsync()` in a compiled snippet is
+     harder for an agent to get right first try than the Python
+     equivalent. If the central door gets a worse hit rate that is a
+     functional regression, and no amount of preference covers it.
+     **Measure it**: three real tasks, both languages, first-try success.
 
-4. **`script`, and what the agent has to write.** [The passthrough
-   tool](013-the-passthrough-tool.md) runs *caller-supplied Python* with
-   `page` and `read(page)` in scope. C# has no `exec`: the equivalent is
-   Roslyn scripting, which means compiling a snippet per call, a
-   references/imports set to maintain, and a slower first call. Harder
-   than the mechanics, and probably the real question in this ticket:
-   the caller is an LLM, and it writes Playwright-Python far more fluently
-   than it writes Playwright-C#. If the central door gets more expensive
-   for the only party that uses it, that outweighs a lot of typing wins.
-   Measure it -- have an agent drive the same three tasks through both.
+## What does not move at all
 
-5. **Packaging, which cuts both ways.** `buildDotnetModule` and a NuGet
-   lock replace the interpreter and `nix/python-overlay.nix`; the overlay
-   exists only because two of seven Python dependencies are missing or
-   stale in nixpkgs, and that specific pain goes away. Note also that
-   .NET carries ICU in the BCL, so `count_words` would be free again --
-   which does *not* reopen [Drop ICU](022-drop-icu.md), since 022's
-   argument is that nothing decides with the number any more, not that
-   the dependency is expensive.
+cage, wayvnc, wlr-randr and wayland-info are subprocesses and stay
+subprocesses; the noVNC page and the small web server behind it are HTTP
+and JavaScript. The session record and pid-scoped teardown are process
+bookkeeping that translates directly. Roughly `present.py`, `launch.py`,
+`geometry.py`, `session.py` and `webserve.py` -- call it 800 lines -- are
+a transliteration, not a design problem. `dom` extraction is a JavaScript
+string evaluated in the page and does not care what language sent it.
 
-6. **What does not move at all.** cage, wayvnc, wlr-randr and
-   wayland-info are subprocesses and stay subprocesses; the noVNC page
-   and the small web server behind it are HTTP and JavaScript. The
-   session-record and pid-scoped teardown logic is process bookkeeping
-   that translates directly. Roughly, `present.py`, `launch.py`,
-   `geometry.py`, `session.py` and `webserve.py` -- call it 800 lines --
-   are a transliteration, not a design problem.
+## The answer
 
-### What the answer looks like
-
-A markdown asset that says go or no-go with the measurements attached,
-not an impression. If it is go, it should also say *when*: [Remove auto
-mode](021-remove-auto-mode.md) and [Drop ICU](022-drop-icu.md) are both
-open and both remove things, and porting code that is on its way out is
-the one clearly wrong order.
+A markdown asset with the three measurements attached, and a go or no-go
+that follows from them rather than from an impression.

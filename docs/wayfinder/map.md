@@ -168,6 +168,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 ## Fog
 
+- **The C# port itself, once it is a go.** [Whether this moves to
+  C#](tickets/023-rewriting-into-csharp.md) decides *whether*, and the
+  grilling behind it already fixed the shape: built alongside the Python
+  one in this repo, Python deleted on a couple of weeks of daily use
+  rather than a green test run, and only after 021, 022 and 025 have
+  landed. The build is far larger than one session, so it is not yet
+  sliced into tickets. It grows a second phase -- trafilatura's
+  extraction core, about 5,500 reachable lines -- if
+  [Whether dom alone is enough](tickets/025-whether-dom-alone-is-enough.md)
+  says no.
+
 - **A page can defer content and say nothing.** A page that withholds content
   usually says so, and 016 decided the agent should be the one to notice. But
   the xiaohongshu listing — 22 notes where 619 exist —
