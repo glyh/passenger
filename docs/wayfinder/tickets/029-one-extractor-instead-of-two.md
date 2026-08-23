@@ -2,7 +2,7 @@
 id: 029
 title: One extractor instead of two
 labels: [wayfinder:grilling]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -218,3 +218,47 @@ everything else here is conditional on.
 5. **Whether `dom`'s escape hatch survives anyway.** One mode is the goal, but
    a caller who disagrees with the extractor currently has somewhere to go.
    Removing that is a separate loss from removing `article`.
+
+## Answer
+
+**Closed in favour of [044](044-articles-last-job-structurally.md), which asks
+the same question from a frame that survived measurement.** The one thing this
+ticket most needed established *was* established, and it is what made the frame
+look wrong.
+
+**What was measured.** Decision 1's premise, on the page it turns on. See [the
+structural signal findings](../assets/029-structural-signal-findings.md).
+moonofalabama's comment thread is a structural signature and not a volume ratio:
+`#content` holds 106 children, 100 of them comments carrying 90% of the text, 81
+sharing an internal shape exactly, and the post is the one child whose shape
+occurs once. A probe that never reads a character count separates them. On three
+pages the same probe also tells a listing apart -- Hacker News is a repeated run
+with *no* uniquely-shaped prose sibling, this post is a repeated run *with* one.
+Untested and decisive in the bad direction: a listing with a lead paragraph
+satisfies the same rule and would be stripped.
+
+**Why the frame did not survive.** This ticket is all-or-nothing by
+construction: "If that reading holds, one mode is reachable. If it does not,
+this is a port after all and `article` stays." The measurement landed in
+between, and the interesting answers live there -- keep the walker exactly as it
+is and add a structural strip pass beside it; or keep trafilatura but reduce it
+to the one thing it still wins at. Neither is expressible here, and both are
+live. A ticket whose two permitted answers are both wrong is the wrong ticket.
+
+044 also starts from what is actually in dispute -- 025's recommendation 2, the
+single sentence keeping `article` alive -- rather than from an end state. That
+makes the next step the same on both tickets, which is the other reason not to
+keep two open over one territory.
+
+**What moved to 044:** the acceptance criteria (the five things `article` gets
+wrong and the three `dom` does), the reopened question of where a strip pass
+would run, and whether `dom`'s escape hatch survives. **What stays here** and is
+still readable: the `DOMSnapshot.captureSnapshot` measurements, which are sound
+measurements whose conclusion 030 overturned, and the argument in *The claim
+that makes one mode possible*, which 044 inherits by reference rather than by
+copy.
+
+**What is not decided by this closure.** Whether one mode is reachable. It was
+never answered -- one of five requirements was measured. If decision 1 on 044
+comes back clean and the strip pass turns out to subsume `article` entirely,
+this ticket's ambition is simply 044's answer arrived at by a better road.

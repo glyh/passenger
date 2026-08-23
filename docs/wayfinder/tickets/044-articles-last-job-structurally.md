@@ -56,6 +56,45 @@ construction, including keeping trafilatura and taking only the part of it that
 still earns its place. Neither blocks the other; they are competing shapes for
 the same territory, and the structural measurement feeds both.
 
+## What any replacement has to do
+
+Inherited from [029](029-one-extractor-instead-of-two.md), which is closed in
+favour of this ticket. These are 025's measurements, and they are the acceptance
+criteria whichever of decision 3's shapes is chosen -- a strip pass added to
+`dom` must not break the first list, and anything replacing `article` must
+deliver the second.
+
+**What `article` gets wrong today, and `dom` does not:**
+
+- **Keep a listing.** Trafilatura discards a search page or a feed as
+  boilerplate. That is why `dom` exists, and
+  [011](011-listing-clears-the-yield-floor.md) established the choice between
+  them is not computable from the text.
+- **Keep the markers of withheld content.** chinadaily's piece has six pages and
+  only `dom` carries the `_2`..`_6` links. After
+  [015](015-only-the-first-screen-exists.md) and
+  [016](016-the-result-says-what-it-missed.md) those markers are the caller's
+  only signal that a page held something back.
+- **Keep labels on what it keeps.** chinanews: `article` retains a related-news
+  rail but loses its labels, emitting five bare timestamps under a heading.
+- **See what is invisible.** gmw: `article` includes a hidden WeChat share
+  overlay as body text; `dom` does not, because `checkVisibility()` filters it.
+  Trafilatura reads static HTML and cannot see what is not displayed.
+- **Keep links as [007](007-links-lost-in-dom-mode.md) settled them** --
+  `[label](url)` inline, resolved against the document, never normalised.
+
+**What `dom` gets wrong today, and `article` does not:**
+
+- **Remove boilerplate at all.** moonofalabama: 128,718 characters around a
+  9,569-character post. This is the case decision 1 is about, and the single
+  reason 025 kept `article`.
+- **Find the content without a selector list.** `_ROOTS` is six selectors, first
+  match over 40 characters wins -- which on americanthinker was a sidebar promo
+  card. [028](028-the-root-heuristic-picks-a-decoy.md) fixed the bug; the
+  mechanism is still a selector list.
+- **Emit tables.** `dom` emits none. Headings, list markers and fenced code
+  landed in 09e1819 and are the floor, not the ceiling.
+
 ## To decide
 
 1. **Whether the structural separation survives the case that would break it.**
@@ -107,3 +146,22 @@ the same territory, and the structural measurement feeds both.
    are recorded by site name and character count and **no URL for any of them
    exists** in the ticket or the assets. Whatever set this ticket uses, its URLs
    go in the asset.
+
+6. **Where a strip pass would run, if there is one.** Inherited from 029, and
+   reopened rather than answered. Its recorded answer -- C# over a
+   `DOMSnapshot`, no JavaScript in the page -- was overturned when
+   [030](030-the-walker-reads-a-snapshot.md) closed *no*: the walker stays
+   JavaScript, because that string is the one part of `extract.py` a port
+   inherits unchanged. The `DOMSnapshot.captureSnapshot` measurements in 029
+   stand as measurements; the conclusion drawn from them does not. Since then
+   [Fable](https://github.com/fable-compiler/Fable) has been measured as a third
+   answer neither ticket had: F# compiled to JavaScript runs *in* the page, so
+   the strip pass can be typed and unit-tested and still see the browser's real
+   `innerText` and `checkVisibility()`. See [the port
+   measurements](../assets/023-port-measurements-findings.md).
+
+7. **Whether `dom`'s escape hatch survives.** Inherited from 029. If a strip
+   pass or a single mode lands, a caller who disagrees with it currently has
+   somewhere to go. Removing that is a separate loss from removing `article`,
+   and it should be decided on purpose rather than fall out of the
+   implementation.

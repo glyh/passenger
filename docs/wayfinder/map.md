@@ -416,6 +416,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   accident: that escape hatch has a production caller, so narrowing `script`'s
   scope would break it.
 
+- [One extractor instead of two](tickets/029-one-extractor-instead-of-two.md)
+  — closed in favour of [Whether article's last job can be done
+  structurally](tickets/044-articles-last-job-structurally.md), after measuring
+  the premise it turned on. moonofalabama's comment thread *is* a structural
+  signature: 100 of `#content`'s 106 children are comments holding 90% of the
+  text, 81 sharing an internal shape exactly, and the post is the one child whose
+  shape occurs once — separable without reading a character count, so 011's
+  objection does not reach it. What did not survive was the frame: this ticket
+  permitted only "one mode" or "a port after all", and the live answers are in
+  between — a strip pass beside the walker, or a trafilatura reduced to the one
+  thing it still wins at.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
