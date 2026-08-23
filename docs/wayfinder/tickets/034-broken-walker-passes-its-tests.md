@@ -3,7 +3,7 @@ id: 034
 title: A broken walker passes its own tests
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
