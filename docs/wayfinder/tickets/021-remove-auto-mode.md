@@ -4,10 +4,18 @@ title: Remove auto mode
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: []
+blocked_by: [025]
 ---
 
 ## Question
+
+Blocked on [Whether dom alone is enough](025-whether-dom-alone-is-enough.md),
+which can delete this ticket's central question rather than answer it. If
+`dom` reads acceptably on document-shaped pages then `article` comes out
+whole, and there is no default to choose between -- `mode` has one value.
+Deciding that default first is picking between two options one of which may
+not survive the week. Question 5 is the exception: `PageProbe.word_count` is
+dead today and independent of everything else here.
 
 [A listing clears the yield floor on a
 footer](011-listing-clears-the-yield-floor.md) concluded that no signal
