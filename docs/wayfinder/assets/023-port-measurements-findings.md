@@ -104,28 +104,31 @@ typed parameters; injected services arrive as parameters too. The feared
 outcome -- a dictionary at the door and manual digging afterwards -- is not what
 this SDK does.
 
-**But the bounds are lost, and that is the one real regression.**
-`RangeAttribute` appears **zero** times in the SDK: schema generation reflects
-types and `[Description]`, not DataAnnotations. The MCP door currently ships six
-bounded parameters, and every one of those bounds is *in the schema the calling
-agent reads*:
+**And the bounds survive too.** This was first recorded here as the port's one
+functional regression, on the strength of `RangeAttribute` appearing zero times
+in the SDK repository. That was bad evidence and the claim was wrong: schema
+generation lives in `Microsoft.Extensions.AI`, a different package, so grepping
+the SDK proved nothing about what it honours.
 
-| parameter | bound |
-|---|---|
-| `fetch.settle_ms` | 0 – 30000 |
-| `fetch.wait_seconds` | 0 – 900 |
-| `script.timeout_seconds` | 1 – 600 |
-| `set_ttl.minutes` | 1 – 1440 |
-| `show_browser.wait_seconds` | 0 – 900 |
-| `show_browser.ttl_minutes` | 1 – 1440 |
+Tested rather than grepped -- `McpServerTool.Create` over a method mirroring
+`fetch`, and the generated `InputSchema` printed:
 
-In C# these become guard clauses in the method body: still enforced, no longer
-*told*. An agent would learn the ceiling by being refused rather than by
-reading. That is a downgrade of precisely the contract this map values, and the
-port would have to buy it back by hand -- which is a finding [One description,
-two doors](../tickets/026-one-description-two-doors.md) should hear, because a
-declarative capability description would then have to carry bounds itself in
-either language rather than lean on the framework.
+    "settleMs": {
+      "description": "Milliseconds to let client-side rendering finish.",
+      "type": "integer", "default": 1500, "minimum": 0, "maximum": 30000 }
+
+against the same tool's real schema on the Python side today:
+
+    "settle_ms": {
+      "description": "Milliseconds to let client-side rendering finish.",
+      "type": "integer", "default": 1500, "minimum": 0, "maximum": 30000,
+      "title": "Settle Ms" }
+
+`[Range(0, 30000)]` produces exactly what `Field(ge=0, le=30000)` produces.
+Equivalent, down to the key names; Python contributes a `title` that nothing
+reads. So the contract with the calling agent carries over whole -- types,
+prose, defaults and bounds -- and there is **no identified regression** in the
+port at all.
 
 **AOT is available and may be a packaging argument.** The samples set
 `PublishAot=true` and the SDK is built with source-generated JSON contexts
@@ -263,9 +266,15 @@ server is async already; on the CLI side it means `cyclopts` commands become
 **Three measurements, no blocker.** The one that was meant to be most dangerous
 came back safest: the driver is byte-identical, so the evasions are shared by
 construction rather than by a third party's diligence. The SDK is GA, speaks
-stdio in one line, and generates schemas from signatures. The central door is
-not harder to write against, and its error reporting is better in one half and
-buildable in the other.
+stdio in one line, and generates schemas from signatures -- bounds included. The
+central door is not harder to write against, and its error reporting is better
+in one half and buildable in the other.
+
+The shape of the result is worth stating plainly: **nothing was found that the
+port loses, and nothing was found that it wins.** Every measurement came back
+parity or near-parity. One twenty-line deadline loop reads better in C#; one
+bug in the Python surfaced because a mechanism was rebuilt. That is the whole
+ledger.
 
 **The costs that survive, all of them known before:**
 
@@ -276,8 +285,9 @@ buildable in the other.
   billed**: a transliteration with four named exceptions, one of which reads
   better in C# than in Python. `service.py` and the CLI's async virality are
   still untried.
-- **One functional regression, newly identified**: six bounded parameters would
-  keep their enforcement and lose their schema visibility.
+- No identified functional regression. The bounds claim recorded here earlier
+  was wrong and is retracted above: `[Range]` generates the same `minimum` /
+  `maximum` that `Field(ge=, le=)` does.
 - A single-maintainer dependency, mitigated by its being 1,180 legible lines.
 
 **What this does not decide.** The measurements were run to find a blocker, and

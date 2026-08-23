@@ -112,14 +112,14 @@ surface we need is present on inspection, not on a run. `BUGS.md` is worth
 reading first: nothing we use is on it except `innerText` atomicity, which
 `extract.py:121` relies on as the walker's fallback.
 
-**2 is answered, with one regression to price.** The SDK left preview -- 2.0 GA
-in July 2026, v2.2.0 now. stdio is one line; schemas generate from the method
-signature via `AIFunctionFactory`, so no hand-written JSON; typed binding does
-*not* degrade into `JsonNode`. But `RangeAttribute` is nowhere in the SDK, so
-the six bounded parameters this door ships (`settle_ms`, two `wait_seconds`,
-`timeout_seconds`, `minutes`, `ttl_minutes`) would keep their enforcement and
-lose their *visibility*: an agent would learn a ceiling by being refused rather
-than by reading the schema.
+**2 is answered, and nothing is lost.** The SDK left preview -- 2.0 GA in July
+2026, v2.2.0 now. stdio is one line; schemas generate from the method signature
+via `AIFunctionFactory`, so no hand-written JSON; typed binding does *not*
+degrade into `JsonNode`. This ticket briefly recorded a regression here -- that
+bounds would not reach the schema -- and it was wrong, grepped rather than
+tested. `[Range(0, 30000)]` emits the same `minimum` / `maximum` that
+`Field(ge=0, le=30000)` does; the two schemas are equivalent down to the key
+names. The whole contract carries: types, prose, defaults, bounds.
 
 **3 is made, and found no blocker either.** Three tasks, both languages, all six
 snippets written and checksummed before any was run: 3/3 each side, identical
@@ -150,8 +150,8 @@ doing, but rebuilding a mechanism is what made its assumption visible.
 
 **So all four are in, and none of them says no.** What is left is not a
 measurement. The packaging motive was removed by 022, the remaining cost is
-overwhelmingly the extraction port, and the one identified regression is the
-schema-visible bounds. Whether that is worth a hobby project's evenings is the
+overwhelmingly the extraction port, and no regression was identified once the
+bounds claim was tested rather than grepped. Whether that is worth a hobby project's evenings is the
 developer's call, and it is the only thing between this ticket and closed.
 
 The three as originally written follow, unedited.
