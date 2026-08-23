@@ -3,7 +3,7 @@ id: 031
 title: The pid test loses its race in the nix sandbox
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: claude
 blocked_by: []
 ---
 
