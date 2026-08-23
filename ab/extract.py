@@ -12,6 +12,12 @@ nowhere -- see ticket 007. Targets are passed through whole: on a page whose
 ids are opaque and whose query string is a signed capability, a tidied-up URL
 is not the same URL.
 
+Both also emit markdown structure: headings, list markers and fenced code.
+`dom` emitted none of it until ticket 025, which measured the difference on
+documentation -- 34 fenced blocks against trafilatura's 8 on one asyncio page,
+where before there were none and a code sample was indistinguishable from the
+prose around it.
+
 This file used to say `dom` exists because trafilatura cannot see a JS app.
 That is wrong: `page.content()` is the *rendered* DOM, so trafilatura is handed
 the same nodes -- it sees a listing and discards it as boilerplate, which every
@@ -44,6 +50,7 @@ _MIN_COMPARABLE_WORDS = 40
 _DOM_JS = r"""
 ([stripSel, roots]) => {
   const OPAQUE = new Set(['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG','IFRAME','CANVAS','SELECT']);
+  const HEADING = {H1:'# ', H2:'## ', H3:'### ', H4:'#### ', H5:'##### ', H6:'###### '};
   const BLOCK = new Set(['ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','BR','BUTTON','DD','DETAILS',
     'DIALOG','DIV','DL','DT','FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM','H1','H2','H3',
     'H4','H5','H6','HEADER','HGROUP','HR','LI','MAIN','NAV','OL','OPTION','P','PRE','SECTION',
@@ -65,7 +72,18 @@ _DOM_JS = r"""
   }
 
   const out = [];
-  const push = (s) => { if (s) out.push(s); };
+  // A marker waits for the text it marks. `- ` written the moment an LI opens
+  // lands alone on its line as soon as the item's first child is a block --
+  // and on documentation most of them are, so the whole list came out as bare
+  // dashes above their items. Deferring it also fixes the same case in a
+  // heading whose text is wrapped in a div.
+  let pending = '';
+  const push = (s) => {
+    if (!s) return;
+    if (pending) { out.push(pending); pending = ''; }
+    out.push(s);
+  };
+  const mark = (s) => { pending = s; };
   const nl = () => { if (out.length && !out[out.length - 1].endsWith('\n')) out.push('\n'); };
   // An anchor with no text still has a label often enough -- an icon link
   // carries it in aria-label, an image link in alt.
@@ -77,7 +95,7 @@ _DOM_JS = r"""
             || (img && img.getAttribute('alt')) || '').replace(/\s+/g, ' ').trim();
   };
 
-  const walk = (node, pre) => {
+  const walk = (node, pre, depth) => {
     if (node.nodeType === 3) {
       push(pre ? node.nodeValue : node.nodeValue.replace(/\s+/g, ' '));
       return;
@@ -104,11 +122,25 @@ _DOM_JS = r"""
 
     const block = BLOCK.has(node.tagName);
     if (block) nl();
-    for (const child of node.childNodes) walk(child, pre || node.tagName === 'PRE');
-    if (block) nl();
+    // Markdown structure. `dom` used to emit block boundaries and links and
+    // nothing else, so a heading was a short line, a list was a run of short
+    // lines, and a code sample was prose -- while trafilatura, asked for
+    // markdown, emitted all of it. Ticket 009 found fenced code to be the one
+    // axis on which an extractor visibly wins, which makes it the axis a
+    // documentation page is lost on.
+    const isPre = node.tagName === 'PRE';
+    const list = node.tagName === 'UL' || node.tagName === 'OL';
+    if (HEADING[node.tagName]) mark(HEADING[node.tagName]);
+    else if (node.tagName === 'LI') mark('  '.repeat(Math.max(0, depth - 1)) + '- ');
+    else if (isPre) push('```\n');
+    for (const child of node.childNodes) walk(child, pre || isPre, depth + (list ? 1 : 0));
+    if (isPre) { nl(); push('```'); }
+    // An unflushed marker belongs to a block that turned out to hold nothing;
+    // left standing it would label the next block's text instead.
+    if (block) { pending = ''; nl(); }
   };
 
-  walk(root, false);
+  walk(root, false, 0);
   return out.join('');
 }
 """
@@ -124,12 +156,29 @@ def article_text(html: str, url: str | None = None) -> str:
 
 
 def tidy(raw: str) -> str:
-    """Pure: collapse the blank runs and stray whitespace innerText leaves."""
-    lines = [re.sub(r"[ \t ]+", " ", line).strip()
-             for line in raw.splitlines()]
+    """Pure: collapse the blank runs and stray whitespace innerText leaves.
+
+    A fenced block passes through verbatim. Collapsing runs of spaces is right
+    for prose read off the DOM and wrong for the one thing whose indentation
+    *is* its meaning: the walker has always kept `PRE` whitespace, and this
+    function threw it away again line by line, which did not show until the
+    fence made the block worth reading.
+    """
     kept: list[str] = []
     pending_blank = False
-    for line in lines:
+    in_fence = False
+    for line in raw.splitlines():
+        if line.strip() == "```":
+            if not in_fence and pending_blank and kept:
+                kept.append("")
+            pending_blank = False
+            in_fence = not in_fence
+            kept.append("```")
+            continue
+        if in_fence:
+            kept.append(line.rstrip())
+            continue
+        line = re.sub(r"[ \t ]+", " ", line).strip()
         if not line:
             pending_blank = True
             continue
