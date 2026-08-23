@@ -2,8 +2,8 @@
 id: 020
 title: How thin can this layer get
 labels: [wayfinder:grilling]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -86,7 +86,10 @@ To decide:
    control plus a tab list, that is three tools, and worth saying out
    loud even if the conclusion is that it goes too far.
 
-## Decided so far
+## Answer
+
+Seven, and that is the floor. `list_blockers` was the only surface;
+everything else is capability.
 
 **`list_blockers` is gone.** Eight tools are seven.
 
@@ -106,7 +109,35 @@ available -- but a description line was not added on the way out, because
 adding text to every session to explain a tool that was removed to save
 text is the wrong trade.
 
-The remaining questions stand. `show`/`hide`, `close_tabs` and the
-`fetch`-against-`script` question are all still open, and the fourth --
-what the floor is -- is the one worth answering deliberately rather than
-by attrition.
+### Why the other six stay
+
+The sorting question turned out to be a good one and the sorting itself
+was wrong past the first entry. Each of the remaining tools is a
+capability the caller cannot otherwise reach, or is reachable only in a
+way that costs more than the tool does.
+
+- **`script`** is the general door. Irreducible by construction.
+- **`fetch`** is `page.goto(url); return read(page)`, and stays anyway.
+  This is a deliberate exception to the rule against second ways to do
+  one thing, made with the rule in view: it is the overwhelming majority
+  of calls, it costs the caller no code and no thought, and the cheaper
+  boundary for the common case is worth more than the tidier one. It
+  also still carries `wait_seconds`, which `script` has no version of.
+- **`list_tabs`** reads the CDP HTTP endpoint, which keeps answering when
+  a renderer does not. A script needs a working tab to run in; listing
+  must not. That is [One wedged tab bricks every later
+  call](012-one-wedged-tab-bricks-every-call.md) in one sentence.
+- **`show_browser` / `hide_browser`** are outside the page entirely --
+  nothing reachable from `page` presents a compositor. They could be one
+  call with an argument; two verbs read more plainly to a caller than a
+  boolean does, and collapsing them would save a schema and cost a
+  little clarity. Not worth it.
+- **`browser_status`** is the only way to tell a live session from a
+  stale one, which is the thing that makes a black screen diagnosable.
+- **`close_tabs`** is housekeeping the caller does need a handle on:
+  `fetch` cleans up after itself, a sequence of `script` calls does not.
+
+Questions 1 and 2 fall out rather than being answered head-on. No MCP
+resource was needed, because the one read-only constant stopped being
+exposed at all -- and the budget that matters, total schema text in every
+session, was reduced by deleting a tool rather than by relocating it.

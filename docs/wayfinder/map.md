@@ -136,6 +136,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   strongest evidence. `fetch https://example.com` returns thirty-odd words and
   exits 0.
 
+- [How thin can this layer get](tickets/020-how-thin-can-this-layer-get.md)
+  — seven tools, and that is the floor. `list_blockers` returned a table that
+  does not change between calls, and the caller learns the name of what is in
+  the way from the `blocked` record anyway; it is gone. Everything else is
+  capability: `fetch` stays as a deliberate exception to the no-second-ways
+  rule because the common case should cost no code, `list_tabs` must work when
+  a renderer does not, and presenting a compositor is not reachable from
+  `page` at all.
+
 ## Fog
 
 - **A page can defer content and say nothing.** 015's signal only speaks
