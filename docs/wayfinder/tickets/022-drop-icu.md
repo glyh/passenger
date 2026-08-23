@@ -3,7 +3,7 @@ id: 022
 title: Drop ICU
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: [021]
 ---
 
