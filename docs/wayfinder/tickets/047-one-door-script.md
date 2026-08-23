@@ -2,7 +2,7 @@
 id: 047
 title: Delete fetch, and make script the only door
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -83,3 +83,62 @@ is removing the other door and the extraction behind it.
 - [One description, two doors](026-one-description-two-doors.md) -- most of the
   drift it catalogues is `fetch`'s parameters, and both doors now carry the same
   two verbs. Re-read it after this lands; it may be much smaller or moot.
+
+## Answer
+
+**Done.** `script` is the only door at both surfaces; `fetch`, `article`, `dom`,
+`ExtractMode`, `Extraction`, `FetchRequest`, `read(page)` and trafilatura are
+gone. Eleven MCP tools are ten. Net −239 lines across the change, and the
+project now runs no extraction at all.
+
+Verified end to end through the CLI against a live page, both recipes exactly as
+the skill writes them: `page.inner_text('body')`, and the walker read from
+`skills/using-passenger/walker.js` and evaluated, which returned markdown with
+its heading and a resolved link. 78 tests pass, `mypy --strict` is clean, and
+trafilatura is out of the dev shell.
+
+**What moved rather than went.** `tidy()` is inside the walker. The walker is
+`skills/using-passenger/walker.js` with its own defaults for the strip selector
+and the root list, callable with no arguments, and still tested in a real
+browser against 028's fixtures. `Fetched` became `Measured`: url, title,
+`char_count`, picture geometry, and nothing that interprets.
+
+**Three things worth knowing that the ticket did not anticipate.**
+
+1. **`char_count` is now `document.body.innerText`**, which closes
+   [039](039-extractor-returns-nothing-on-12306.md) by construction rather than
+   by fix. That ticket closed undone on a count of 0 for a page holding 2,647
+   characters -- a number measuring the extractor while looking like it measured
+   the page. There is no extractor to measure now.
+2. **The walker's defaults needed a null guard, not a default parameter.**
+   `page.evaluate(source)` with no argument sends *null*, so
+   `([a, b] = []) => …` never fires and destructuring throws. Destructured
+   inside the body instead.
+3. **The tidy coverage gap was worse than recorded, and is now closed.** Across
+   all thirteen existing walker tests, `tidy` only ever stripped leading and
+   trailing whitespace; on real pages it collapses up to 140 blank runs and 201
+   space runs in a single document. Four tests were added for the paths nothing
+   reached -- and the blank-run one needed correcting first: an *empty* block
+   produces no blank line at all, because `nl()` will not append a newline after
+   a newline. Real pages get theirs from blocks holding whitespace.
+
+**What `show_browser` gained**, being the one capability `fetch` had that
+nothing else reached: `until="unblocked"`, which polls the named tab until the
+vendor signature stops matching, beside the default that waits for the human to
+close the viewer. `handoff.wait_for_human` became `wait_until_unblocked` and
+stopped needing an extractor.
+
+**Tickets this changed:**
+
+- [039](039-extractor-returns-nothing-on-12306.md) -- **closed**, by
+  construction.
+- [Build drop_run](045-build-drop-run.md) -- was already closed as superseded.
+- [043](043-tidy-hides-walker-differences.md) -- unblocked, and reshaped as
+  predicted: `tidy` is in the walker, so its third decision is answered by
+  construction and its first two are moot. What is left is decision 4.
+- [023](023-rewriting-into-csharp.md) -- its second phase is marked overtaken.
+  No trafilatura port, no justext, no XPath DOM library; the walker is
+  JavaScript a port inherits unchanged.
+- [026](026-one-description-two-doors.md) -- annotated. Nearly every parameter
+  it catalogues was `fetch`'s, and the two doors now carry the same verbs. It
+  may be closeable by subtraction.

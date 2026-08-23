@@ -51,6 +51,16 @@ enough](025-whether-dom-alone-is-enough.md) asked, in Python, whether
 thread inside the content wrapper that no root rule reaches. So this port
 carries an extraction problem, and the second phase below is live work.
 
+*Overtaken by [Delete fetch](047-one-door-script.md), 2026-08-24.* **This whole
+phase is gone.** Extraction left the codebase: there is no `article` mode, no
+trafilatura, no justext and no XPath-capable DOM library to find a .NET
+equivalent of. The walker is a JavaScript recipe in the skill directory, which
+a port inherits unchanged -- exactly the property
+[030](030-the-walker-reads-a-snapshot.md) closed on. What was priced below as
+roughly twice the size of the program it serves is now zero, and the port's
+remaining cost is the ~2,400 lines of Python that are left. Read the rest of
+this section as history.
+
 **Porting trafilatura is live work, not a fallback, and it has fired.**
 [025](025-whether-dom-alone-is-enough.md) closed on `article` staying, so this
 is no longer conditional: the extraction core goes to C# too -- about 5,500

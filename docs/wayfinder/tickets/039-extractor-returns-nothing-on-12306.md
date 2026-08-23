@@ -115,3 +115,22 @@ is [`auto`](021-remove-auto-mode.md) wearing a different hat.
 **What would reopen it:** a second page that fails the same way, which turns one
 instance into a class -- or a caller who hits the `article` skeleton without the
 vault skill in context and believes it.
+
+## Closed again, by construction
+
+*2026-08-24.* [Delete fetch](047-one-door-script.md) removed the extractor that
+this ticket was about. `char_count` is now `document.body.innerText` -- the
+browser's own measurement of the page -- so the failure recorded above cannot
+recur in the shape it took: a count of 0 on a page holding 2,647 characters was
+this side measuring its own extractor while appearing to measure the page, and
+there is no extractor left to measure.
+
+The `article` half went the same way. A 22-row table skeleton with every train
+number empty is not something this tool can return any more, because it no
+longer decides what a page's content is.
+
+What the vault skill documented as a workaround -- `page.inner_text('body')` --
+is now simply the documented way to read a page, so the caller-side story and
+this side's story are the same story. The reopening condition recorded above
+("a second page that fails the same way") is spent: it named a class of failure
+that has no mechanism left.

@@ -57,3 +57,29 @@ To decide:
    exactly the moment a second surface gets rebuilt by hand from the
    first. Worth knowing whether this is a thing to do now or a thing the
    port should be told about.
+
+## Most of this went with `fetch`
+
+*Recorded 2026-08-24.* [Delete fetch](047-one-door-script.md) removed the tool
+that supplied nearly every example above. `fetch`'s `--keep-tab`,
+`--close-tabs`, `--new-tab` and `--wait`, and the MCP `fetch`'s `wait_seconds`
+against the CLI's `--handoff`, are all gone with the door they were on. `script`
+lost `mode` and `read_page` at the same time, so what is left of it is
+`source`, `lane`, `tab` and a timeout at both surfaces -- which do not
+currently disagree.
+
+What survives of the question:
+
+- **`show_browser` still exists only on the MCP side**, and now carries `tab`,
+  `wait_seconds`, `notify_human`, `ttl_minutes` and `until`. That is five
+  parameters on a tool the CLI does not have at all, and
+  [018](018-asking-for-a-human.md) argued that is correct rather than drift --
+  at a terminal the caller *is* the human.
+- **The generator's case is weaker and its cost is unchanged.** With two verbs
+  that agree, there is little for a single description to keep in step, and
+  decision 5's question -- whether it survives a port -- was answered
+  sideways: [023](023-rewriting-into-csharp.md) on .NET generates the MCP
+  schema from the method signature already, bounds and prose included.
+
+Re-read before claiming. This may now be small enough to close as answered by
+subtraction.

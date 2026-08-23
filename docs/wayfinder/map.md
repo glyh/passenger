@@ -452,6 +452,16 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   port expensive. The CLI loses `fetch` too, symmetry chosen over a human's
   convenience.
 
+- [Delete fetch, and make script the only door](tickets/047-one-door-script.md)
+  — done, −239 lines. `fetch`, both extractors, `mode`, `read(page)` and
+  trafilatura are gone; `script` navigates, drives and measures, and reading a
+  page is the caller's, with the walker shipped as
+  `skills/using-passenger/walker.js`. `tidy()` moved into the walker, so the
+  walker is the whole contract. `Fetched` became `Measured`, and `char_count` is
+  the browser's own `innerText` length — which closed 039 by construction.
+  `show_browser` gained `until="unblocked"`, the one thing `fetch` could do that
+  nothing else reached.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
