@@ -3,7 +3,7 @@ id: 033
 title: Rename agent-browser to passenger
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
