@@ -152,6 +152,45 @@
     if (block) { pending = ''; nl(); }
   }
 
+  // --- tidying ------------------------------------------------------------
+
+  // Collapse the blank runs and stray whitespace the walk leaves behind. This
+  // was `tidy()` in extract.py and moved here when `fetch` was retired and the
+  // walker became the whole contract: there is no Python side left to run it,
+  // and the raw walk now exists nowhere outside this function.
+  //
+  // A fenced block passes through verbatim, because the one thing whose
+  // indentation *is* its meaning must not be collapsed line by line. On the
+  // Python side that meant re-detecting the fence by matching lines equal to
+  // ```; here `isPre` already knew, but the walk has finished by now, so the
+  // marker is still what there is to go on.
+  //
+  // The character class is space, tab and U+00A0 deliberately: a non-breaking
+  // space is what CJK portals pad cells with, and leaving it uncollapsed puts
+  // a run of them through into the markdown.
+  function tidy(raw) {
+    const kept = [];
+    let pendingBlank = false, inFence = false;
+    // Python's splitlines() breaks on more than \n -- \r, \v, \f and the
+    // unicode separators -- and a `pre` can carry any of them out of the page.
+    for (const line of raw.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/)) {
+      if (line.trim() === '```') {
+        if (!inFence && pendingBlank && kept.length) kept.push('');
+        pendingBlank = false;
+        inFence = !inFence;
+        kept.push('```');
+        continue;
+      }
+      if (inFence) { kept.push(line.replace(/\s+$/, '')); continue; }
+      const text = line.replace(/[ \t\u00a0]+/g, ' ').trim();
+      if (!text) { pendingBlank = true; continue; }
+      if (pendingBlank && kept.length) kept.push('');
+      pendingBlank = false;
+      kept.push(text);
+    }
+    return kept.join('\n').trim();
+  }
+
   // --- and go -------------------------------------------------------------
 
   // Walk the live document, not a detached clone: innerText on a clone is
@@ -161,5 +200,5 @@
   const hrefs = countHrefs(root);
 
   walk(root, false, 0);
-  return out.join('');
+  return tidy(out.join(''));
 }
