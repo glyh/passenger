@@ -24,7 +24,7 @@ class ErrorCode(str, Enum):
     TAB_NOT_FOUND = "TAB_NOT_FOUND"
 
 
-class AgentBrowserError(Exception):
+class PassengerError(Exception):
     """Base for every failure this tool raises on purpose."""
 
     def __init__(self, code: ErrorCode, message: str, *,
@@ -35,15 +35,15 @@ class AgentBrowserError(Exception):
         super().__init__(f"[{code.value}] {message}")
 
 
-class DaemonError(AgentBrowserError):
+class DaemonError(PassengerError):
     """The Chrome daemon is missing, unstartable, or contested."""
 
 
-class WindowError(AgentBrowserError):
+class WindowError(PassengerError):
     """The window backend could not do what was asked."""
 
 
-class BlockedError(AgentBrowserError):
+class BlockedError(PassengerError):
     """A page needs a human and we were told not to ask for one."""
 
     def __init__(self, blocker_name: str, url: str) -> None:
@@ -53,7 +53,7 @@ class BlockedError(AgentBrowserError):
         self.url = url
 
 
-class HandoffTimeout(AgentBrowserError):
+class HandoffTimeout(PassengerError):
     def __init__(self, blocker_name: str, seconds: int) -> None:
         super().__init__(ErrorCode.HANDOFF_TIMEOUT,
                          f"no human solved {blocker_name} within {seconds}s")
@@ -61,11 +61,11 @@ class HandoffTimeout(AgentBrowserError):
         self.seconds = seconds
 
 
-class ScriptError(AgentBrowserError):
+class ScriptError(PassengerError):
     """A caller's script would not compile, raised, or returned a handle."""
 
 
-class TabNotFound(AgentBrowserError):
+class TabNotFound(PassengerError):
     """The tab a call named is gone -- closed, or from a browser since restarted."""
 
     def __init__(self, tab: str, open_tabs: tuple[str, ...]) -> None:

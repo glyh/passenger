@@ -14,7 +14,7 @@ import cyclopts
 from . import browser, launch, present, service, session as session_mod, targets
 from .config import settings
 from .detect import BUILTIN
-from .errors import AgentBrowserError, ErrorCode
+from .errors import ErrorCode, PassengerError
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
 app = cyclopts.App(
@@ -278,7 +278,7 @@ def main() -> None:
     """Single place that turns a domain error into terminal behaviour."""
     try:
         app()
-    except AgentBrowserError as error:
+    except PassengerError as error:
         print(f"error: {error.message}", file=sys.stderr)
         if error.detail is not None:
             print(f"       {error.detail}", file=sys.stderr)

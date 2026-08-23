@@ -1,5 +1,5 @@
 """Parsing Chrome's target list. Pure: a recorded payload, no browser."""
-from ab.targets import parse
+from passenger.targets import parse
 
 # Recorded from the live endpoint while a tab sat stuck mid-navigation
 # (ticket 012). Note the stuck tab: its title is still the document it had

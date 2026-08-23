@@ -57,7 +57,7 @@ _ROOTS = ("main", "[role=main]", "article", "#content", "#main")
 # wheel in a way `pythonImportsCheck` would not otherwise see -- the import
 # succeeds and the first fetch fails -- but both entry points import this
 # module, so a missing `walker.js` now fails the package build instead.
-_DOM_JS = resources.files("ab").joinpath("walker.js").read_text(encoding="utf-8")
+_DOM_JS = resources.files("passenger").joinpath("walker.js").read_text(encoding="utf-8")
 
 
 def article_text(html: str, url: str | None = None) -> str:

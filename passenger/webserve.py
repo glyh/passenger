@@ -94,7 +94,7 @@ def ensure(port: int) -> bool:
         return True
     if novnc_root() is None:
         return False
-    subprocess.Popen([sys.executable, "-m", "ab.webserve", str(port)],
+    subprocess.Popen([sys.executable, "-m", "passenger.webserve", str(port)],
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     for _ in range(20):

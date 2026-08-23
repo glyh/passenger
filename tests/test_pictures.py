@@ -20,8 +20,8 @@ import shutil
 
 import pytest
 
-from ab.config import CHROME_BIN
-from ab.pictures import BIG_ENOUGH, measure
+from passenger.config import CHROME_BIN
+from passenger.pictures import BIG_ENOUGH, measure
 
 VIEWPORT = {"width": 1000, "height": 1000}
 

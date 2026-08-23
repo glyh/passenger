@@ -26,8 +26,8 @@ import uuid
 
 import pytest
 
-from ab import session
-from ab.config import settings
+from passenger import session
+from passenger.config import settings
 
 
 def _state(pid: int) -> str:

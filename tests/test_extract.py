@@ -10,7 +10,7 @@ now says which extractor it wants, and there is no decision here left to test.
 JavaScript over a live DOM and is covered separately, in `test_walker.py`,
 which does start one.
 """
-from ab.extract import tidy
+from passenger.extract import tidy
 
 
 def test_a_code_block_keeps_its_indentation():

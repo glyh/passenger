@@ -101,7 +101,7 @@ so `detect.classify()` is a function of that record alone.
 
 Blockers are a discriminated union closed with `assert_never`, so adding a
 variant without handling it is a type error rather than a silent fallthrough.
-`mypy --strict` passes; run it with `mypy ab` in `nix develop`.
+`mypy --strict` passes; run it with `mypy passenger` in `nix develop`.
 
 ## Design
 
@@ -253,8 +253,8 @@ Selectable via `PASSENGER_WM`:
 | `web`   | the URL, to open wherever you are | for containers/servers with no display of their own |
 | `none`  | nothing           | honest about having no way to show it |
 
-Both are the same page (`ab/web/viewer.html`), a full-bleed noVNC screen. There
-is no native VNC client involved: noVNC asks for the framebuffer size its
+Both are the same page (`passenger/web/viewer.html`), a full-bleed noVNC
+screen. There is no native VNC client involved: noVNC asks for the framebuffer size its
 window needs and keeps asking as the window changes, which is something no
 native client here did: the lightweight ones stretch whatever they are sent
 and freeze that aspect at connect time, and the one that does resize costs

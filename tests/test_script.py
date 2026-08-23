@@ -1,8 +1,8 @@
 """The passthrough door's core. Pure: no browser, no page."""
 import pytest
 
-from ab.errors import ErrorCode, ScriptError
-from ab.script import execute
+from passenger.errors import ErrorCode, ScriptError
+from passenger.script import execute
 
 
 def _run(source: str, page: object = None):

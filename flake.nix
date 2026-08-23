@@ -94,7 +94,7 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: python -m ab.cli status"
+              echo "run: python -m passenger.cli status"
             } >&2
           '';
         };
@@ -154,7 +154,7 @@
           # Import-checking both entry points still catches a missing
           # dependency, which is what this stage is for.
           doCheck = false;
-          pythonImportsCheck = [ "ab.cli" "ab.mcp_server" ];
+          pythonImportsCheck = [ "passenger.cli" "passenger.mcp_server" ];
 
           # Both entry points need the compositor on PATH and the viewer's
           # JavaScript findable; neither can be discovered at runtime.

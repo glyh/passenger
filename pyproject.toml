@@ -12,15 +12,15 @@ dependencies = [
 ]
 
 [project.scripts]
-passenger = "ab.cli:main"
-passenger-mcp = "ab.mcp_server:main"
+passenger = "passenger.cli:main"
+passenger-mcp = "passenger.mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["ab"]
+packages = ["passenger"]
 
 [tool.mypy]
 python_version = "3.14"
@@ -34,7 +34,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 # The project is not installed into the dev shell's interpreter -- that env
-# carries the dependencies, not `ab` itself -- so the tests import it from the
-# working tree.
+# carries the dependencies, not `passenger` itself -- so the tests import it
+# from the working tree.
 pythonpath = ["."]
 testpaths = ["tests"]

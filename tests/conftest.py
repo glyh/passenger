@@ -1,6 +1,6 @@
-"""Point every state path at a temp directory, before `ab` is imported.
+"""Point every state path at a temp directory, before `passenger` is imported.
 
-This is a safety mechanism, not a convenience. `ab.config` reads the
+This is a safety mechanism, not a convenience. `passenger.config` reads the
 environment exactly once, at import, into module-level constants -- so
 `session.SESSION_FILE` and `launch.SESSION_SH` are both fixed by the time any
 test runs. Without this, a test that called `teardown()`

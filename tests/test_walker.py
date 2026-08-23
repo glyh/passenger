@@ -30,8 +30,8 @@ import shutil
 
 import pytest
 
-from ab.config import CHROME_BIN
-from ab.extract import dom_text
+from passenger.config import CHROME_BIN
+from passenger.extract import dom_text
 
 # Three cards of the size americanthinker's are (79-203 characters), so the
 # first one clears the 40-character guard exactly as the real page's did.

@@ -8,8 +8,8 @@ wait built on "the viewer closed" would report success the instant it began,
 on exactly the deployments that most need a human. The refusal is the fix, and
 this is what stops it being quietly removed as a redundant branch.
 """
-import ab.handoff as handoff
-from ab.models import PresenterName
+import passenger.handoff as handoff
+from passenger.models import PresenterName
 
 
 class _Fake:

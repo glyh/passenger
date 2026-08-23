@@ -32,7 +32,7 @@ BIG_ENOUGH = 0.10
 # per call would make which code ran unanswerable, and importing it here means
 # a `pictures.js` missing from the wheel fails `pythonImportsCheck` rather
 # than the first fetch.
-_JS = resources.files("ab").joinpath("pictures.js").read_text(encoding="utf-8")
+_JS = resources.files("passenger").joinpath("pictures.js").read_text(encoding="utf-8")
 
 NOTHING = Pictures(largest=0.0, count=0, src="")
 

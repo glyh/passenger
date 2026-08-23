@@ -9,8 +9,8 @@ all. That guarantee is now structural rather than tested.
 from a registry that could add learned rules to it. There is one table now and
 it is read directly, so these calls pass a probe and nothing else.
 """
-from ab.detect import classify
-from ab.models import PageProbe
+from passenger.detect import classify
+from passenger.models import PageProbe
 
 
 def _probe(title: str = "珠海长隆海洋王国 - 小红书搜索",

@@ -10,7 +10,7 @@ deployed:
          option that works from a container with no display of its own
   none   nothing can show it; say so rather than pretending
 
-There is no VNC client here any more. The viewer is a page (ab/web/viewer.html)
+There is no VNC client here any more. The viewer is a page (passenger/web/viewer.html)
 served to the host's own browser, which is both lighter than every native
 client that would do -- 1.8 MB of noVNC against 1.2 GiB for the lightest native
 one that works -- and the only one of them that gets the size right by itself:
