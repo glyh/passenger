@@ -166,13 +166,14 @@ would have licensed the asymmetry; it was declined.
 
 ## Still to decide, in the build
 
-1. **What happens to `tidy()`.** It runs on the Python side today, after the
-   walker, collapsing blank runs and stray whitespace while passing fenced
-   blocks through verbatim. With no Python caller it must move into the walker,
-   move into the recipe, or stop existing -- and agents get raw output if it
-   stops. This also reshapes [043](043-tidy-hides-walker-differences.md), whose
-   entire subject is `tidy` masking walker differences: if `tidy` moves into the
-   JavaScript, the blind spot moves with it rather than closing.
+1. ~~**What happens to `tidy()`.**~~ **Decided: it moves into `walker.js`.**
+   The walker becomes the whole contract -- walk, tidy, return. Details and the
+   two things to check while porting it are on
+   [047](047-one-door-script.md). It reshapes
+   [043](043-tidy-hides-walker-differences.md) rather than closing it: the raw
+   walk stops existing anywhere outside the function, which settles that
+   ticket's third decision by construction and moots its first two, leaving only
+   the question of what else the normalisation hides.
 2. **What is left of `extract.py`.** `dom_text`, `article_text` and the
    `ExtractMode` enum have no callers. Whether the module survives at all is a
    deletion question, not a design one.

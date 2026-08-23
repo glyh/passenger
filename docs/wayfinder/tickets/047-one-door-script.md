@@ -41,8 +41,29 @@ is removing the other door and the extraction behind it.
 
 ## To decide while doing it
 
-1. **`tidy()`** -- into the walker, into the recipe, or gone. See 046. Decide
-   before step 3, because it changes what the file is.
+1. ~~**`tidy()`**~~ **Decided: into `walker.js`.** Three notes for whoever does
+   it.
+
+   **It gets simpler on the way in, not harder.** `tidy` re-detects fenced
+   blocks by matching lines that are exactly ``` -- a string search for a marker
+   the walker itself emitted moments earlier. Inside the walker the `PRE` state
+   is already tracked (`isPre`), so fence-awareness stops being a detection
+   problem and becomes a variable that is already in scope.
+
+   **Some of it may already be dead.** Its docstring says it collapses "the
+   blank runs and stray whitespace *innerText* leaves" -- but the walk does not
+   read `innerText` for text nodes, it reads `nodeValue` and squashes runs
+   itself (`label()` is the only `innerText` caller). So part of `tidy` is
+   cleaning up after a mechanism the walker stopped using. Measure what it still
+   changes on the fixture set before porting it line for line; the honest port
+   may be half of it.
+
+   **It makes the tidied form the only form.** Today the raw walk exists for a
+   moment between `page.evaluate` and `tidy`. Afterwards it exists nowhere
+   outside the function, which answers
+   [043](043-tidy-hides-walker-differences.md)'s third decision by construction:
+   the walker's contract *is* its tidied output, because there is no other
+   output to have a contract about.
 2. **Whether `extract.py` survives at all** once its callers go.
 3. **What the skill says about failure.** `dom_text` degraded to
    `inner_text("body")` on a page that could not answer; a recipe has no such

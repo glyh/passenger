@@ -4,7 +4,7 @@ title: tidy() normalises away the differences the walker suite would catch
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: []
+blocked_by: [047]
 ---
 
 ## Question
@@ -62,3 +62,27 @@ To decide:
    was caught. Blank-run collapsing hides missing and spurious block boundaries
    equally, and those are `nl()` bugs -- which is closer to something a caller
    would notice.
+
+## Blocked on 047, and mostly answered by it
+
+*Recorded 2026-08-24.* [Retire fetch](046-retire-fetch.md) moves `tidy()` into
+`walker.js`, so this ticket must not be worked before
+[047](047-one-door-script.md) lands -- the thing it is about changes shape.
+
+What 047 settles, by construction rather than by argument:
+
+- **Decision 3 is answered.** The walker's contract *is* its tidied output.
+  After the move the raw walk exists nowhere outside the function, so there is
+  no other form for a contract to be about. The gap this ticket named -- that
+  nobody wrote that down, so a rewriter assumes byte-fidelity is the bar -- is
+  closed by the code saying it.
+- **Decisions 1 and 2 are moot.** There is no raw output to pin, so the seam
+  question does not arise; and `tidy` stops being a separable pass whose
+  necessity can be measured against the walker's output, because it *is* the
+  walker's output.
+
+**What survives, and is why this stays open.** Decision 4: normalisation still
+hides more than trailing whitespace. Collapsing blank runs masks missing and
+spurious block boundaries equally, and those are `nl()` bugs -- closer to
+something a caller would notice than the stray space that started this. That
+question is unchanged by the move, and after 047 it is the whole ticket.
