@@ -96,9 +96,36 @@ porting the same code twice.
 
 ## What is still open
 
-Three measurements. This ticket is not blocked on the Python work -- the
-measurements can be made now, and they are what decide whether the port is
-attempted at all.
+*Measurements 1 and 2 are made.* See [the port
+measurements](../assets/023-port-measurements-findings.md). Neither killed the
+port, which was the cheap outcome they were run for.
+
+**1 is answered, and the premise below is wrong.** patchright-dotnet does not
+reimplement the evasions: it patches `microsoft/playwright-dotnet` at build
+time and repoints the driver download at `patchright-core` on npm -- the same
+tarball the Python package ships, at the same version this machine is running
+(1.62.1 both sides). Parity is structural. What the author does own is the
+binding patch and the release plumbing, and the version seam is real: the .NET
+release tracks *playwright-dotnet* while the driver tracks *patchright*, so
+there are windows where no matching driver exists. Bus factor is one. The
+surface we need is present on inspection, not on a run. `BUGS.md` is worth
+reading first: nothing we use is on it except `innerText` atomicity, which
+`extract.py:121` relies on as the walker's fallback.
+
+**2 is answered, with one regression to price.** The SDK left preview -- 2.0 GA
+in July 2026, v2.2.0 now. stdio is one line; schemas generate from the method
+signature via `AIFunctionFactory`, so no hand-written JSON; typed binding does
+*not* degrade into `JsonNode`. But `RangeAttribute` is nowhere in the SDK, so
+the six bounded parameters this door ships (`settle_ms`, two `wait_seconds`,
+`timeout_seconds`, `minutes`, `ttl_minutes`) would keep their enforcement and
+lose their *visibility*: an agent would learn a ceiling by being refused rather
+than by reading the schema.
+
+**3 is not made, and now decides it.** It was left until last on purpose: it is
+the only one that needs C# actually running, and either of the cheap two could
+have ended the question first. Neither did.
+
+The three as originally written follow, unedited.
 
 1. **patchright-dotnet's parity, and its cadence.** A third-party fork by
    a different author from the Python patchright this project runs.
