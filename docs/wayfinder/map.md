@@ -135,6 +135,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   the guessing that hung off the other one — evidence capture, proposed
   signatures, `registry.remember` — went with it. The registry's curation half
   stayed.
+
+- [The tool does not learn; the agent remembers](tickets/019-the-tool-does-not-learn.md)
+  — and the curation half 005 kept is gone too: `registry.py` in full, the
+  on-disk `signatures.json`, `--approve`/`--forget`, and the `Signature` fields
+  that only served proposals. No caller could observe it landing — the learned
+  list had been empty since 005 — which is the point: a mechanism nothing fed
+  was still a second memory owned by the wrong party. The table stopped being a
+  parameter as well, since one possible argument is a seam, not a choice.
+  `agent-browser signatures` gave way to a `recognises:` line in `status`, and
+  the MCP `fetch` docstring now says outright that a wall it cannot name is the
+  caller's to remember.
 - [A fetch of an ordinary page put the browser on screen and waited](tickets/010-fetch-seizes-the-screen.md)
   — closed by 005, from the other end. The handoff is reached only on a
   signature match, so the strongest action the tool has is triggered only by its
