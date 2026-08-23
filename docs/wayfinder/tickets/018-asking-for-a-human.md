@@ -39,10 +39,11 @@ To decide:
    count moved, or simply the human says so by the call returning when
    they dismiss the window.
 3. Whether a caller that met a novel challenge should be able to *teach*
-   it -- a signature added deliberately, from a page a human confirmed
-   was a challenge, is the good version of what `propose_signature` was
-   doing badly. The registry's curation half (`pending_review`,
-   `approve`, `forget`) survived 005 intact and is sitting there unused.
+   it. The answer is now no -- see [The tool does not learn; the agent
+   remembers](019-the-tool-does-not-learn.md), which this blocks. What
+   the caller needs is not a way to write into `signatures.json` but a
+   way to act on what it already recognised, which is what this ticket
+   is. Where the knowledge goes afterwards is the agent's memory.
 4. Whether the CLI keeps `--handoff` on by default once the only trigger
    is a signature match. 010 left it alone deliberately; worth
    revisiting beside a deliberate verb.

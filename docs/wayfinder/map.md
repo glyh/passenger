@@ -32,6 +32,15 @@ Match that style rather than introducing a new one. `tdd` is relevant to
 prior wrong behaviour was when a comment guards against its return.
 Single developer, no remote: commit to `trunk`, do not branch.
 
+**The tool does not learn.** Anything durable this tool discovers about a
+*site* belongs in the calling agent's memory, not in state of its own. A
+tool that remembers is a second memory owned by the wrong party: invisible
+to the agent it would help, unexplainable, and revisable only by surprise.
+The builtin challenge signatures are not an exception to this — they are a
+fixed table about how vendors identify themselves, true regardless of who
+is calling. See [The tool does not learn; the agent
+remembers](tickets/019-the-tool-does-not-learn.md).
+
 ## Decisions so far
 
 <!-- one line per closed ticket -->
