@@ -3,7 +3,7 @@ id: 021
 title: Remove auto mode
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: [028]
 ---
 
