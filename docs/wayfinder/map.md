@@ -440,6 +440,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   decide it was designed away rather than measured, the same move 021 made on
   `auto`.
 
+- [Retire fetch: a tab and a script, and extraction becomes the agent's](tickets/046-retire-fetch.md)
+  — `fetch` goes and `script` is the only door, which is 004's "one door with
+  `page` bound" finally applied to the tool that predates it. Extraction is a
+  judgement and judgement is the caller's: six mechanisms have been deleted for
+  crossing that line and the two extractors that stayed are still failing. The
+  measurements are not extraction and survive on the script result, `char_count`
+  becomes the browser's own `innerText` length — which fixes 039 for free — and
+  the walker moves to `skills/using-passenger/walker.js`, one tested copy with no
+  production caller. trafilatura leaves, and with it most of what made the C#
+  port expensive. The CLI loses `fetch` too, symmetry chosen over a human's
+  convenience.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

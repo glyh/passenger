@@ -2,8 +2,8 @@
 id: 045
 title: Build drop_run: a caller-named repeated run, dropped from a dom read
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: [043]
 ---
 
@@ -88,3 +88,19 @@ trafilatura's deletion trigger and could not run without the flag: does
 links, labels, hidden overlays, listings. If boilerplate is the only remaining
 edge and it goes, `article` is deletable, trafilatura leaves, and
 [023](023-rewriting-into-csharp.md)'s expensive half disappears with it.
+
+## Answer
+
+**Closed unstarted, superseded by [Retire fetch](046-retire-fetch.md).** This
+was a feature on `dom` mode, and `dom` mode will not exist: extraction leaves
+this codebase entirely and becomes a recipe the agent runs. A caller that wants
+a repeated run dropped now writes that into its own script, which is the same
+answer this ticket reached -- the caller names the run -- arrived at one layer
+further out.
+
+What survives and should not be re-derived: [the acceptance
+set](../assets/044-acceptance-set.md), five pages with URLs and a verified
+diagnostic each, and the run-detection measurements in [the structural signal
+findings](../assets/029-structural-signal-findings.md) -- including that a
+class-aware shape signature counts moonofalabama's hundred comments as
+forty-one, which is a trap for anyone writing that recipe.

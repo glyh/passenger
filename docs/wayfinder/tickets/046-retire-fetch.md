@@ -2,8 +2,8 @@
 id: 046
 title: Retire fetch: a tab and a script, and extraction becomes the agent's
 labels: [wayfinder:grilling]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -116,3 +116,68 @@ be worked on before this is decided:
    shipped in the skill? If kept, it is no longer code this project runs but
    text this project publishes, which is a different maintenance contract and a
    different failure mode.
+
+## Settled by grilling, 2026-08-24
+
+**One door, and it is `script`.** `fetch` goes; `open_tab` is not built either,
+because `script` already opens a fresh tab when `tab` is omitted and can
+`page.goto` itself. This is [004](004-driving-the-page.md)'s answer -- one door
+with `page` bound -- finally applied to the tool that predates it. Eleven MCP
+tools become ten, and the surface [020](020-how-thin-can-this-layer-get.md) asked
+about is as thin as it goes.
+
+**One MCP call per page, for an agent that knows what it wants.**
+`script(source="page.goto(url); return ...")` navigates and reads in the same
+call, so the cost objection in decision 5 does not arise. A caller that does not
+know what it wants pays a probe first, which is the same trade it pays today.
+
+**The measurements stay, and they are not extraction.** `Ran` already carries
+`page: FetchOutcome | None` -- [013](013-the-passthrough-tool.md) built it so a
+script's ending page is classified by the same `service.inspect` `fetch` used.
+So `Blocked` survives untouched (a fixed table of vendors' own markup is a
+measurement, [038](038-a-fetched-that-says-this-reads-like-a-wall.md)), and so do
+`largest_image` and friends ([017](017-a-payload-that-is-not-text.md)). What
+leaves `Fetched` is `markdown` and `mode_used`.
+
+**`char_count` becomes the browser's own `innerText` length**, and this fixes
+[039](039-extractor-returns-nothing-on-12306.md) for free. That ticket closed
+undone on exactly this: a `char_count` of 0 on a page holding 2,647 characters
+was measuring *the extractor* while looking like it measured the page. With no
+extractor there is nothing to lie about.
+
+**The walker lives in the skill directory as a file.**
+`skills/using-passenger/walker.js`, not inline in `SKILL.md`. The skill ships
+from this repo ([036](036-one-skill-for-this-server.md)), so there is exactly one
+copy, it stays under `tests/test_walker.py` in a real browser against
+[028](028-the-root-heuristic-picks-a-decoy.md)'s fixtures, and drift is
+impossible because there is nothing to drift from. A file rather than a fenced
+block means the test parses no markdown and the agent loads 165 lines only when
+it actually wants markdown. `SKILL.md` says when to reach for it and points --
+[037](037-vault-skills-cite-the-skill.md)'s rule applied inside the skill.
+
+**`read(page)` goes, and trafilatura goes with it.** Nothing in this repo runs
+extraction any more; the walker has no production caller, only tests.
+
+**The CLI loses `fetch` too.** Symmetry over convenience, chosen knowingly: a
+human wanting one page as markdown now writes Playwright at a terminal. On a
+project with one developer and no users that is the developer's own trade, and
+it buys a single story about what this tool is. [018](018-asking-for-a-human.md)
+would have licensed the asymmetry; it was declined.
+
+## Still to decide, in the build
+
+1. **What happens to `tidy()`.** It runs on the Python side today, after the
+   walker, collapsing blank runs and stray whitespace while passing fenced
+   blocks through verbatim. With no Python caller it must move into the walker,
+   move into the recipe, or stop existing -- and agents get raw output if it
+   stops. This also reshapes [043](043-tidy-hides-walker-differences.md), whose
+   entire subject is `tidy` masking walker differences: if `tidy` moves into the
+   JavaScript, the blind spot moves with it rather than closing.
+2. **What is left of `extract.py`.** `dom_text`, `article_text` and the
+   `ExtractMode` enum have no callers. Whether the module survives at all is a
+   deletion question, not a design one.
+3. **What the walker's fallback becomes.** `dom_text` degraded to
+   `inner_text("body")` when the page could not answer -- a wedged renderer, a
+   navigation mid-flight. In a recipe there is no such wrapper, so the agent
+   gets the raw failure. That is arguably correct, and it should be stated in
+   the skill rather than discovered.
