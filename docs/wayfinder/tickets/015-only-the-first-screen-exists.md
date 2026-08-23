@@ -3,7 +3,7 @@ id: 015
 title: Only the first screen exists
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
