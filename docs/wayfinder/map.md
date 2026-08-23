@@ -255,6 +255,20 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   but waits on its pipe reaching EOF first, so what is left is the tail of one
   kernel call.
 
+- [The walker reads a snapshot, not the
+  page](tickets/030-the-walker-reads-a-snapshot.md)
+  — no. The walker stays JavaScript in the page, because that string is the
+  one part of `extract.py` the C# port inherits unchanged — a Python walker
+  would be written twice. Its other argument was already false: 028 had built
+  the browser harness and pinned a chromium in the flake, so the testability
+  the rewrite was buying was sitting unused, and a rewrite is an expensive way
+  to write tests. Preserving `querySelector` over a snapshot was explored
+  three ways and one was chosen before scope killed it —
+  `el.querySelector('img[alt]')` runs once per anchor, so resolving selectors
+  in the shell is four hundred roundtrips on a listing. What the ticket was
+  right about is that the walker is untested, which is [A broken walker passes
+  its own tests](tickets/034-broken-walker-passes-its-tests.md).
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
@@ -276,12 +290,13 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   something in C# has to do what trafilatura does. How large that is is
   [One extractor instead of
   two](tickets/029-one-extractor-instead-of-two.md) — reimplement rather
-  than port, strong enough that one mode suffices. Where it runs is no
-  longer open: a `DOMSnapshot` hands every live-DOM fact to ordinary code,
-  so there is no JavaScript in the page and no XPath library to find, and
-  [The walker reads a snapshot, not the
-  page](tickets/030-the-walker-reads-a-snapshot.md) proves that design in
-  Python first.
+  than port, strong enough that one mode suffices. Where the *walk* runs is
+  settled, and it costs the port nothing: it stays JavaScript evaluated in the page,
+  which `Runtime.evaluate` reaches from C# exactly as from Python, so it is
+  the one piece of `extract.py` that crosses unchanged. The `DOMSnapshot`
+  rewrite that would have replaced it was weighed and refused — see [The
+  walker reads a snapshot, not the
+  page](tickets/030-the-walker-reads-a-snapshot.md).
 
 - **A page can defer content and say nothing.** A page that withholds content
   usually says so, and 016 decided the agent should be the one to notice. But
@@ -314,7 +329,11 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 - **A long-running MCP server can hold stale code.** Editing `ab/` does
   not affect an already-running server, which is confusing precisely
   when someone is mid-debugging. Perhaps a version report in
-  `browser_status`; perhaps nothing.
+  `browser_status`; perhaps nothing. One branch is closed: nothing gets made
+  hot-reloadable to paper over it. 034 weighed reading `walker.js` per call
+  and refused — it would make *which code ran* unanswerable, which is worse
+  than stale. The standing expectation is that a server is restarted after an
+  edit; what is unresolved is only whether it should be able to say so.
 - **Input quality during handoff, not just output.** The pointer is now
   drawn and singular, but keyboard layout, clipboard, and IME through the
   VNC path are still unexamined -- a login the human cannot type into

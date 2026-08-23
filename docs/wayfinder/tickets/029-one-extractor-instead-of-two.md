@@ -4,7 +4,7 @@ title: One extractor instead of two
 labels: [wayfinder:grilling]
 status: open
 assignee:
-blocked_by: [023, 030]
+blocked_by: [023]
 ---
 
 ## Question
