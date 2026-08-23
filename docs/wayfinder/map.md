@@ -157,6 +157,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   measure. Every consumer already pins the mode by URL shape. Superseded by
   [Remove auto mode](tickets/021-remove-auto-mode.md).
 
+- [What the test suite covers, and how the shells get tested](tickets/001-testing-the-shells.md)
+  — the suite is a list of scars: a test earns its place by naming a failure
+  that happened, and no coverage bar pulls it toward the modules that never
+  broke. No seam for `_alive` — a real zombie is `Popen(["true"])` unreaped,
+  so the test runs against the actual `/proc` read. Real processes, but only
+  `true` and `sleep`; nothing starts the real stack. `nix flake check` runs it,
+  and `conftest.py` redirects state before import, without which a test would
+  SIGTERM the developer's own session.
+
 ## Fog
 
 - **A page can defer content and say nothing.** A page that withholds content
