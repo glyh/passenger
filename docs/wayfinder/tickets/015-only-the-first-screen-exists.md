@@ -2,7 +2,7 @@
 id: 015
 title: Only the first screen exists
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -101,3 +101,69 @@ open for: nothing in a `fetch` result says the page held more. The page
 states `共 177 条评论`, the extraction contains 19, and the tool reports
 neither the discrepancy nor that scrolling exists. A caller who does not
 already know to reach for `script` still gets a confident 11% answer.
+
+## Answer
+
+Yes -- and by quoting the page's own words back, not by looking again.
+
+Measurements in [Saying what a fetch did not
+reach](../assets/015-deferred-content-findings.md), across eleven pages
+in three languages.
+
+The finding that decides it: **the evidence is already inside the
+markdown `fetch` returns.** The extraction of a note claiming `共 153
+条评论` contains that string and all five of its `展开 N 条回复` markers.
+Nothing has to be read off the page, because it was read off the page
+already and thrown past unexamined. Summing the numbers those markers
+carry gives an exact lower bound -- at least 37 replies withheld -- from
+the page's own arithmetic rather than an estimate.
+
+So the signal is a **pure function over the extracted text**, and it
+lands on `Fetched` where both doors already build it. It reports what it
+found rather than a verdict: the markers, and the count they add up to.
+Two rules come out of the measurements:
+
+- **Only markers that carry a number count.** Numbered markers had zero
+  false positives across six negative controls; bare "load more" /
+  "view all" fired on the Rust release blog and on BBC, where they are
+  furniture.
+- **A bare total is not a claim about this page.** `\d+ comments` matched
+  five times on a reddit listing, every one of them a listed post's own
+  count. A total means something only beside an affordance that says
+  content is being withheld.
+
+Its failure mode is silence, which is today's behaviour, so it can only
+improve the answer; its cost is a string table that will never be
+complete.
+
+### What was rejected, and why
+
+Scrolling once and checking whether the page grew. It works -- the true
+infinite scroller tripled its text while five static pages did not move a
+byte -- and it covers precisely the case the marker signal misses. It was
+rejected as a default for two reasons.
+
+It answers the wrong question on this ticket's own page: scrolling the
+document of a note grows it 5377 -> 9045 while the text *falls*, because
+what loads is the feed of other notes below, not the comments. The
+comments are in an inner scroller. A probe that reported "there is more"
+there would be confidently pointing at content nobody asked for.
+
+And it changes what a read *is*. Ticket 004 measured that reading a page
+is free and invisible while driving one spends the reputation of a
+session whose whole value is that it has never done anything unusual.
+A growth probe makes every fetch a driving act, continuously, on the
+overwhelming majority of pages that have nothing deferred -- and to reach
+the comments it would have to drive inner containers too.
+
+### What stays unreached
+
+Pages that defer silently. The xiaohongshu listing -- 22 -> 619 notes,
+half the evidence in this ticket -- carries no numbered marker and no bare
+one; its markdown ends `回到顶部 / 加载中`. `quotes.toscrape.com/scroll`
+says nothing either. For those, `script` remains the whole answer, and
+the tool stays quiet rather than guessing. That gap is now named in the
+map's Fog instead of being invisible.
+
+Built as [The result says what it did not
+reach](016-the-result-says-what-it-missed.md).

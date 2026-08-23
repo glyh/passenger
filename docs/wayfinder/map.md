@@ -99,17 +99,25 @@ Single developer, no remote: commit to `trunk`, do not branch.
   read. The questions about inline markdown, `alt`, and capping URL bloat were all
   questions about everyone's markdown, and stop being asked.
 
+- [Only the first screen exists](tickets/015-only-the-first-screen-exists.md)
+  — say it from the text already returned. The page prints `共 153 条评论` and
+  five `展开 N 条回复`, and the extraction already contains every one of them,
+  so the hedge is a pure function over a string this project produced rather
+  than a second look at the page. Numbered markers only: bare "load more" is
+  furniture on the Rust blog and on BBC. Scrolling once to see whether the page
+  grew was rejected — it points at the wrong content on a note, and it makes
+  every read a driving act.
+
 ## Fog
 
-- **A page can be non-text without saying so.** Closing
-  [Content that lives in pictures reads as an empty page](tickets/014-content-that-lives-in-pictures.md)
-  left this standing: a plain `fetch` cannot distinguish "there is nothing
-  here" from "what is here is not text". A video note returns its player
-  furniture and its comments; a 图文 note returns a real paragraph that omits
-  the price list in the photo. `script` is the cure, but only for a caller who
-  already suspects -- and nothing tells them to. Counting what the extraction
-  dropped would be cheap; whether the answer is that, a `mode_used` that admits
-  it, or nothing at all is undecided.
+- **A page can defer content and say nothing.** 015's signal only speaks
+  when the page does. The xiaohongshu listing — 22 notes where 619 exist —
+  carries no marker at all, and neither does a plain infinite scroller; both
+  are reachable by `script` and invisible to anything cheaper. Scrolling once
+  and measuring whether the document grew *does* catch them (+51% and +214%
+  against six unmoved controls), and was rejected as a default rather than as
+  an idea. Whether it comes back as an opt-in, and whether anything short of
+  driving the page can see a silent deferral, is unexamined.
 - **Two viewers fight over the framebuffer.** Now that the size is
   client-driven, every connected viewer asks for its own window's size,
   and the last to ask wins. Harmless with one viewer, which is the only
@@ -145,7 +153,8 @@ Single developer, no remote: commit to `trunk`, do not branch.
   agent, the page *is* the context budget: a listing of a hundred
   bankruptcy notices costs the same as the paragraph that mattered.
   There is no cap, no selector to scope the read, and no notice when
-  something was long. Paging such a list a few times is enough to feel
+  something was long — one Hacker News thread measured 462,337 characters
+  from a single fetch. Paging such a list a few times is enough to feel
   it, and links made it sharper: a listing now costs several times what it
   did, for pointers that are the point. Whether the answer is a `max_words`,
   a scoping selector, or simply leaving it to the caller is unexamined --
