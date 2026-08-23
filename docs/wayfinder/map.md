@@ -183,6 +183,22 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   cannot see its own window refuses the wait rather than reporting it over
   instantly. `Blocked` now names its tab, and a blocked fetch stops blanking it.
 
+- [Whether dom alone is enough](tickets/025-whether-dom-alone-is-enough.md)
+  — `article` stays, on one page out of five: moonofalabama wraps the post and
+  a hundred visible comments in `#content`, and separating them needs the
+  page-type judgement 011 ruled out. Where the ticket predicted `dom` would
+  fail it read fine; both real failures were roots that matched the wrong
+  element, which became [The root heuristic picks a
+  decoy](tickets/028-the-root-heuristic-picks-a-decoy.md). `dom` also gained
+  headings, list markers and fenced code — 34 fences to trafilatura's 8 on one
+  asyncio page, where it had none.
+
+- [Whether the payload is AsciiDoc rather than
+  Markdown](tickets/027-asciidoc-rather-than-markdown.md)
+  — no; markdown arrived as a default and is now kept on purpose. Three of its
+  four considerations were answered by 025 and by the walker fix, all the same
+  way, and the fourth was never measurable from here.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
@@ -198,12 +214,14 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   C#](tickets/023-rewriting-into-csharp.md) decides *whether*, and the
   grilling behind it already fixed the shape: built alongside the Python
   one in this repo, Python deleted on a couple of weeks of daily use
-  rather than a green test run, and only after 021, 022 and 025 have
-  landed. The build is far larger than one session, so it is not yet
-  sliced into tickets. It grows a second phase -- trafilatura's
-  extraction core, about 5,500 reachable lines -- if
-  [Whether dom alone is enough](tickets/025-whether-dom-alone-is-enough.md)
-  says no.
+  rather than a green test run, and only after 021 and 022 have landed —
+  025 now has. The build is far larger than one session, so it is not yet
+  sliced into tickets. Its second phase has fired: 025 kept `article`, so
+  something in C# has to do what trafilatura does. How large that is, and
+  whether it is C# at all, is [One extractor instead of
+  two](tickets/029-one-extractor-instead-of-two.md) — reimplement rather
+  than port, strong enough that one mode suffices, and a DOM-native
+  algorithm may have to run in the page as JavaScript rather than in C#.
 
 - **A page can defer content and say nothing.** A page that withholds content
   usually says so, and 016 decided the agent should be the one to notice. But

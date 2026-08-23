@@ -66,3 +66,23 @@ A page with many decoy `<article>` cards is a fixture, not a live fetch --
 the failure is entirely in the selection, so it can be a small HTML document
 served to the walker. 001's rule applies: this earns a test because it
 happened.
+
+### Re-checked against 025's pages
+
+[Whether dom alone is enough](025-whether-dom-alone-is-enough.md) closed on a
+verdict that a repaired root could in principle overturn, so the check rides
+here rather than in a ticket of its own -- this is the change that would
+invalidate it, and the only place it can be run.
+
+After the fix, re-run the five pages 025 measured. The expected result is that
+it splits them:
+
+- **americanthinker recovers.** The decoy is the whole failure; `dom` should
+  reach the 5,769-character piece rather than the 273-character promo card.
+- **moonofalabama does not.** `#content` is the right container and still
+  holds a hundred comments. If a root rule *did* fix it, 025's verdict was
+  wrong and `article` may not need to stay -- so an unexpected win here is a
+  finding, not a bonus.
+- **chinadaily, chinanews and gmw are unchanged.** They fall through to `body`
+  and there is no better candidate; a rule that moves them has changed
+  something it was not asked to.

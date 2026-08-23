@@ -2,9 +2,9 @@
 id: 027
 title: Whether the payload is AsciiDoc rather than Markdown
 labels: [wayfinder:grilling]
-status: open
+status: closed
 assignee:
-blocked_by: [025]
+blocked_by: []
 ---
 
 ## Question
@@ -90,3 +90,52 @@ A plausible outcome is that the answer is "no, and the real finding is the
 `LI` marker bug and the walker's missing tables", in which case this closes
 having pointed at work that belongs in 025's markup half. That is a fine
 outcome and should not be argued away.
+
+## Two of these are already answered
+
+Both by [025](025-whether-dom-alone-is-enough.md) and the walker fix that
+closed with it, and both against AsciiDoc. Recorded so the grilling starts
+from the narrowed case rather than re-deriving them.
+
+**Item 1 was a coincidence of a half-finished walker.** The orphaned `LI`
+marker is fixed in commit 09e1819: the marker is deferred until the first text
+actually lands, so docs.python.org went from 8 bare dashes and 0 usable
+bullets to 8 bullets and no orphans. It was ten lines, as this ticket
+predicted, and AsciiDoc's `**` counter wins nothing that the indent does not
+now also do. Nested lists survive a round trip in both.
+
+**Item 3 is closed by `article` surviving.** 025 kept trafilatura, so this is
+the fork where AsciiDoc means either converting trafilatura's markdown after
+the fact -- which cannot recover what markdown could not express, and so buys
+nothing -- or two extractors emitting two formats, which splits the output
+contract in half. The cheap fork is gone.
+
+**What is left is item 2, and item 4 is a wash.** The entire live case for
+AsciiDoc is now what the format costs the reader, which this ticket already
+says is not measurable from here. Designing that experiment is most of the
+remaining work, and the ticket's own prediction -- "no, and here is what it
+would take to change that" -- is now the likelier outcome, not less.
+
+## Answer
+
+**No. The payload stays markdown**, and the tool's one consumer is the whole
+reason: markdown is what an agent reads most fluently and most cheaply, and
+this ticket set the bar that expressiveness alone would not beat it.
+
+Nothing was left to weigh. Item 1 was a coincidence of a half-finished walker
+and cost ten lines to fix. Item 3 closed with `article` surviving
+[025](025-whether-dom-alone-is-enough.md), which removes the only fork where
+AsciiDoc was cheap. Item 4 was a wash by this ticket's own reading. That
+leaves item 2 -- what the format costs the reader -- which is the one
+consideration that was never measurable from here, and it points the same way
+the other three do.
+
+The deliberate look this ticket was created to force did happen: markdown
+arrived as trafilatura's default and has now been kept on purpose.
+
+Unexamined, and deliberately not carried forward as a ticket: nothing has
+measured how an agent actually reads either format, and no experiment for it
+was designed. Revisit only if the format is ever implicated in a caller
+misreading a page. [One extractor instead of
+two](029-one-extractor-instead-of-two.md) inherits markdown as settled rather
+than as an open axis.

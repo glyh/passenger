@@ -2,7 +2,7 @@
 id: 025
 title: Whether dom alone is enough
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -246,3 +246,37 @@ editors are divs, not `PRE`, so neither extractor fences them.
 
 Nothing here touches the root heuristic. That is
 [028](028-the-root-heuristic-picks-a-decoy.md).
+
+## Answer
+
+**`article` stays, and `dom` alone is not enough.** The reason is
+moonofalabama and only moonofalabama: `#content` legitimately wraps the post
+and a hundred comments, and separating them needs the page-type judgement
+[011](011-listing-clears-the-yield-floor.md) established is not computable
+from the text. Neither fork in the question as written survives -- where this
+ticket predicted `dom` would fail it read fine, and both real failures were
+pages where the root heuristic matched something.
+
+Consequences, each landed where it belongs rather than restated here:
+
+- The markup work is in, and it stays regardless -- see **Built** above.
+- The decoy root became [028](028-the-root-heuristic-picks-a-decoy.md), which
+  now carries the re-check this measurement would otherwise be re-opened for:
+  after the root fix, americanthinker should recover and moonofalabama should
+  not. It is an acceptance step on the change that would invalidate it, which
+  is the only place it can actually be run.
+- [021](021-remove-auto-mode.md) does not collapse into this, and holds
+  Recommendation 4 as *evidence with an expiry*: `article` is the safer
+  default while the root is broken, and 028 removes that condition.
+- [023](023-rewriting-into-csharp.md)'s second phase has fired. Extraction was
+  the thing it left open here, and it is decided: something in C# has to do
+  what trafilatura does.
+- [027](027-asciidoc-rather-than-markdown.md) lost two of its four items to
+  this ticket and to the walker fix, both against AsciiDoc, and closed on
+  markdown.
+
+This answer is about the two extractors that exist. [One extractor instead of
+two](029-one-extractor-instead-of-two.md) asks whether a third makes both
+unnecessary, and takes these five pages as its acceptance set. That ticket
+does not reopen this one: `dom` alone is not enough, and a reimplementation is
+not `dom`.

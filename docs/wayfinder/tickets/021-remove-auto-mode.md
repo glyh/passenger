@@ -4,7 +4,7 @@ title: Remove auto mode
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: [025, 028]
+blocked_by: [028]
 ---
 
 ## Question
@@ -86,3 +86,24 @@ To decide:
    `classify` was its only consumer. Removing it also means `probe` no
    longer needs the extraction handed to it. Independent of the rest of
    this ticket and true today.
+
+## What 025 left here
+
+[Whether dom alone is enough](025-whether-dom-alone-is-enough.md) closed
+without deleting this ticket's central question: `article` stays, so there are
+still two modes and still a default to choose. It leaves one argument for
+question 1, and it comes with an expiry date.
+
+**For `article`, while the root is broken.** On americanthinker `dom` returns
+273 characters -- a sidebar promo card -- because `_ROOTS` takes the first
+`<article>` of thirty. `auto` hides it today only by accident: `dom` measures
+11 words, under `_MIN_COMPARABLE_WORDS`, so `choose` discards it. That floor
+goes away with `auto`, which is why this ticket is blocked on
+[028](028-the-root-heuristic-picks-a-decoy.md).
+
+**The expiry.** 028 removes the condition. Once the root picks the real
+container, "with the root broken `article` is safer by a wide margin" is no
+longer an argument for anything, and question 1 is live again on its full
+case -- including *required, no default*, which this ticket calls the honest
+reading of [011](011-listing-clears-the-yield-floor.md) and which nothing has
+yet argued against on its own terms. Do not read 025 as having settled it.

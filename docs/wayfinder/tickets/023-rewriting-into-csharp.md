@@ -37,13 +37,15 @@ to answer to. Type safety is *not* a motive: strict mypy with
 a stricter contract than the C# port would get for free, and item 2 below
 is about not losing it.
 
-**Extraction is decided elsewhere.** [Whether dom alone is
-enough](025-whether-dom-alone-is-enough.md) asks, in Python, whether
-`article` comes out. It must be answered where both extractors can be run
-against the same page.
+**Extraction is decided elsewhere, and now is.** [Whether dom alone is
+enough](025-whether-dom-alone-is-enough.md) asked, in Python, whether
+`article` comes out. It does not: `dom` alone is not enough, on a comment
+thread inside the content wrapper that no root rule reaches. So this port
+carries an extraction problem, and the second phase below is live work.
 
-**Porting trafilatura is live work, not a fallback.** If 024 says `dom`
-alone is not enough, the extraction core goes to C# too -- about 5,500
+**Porting trafilatura is live work, not a fallback, and it has fired.**
+[025](025-whether-dom-alone-is-enough.md) closed on `article` staying, so this
+is no longer conditional: the extraction core goes to C# too -- about 5,500
 reachable lines of trafilatura (`core`, `main_extractor`, `xml`, `xpaths`,
 `htmlprocessing`, `utils`, `settings`, `baseline`, `external`,
 `readability_lxml`, out of 8,877 total), plus justext, plus an
@@ -53,6 +55,15 @@ one: on a hobby project a large clean port is the appealing part.
 Correctness would be checkable against trafilatura's own published
 evaluation rather than by taste. Before pricing our own, check whether a
 .NET port already exists.
+
+This phase's *shape* is now in dispute, and in the direction of being
+smaller. [One extractor instead of
+two](029-one-extractor-instead-of-two.md) proposes reimplementing rather
+than porting, strong enough that `article` and `dom` collapse into one
+mode -- and observes that a DOM-native algorithm has to run where the DOM
+is, which would remove the XPath library and most of the 5,500 lines
+along with it. That ticket is blocked on this one, since it presupposes
+the port happens at all; the price recorded above is the upper bound.
 
 **It lands alongside, not big-bang.** The C# implementation is built in
 this repo next to the Python one, which keeps working and shipping
