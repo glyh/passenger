@@ -1,23 +1,30 @@
 # passenger
 
-Generic web-context fetching through a real, logged-in Chrome that sites can't
+Generic web access through a real, logged-in Chrome that sites can't
 distinguish from your daily driver — with a human handoff when a site puts up a
 challenge the agent shouldn't (and shouldn't try to) solve.
 
     passenger serve                      # start the hidden Chrome daemon
-    passenger fetch <url>                # → markdown on stdout
-    passenger fetch <url> --json         # → {url,title,char_count,markdown}
+    passenger script <file>              # run Playwright against a tab
+    echo "page.goto('$URL')
+          return page.inner_text('body')" | passenger script
     passenger open <url>                 # park a URL in a tab, no window
     passenger open <url> --show          # ...and show it, to log in by hand
-    passenger fetch <url> --close-tabs   # ...and tidy up after
     passenger tabs                       # this lane's tabs and their ids
     passenger tabs --lane orphan         # ...tabs no lane claims
     passenger close-tabs                 # close this lane's tabs
     passenger close-tabs <id> <id>       # ...or just these
     passenger show | hide | stop | status
 
+**There is no `fetch`.** There was, with an `article` mode and a `dom` mode,
+and ticket 046 retired both: extraction is a judgement about what a page means,
+and this tool's whole design says judgement belongs to the caller. `script` is
+the only door onto a page — it navigates, drives and hands back what you
+return. The recipes for reading one, including the DOM walker that used to be
+`dom` mode, live in `skills/using-passenger/`.
+
 Every tab command takes `--lane` and defaults to the reserved `cli` lane,
-which is what lets `fetch` and then `script --tab <id>` work across two
+which is what lets `open` and then `script --tab <id>` work across two
 commands typed thirty seconds apart. `--lane orphan` reaches the tabs no lane
 claims -- what a page opened by itself, or a human opened during a handoff.
 
@@ -40,7 +47,7 @@ the shellHook to **stdout**, which corrupts any stdio protocol. This flake's
 hook prints to stderr for that reason. `nix run` does not run the hook at all,
 which is why the registration above is the simpler of the two.
 
-Tools: `open_lane`, `set_ttl`, `fetch`, `script`, `list_tabs`, `close_tabs`,
+Tools: `open_lane`, `set_ttl`, `script`, `list_tabs`, `close_tabs`,
 `close_all_tabs`, `destroy_lane`, `show_browser`, `hide_browser`,
 `browser_status`.
 
@@ -54,7 +61,7 @@ Four things differ from the CLI, all deliberate:
   CLI the caller is a human who can be trusted with a shared default; over MCP
   the parameter is required, because a caller isolated by accident cannot tell
   which lane it is in.
-- **`fetch` does not wait for a human by default.** A tool call that hangs for
+- **`script` does not wait for a human.** A tool call that hangs for
   five minutes while someone hunts for a captcha is a bad citizen, so a blocked
   page comes straight back as `type="blocked"` with what is in the way and how
   to clear it. The agent tells the user, the user solves it, the agent calls
@@ -69,7 +76,8 @@ Four things differ from the CLI, all deliberate:
 **Operating knowledge for the agent lives in `skills/using-passenger`,**
 not in the tool docstrings, which carry the call contract and stop there. That
 skill is the one place that says what `blocked` does not catch, how to
-recognise a wall this side cannot name, that a fetch is only the first screen,
+recognise a wall this side cannot name, that a read is only the first screen,
+how to read a page at all,
 and why reading a page beats driving it. It is shipped from this repo and
 symlinked into the agent's skill directory, so it sits beside the code it
 describes. Six skills in the owner's notes had each hand-copied a paragraph of
@@ -85,10 +93,9 @@ lives in the shell.
 
     core    models.py    every boundary shape, as frozen pydantic models
             detect.py    blocked-or-not, given a measurement
-            extract.py   article/dom text handling
             errors.py    ErrorCode + structural errors
 
-    shell   service.py   the one fetch orchestration, shared by both frontends
+    shell   service.py   the one script orchestration, shared by both frontends
             browser.py   Chrome daemon lifecycle, CDP attach
             lanes.py     which lane owns which tab, and when its time is up
             targets.py   Chrome's targets over CDP, going around patchright
@@ -101,6 +108,7 @@ lives in the shell.
             mcp_server.py  the MCP frontend over the same service layer
 
     skill   skills/using-passenger/SKILL.md      how an agent operates this
+            skills/using-passenger/walker.js     the DOM-to-markdown recipe
 
 Detection is pure because the shell measures first: `probe.probe()` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
@@ -115,90 +123,41 @@ variant without handling it is a type error rather than a silent fallthrough.
 
 ## Design
 
-**Transport and extraction are separate layers.** Per-site scrapers rot because
-they fuse the two. Here anything fetchable is `navigate + extract`, and the
-extraction half is the part that never goes stale.
+**Transport and extraction are separate layers, and only one of them is
+here.** Per-site scrapers rot because they fuse the two. This side owns
+transport: a warm real browser, a tab, a handoff when a human is needed, and a
+measurement of what it handed over. Extraction is the caller's, and lives in
+`skills/using-passenger/walker.js` as a recipe rather than in this codebase as
+a mode.
 
-### Extraction modes (`--extract`)
+That was not the original design. There were two extractors -- `article`
+(trafilatura) and `dom` (a live-DOM walk) -- and the caller chose between them.
+Ticket 046 retired both, on the accumulated evidence of this project's own
+history: six mechanisms had been deleted for ruling on what a page means (a
+yield floor, a word-count tier, a learned signature registry, an `auto` mode, a
+wall hint, and a withheld-content reporter that was refused before it was
+built), while the two extractors that survived kept failing in the same way --
+a root heuristic that returned a promo card as the document, an `article` that
+deleted a six-page article's pagination links and swallowed a hidden share
+overlay, a `dom` that returned 128,718 characters of comments around a
+9,569-character post, and a ticket page that extracted zero characters from a
+page holding 2,647.
 
-| mode | what it does | right for |
-|---|---|---|
-| `article` | trafilatura boilerplate removal → markdown | a document: an article, a post, a docs page |
-| `dom` | visible text off the live DOM, minus nav/header/footer/aria-hidden | a listing, feed, profile or search result |
+Extraction is a judgement about what a page means. The agent knows what it
+asked for; this side does not.
 
-**There is no default, and no `auto`.** `auto` ran both extractors and picked
-by comparing their word counts; which one is right depends on the page's
-*type*, and that is not in the two blobs of text a comparison is handed, so
-every signal it computed was a proxy for something it could not measure. It is
-gone, and `mode` is required at both doors rather than defaulted, because the
-caller knows what it pointed at and a tool that guesses silently is worse than
-one that asks. The failure it used to hide is worth stating: `article` on a
-listing returns the site footer and none of the cards.
+**What survived the deletion**, because it is measurement and not judgement:
+the `blocked` verdict (a fixed table of vendors' own markup -- a vendor either
+serves it or does not), the picture geometry, and `char_count` -- which is now
+the browser's own `innerText` length rather than an extractor's output. That
+last change fixed a standing bug for free: a `char_count` of 0 on a page
+holding 2,647 characters had been measuring the extractor while looking like it
+measured the page.
 
-Both modes render links inline as `[label](url)`, resolved against the page's
-own URL and otherwise passed through untouched — query strings included, since
-on some sites the token in the query string is what makes the URL work at all.
-`dom` used to return text only, which cost a listing the only part of it that
-was navigable; it also read `innerText` off a *detached clone*, where innerText
-degrades to `textContent`, so every block boundary was lost and whatever line
-structure survived was the source HTML's own whitespace. A xiaohongshu search
-page came back as one unbroken 1,500-character line. It now walks the live
-document, and the same page comes back as 93 lines with 70 links.
-
-Links are not free. Measured on five saved pages, as characters of extracted
-text, `dom` before → after:
-
-| page | before | after | links |
-|---|---|---|---|
-| xiaohongshu search | 1,502 | 11,042 | 70 |
-| Hacker News front page | 3,767 | 16,266 | 228 |
-| Wikipedia article | 75,174 | 130,690 | 741 |
-| Python docs | 42,585 | 49,691 | 97 |
-| react.dev tutorial | 67,898 | 69,142 | 14 |
-
-The blowup tracks link density, which is exactly the axis along which links are
-worth having: the pages that grow most are the ones that are *made of* links.
-For scale, `article` on that Wikipedia page — which has always kept its links —
-is 160,317 characters, larger than the linked DOM text. Bounding a fetch's
-output is a real problem, but it is not this knob's job.
-
-**`dom` is an escape hatch that has not yet proved necessary.** It was added on
-the assumption that trafilatura returns nav chrome for JS apps. Measured, that
-turned out to be false — with `favor_recall=True` it wins on every page tried,
-including app-shaped ones:
-
-| page | article | dom |
-|---|---|---|
-| Wikipedia article | 4145 w | — |
-| Google Calendar agenda | 494 w | 347 w |
-| Gmail inbox | 4878 w | 4144 w |
-| Google Maps | 107 w | 30 w |
-
-Both modes recovered identical event counts on Calendar (16 / 4), which is why
-`auto` never once fired its fallback on these. Don't assume an app-shaped page
-needs `dom` without measuring — and note the pages these numbers were taken on
-are all documents. A search result page is where `article` loses outright.
-(Google Maps is a reminder that some pages lose to *both* — the content is in a
-canvas, and no text extractor will help.)
-
-**Nothing is spoofed.** The profile is a real Chrome on your real IP, so there
-is no fake fingerprint to catch — only the automation protocol needed patching,
-which is what patchright does (notably avoiding the `Runtime.enable` CDP leak).
-Verified: `navigator.webdriver=false`, no `Headless` in the UA, 5 plugins, no
-`cdc_` globals, WebGL reporting the genuine adapter rather than SwiftShader.
-
-**The window appears only when a human is needed.** Navigating and displaying
-are separate commands: `open` parks a URL silently, `show` puts the browser on
-screen. The one place presentation happens on its own is a challenge handoff --
-which is the definition of actually necessary -- and it re-hides afterwards if
-it was hidden when it started.
-
-**Challenges are handed to you, never auto-solved.** Solver services get
-profiles burned and make you *more* detectable. You solve it once; the
-persistent profile keeps the clearance cookie. Note `cf_clearance` is bound to
-IP + User-Agent, which is why this runs locally rather than on a VPS.
-
-### Detection is one dumb tier
+**The walker is still this repo's**, still tested in a real browser against its
+fixtures, and still the thing to reach for when you want markdown with resolved
+links, headings and fenced code. It just is not something this tool decides to
+run.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
 DataDome, PerimeterX, login walls. Cheap, exact, and the only thing that can
@@ -215,10 +174,10 @@ tool was ruling on something the caller could see for itself, and ruling badly.
 It was wrong in three ways at once. The count came from whichever extractor
 `--mode` selected, so the same page came back as content or as blocked
 depending on a presentation choice. It fired on every legitimately short page —
-`fetch https://example.com`, thirty-odd words, used to put the browser on your
+reading https://example.com, thirty-odd words, used to put the browser on your
 screen and block for five minutes. And the rules it guessed were worse than
 nothing: a thin page once taught it `^Example Domain`, which then "blocked"
-every later fetch of that site.
+every later read of that site.
 
 So a short page is now simply a short page. You get the content and its size in
 characters, and you decide.

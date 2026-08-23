@@ -13,13 +13,17 @@ the tool design:
    not have to know that.
 
 The docstrings here carry the *call contract* and nothing else. Operating
-knowledge -- what `blocked` misses, how to recognise a wall, that a fetch is
-one screen -- lives in the `using-passenger` skill, shipped from this repo
-under `skills/`. It used to live here too, and six skills in the owner's notes
-had hand-copied it by the time anyone noticed; ticket 032 found that a
-docstring and these instructions arrive on the same event, so a second copy
-here buys nothing and drifts. Field descriptions are not part of that cut:
-`mode`'s is 021's replacement for deleted code, and it stays.
+knowledge -- what `blocked` misses, how to recognise a wall, that a read is one
+screen, how to read a page at all -- lives in the `using-passenger` skill,
+shipped from this repo under `skills/`. It used to live here too, and six
+skills in the owner's notes had hand-copied it by the time anyone noticed;
+ticket 032 found that a docstring and these instructions arrive on the same
+event, so a second copy here buys nothing and drifts.
+
+That division got sharper with ticket 046: extraction left this codebase
+entirely, so the *recipes* for reading a page -- including `walker.js` itself
+-- are in the skill directory rather than here. There is one door now, and it
+hands over `page`.
 """
 from typing import Annotated
 
@@ -34,16 +38,19 @@ from .models import ScriptRequest, WaitFor
 server = MCPServer(
     name="passenger",
     instructions=(
-        "Fetch web pages through a real, logged-in Chrome that sites cannot "
+        "Reach web pages through a real, logged-in Chrome that sites cannot "
         "distinguish from an ordinary browser. Use this instead of a plain "
         "HTTP fetch when a page needs a login, is behind anti-bot protection, "
         "or renders its content with JavaScript.\n\n"
         "Call `open_lane` first: every tab you open lives in your lane, and "
         "no other caller can see or close it.\n\n"
-        "How to operate it -- what `blocked` does and does not catch, "
-        "recognising a wall it cannot name, why a fetch is only the first "
-        "screen, and why reading beats driving -- is the "
-        "`using-passenger` skill. Load it before the first call."
+        "`script` is the only door onto a page: it navigates, drives and hands "
+        "back what you return. This server does not interpret pages -- there "
+        "is no extraction here, and reading one is yours to write.\n\n"
+        "How to operate it -- the recipes for reading a page, what `blocked` "
+        "does and does not catch, recognising a wall it cannot name, why a "
+        "read is only the first screen, and why reading beats driving -- is "
+        "the `using-passenger` skill. Load it before the first call."
     ),
 )
 
