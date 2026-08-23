@@ -234,6 +234,16 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   and `uv.lock` went, a second dependency record nothing had read since
   7f50c99.
 
+- [The pid test loses its race in the nix sandbox](tickets/031-session-pid-test-is-flaky.md)
+  — the children announce themselves now, and the four `range(200)` polls are
+  gone. Two seconds was a guess at a fork, an exec and an interpreter start;
+  `pids_running` walks all of `/proc` per turn, so the poll grew slower under
+  exactly the load that made it needed. The bound was not raised, because a
+  gate that goes green on a re-run trains its one reader to re-run it. The
+  `zombie` fixture keeps a poll — being dead is not a thing a child can say —
+  but waits on its pipe reaching EOF first, so what is left is the tail of one
+  kernel call.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
