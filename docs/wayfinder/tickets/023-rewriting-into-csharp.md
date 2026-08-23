@@ -98,6 +98,83 @@ mode](021-remove-auto-mode.md), [Drop ICU](022-drop-icu.md) and
 remove something, so waiting makes the port strictly smaller and spares
 porting the same code twice.
 
+## Prerequisites, recomputed 2026-08-24
+
+The original list -- "all Python-side work lands first: 021, 022, 025" -- is
+spent; all three are closed. This is what the same principle says now, with the
+measurements in and F#/Fable on the table. The principle is unchanged: **work
+that removes code makes the port smaller, and work that adds code in Python gets
+ported twice.**
+
+### Must land first
+
+- **[One extractor instead of two](029-one-extractor-instead-of-two.md).** The
+  single biggest lever on the port's price, and the only remaining cost of any
+  size. If one DOM-native mode is reachable, `article`, trafilatura and justext
+  leave the codebase entirely and the port loses its expensive half; if it is
+  not, the port carries ~5,500 lines of trafilatura and Fable's advantage covers
+  one file. The ticket's own instruction is to establish it *in Python* before
+  any C# is written, and its edge to this ticket was cut for that reason.
+
+- **[tidy() normalises away the differences the walker suite would
+  catch](043-tidy-hides-walker-differences.md).** Filed "for later", and the
+  port is what makes it "before". Rewriting the walker in F# means the suite is
+  the only thing standing between a subtly wrong walker and production -- and
+  the F# port that produced these measurements **passed 13/13 while its raw
+  output was wrong**. That is [034](034-broken-walker-passes-its-tests.md)'s
+  failure recurring in the exact place the port would land. A safety net with a
+  known hole in it, used to verify a rewrite, is not a safety net.
+
+### Must not be built in Python first
+
+Neither blocks anything. Both would be built twice if taken now.
+
+- **[One description, two doors](026-one-description-two-doors.md).** Its
+  premise weakens on .NET: the MCP door's schema is *already* generated from the
+  method signature there, bounds and prose included, so half of what 026 wants
+  arrives free and the remaining question is only how the CLI door shares that
+  source. Building a Python generator now is the thing 026's own decision 5
+  warned about.
+
+- **[One screen for everyone, or one window each](041-multiple-display-windows.md).**
+  Pure addition to the presentation layer, which this ticket already prices as
+  an 800-line transliteration. Adding to it before porting it means porting the
+  addition too.
+
+### Independent
+
+- **[A tab waiting on a server that never answers hangs every
+  attach](042-attach-hangs-on-pending-navigation.md).** A live bug, and the
+  C# port reproduced it exactly, so it is a design fault rather than a Python
+  one. It should be fixed on its own schedule and not wait on a language
+  decision -- accepting that during the overlap ("it lands alongside, not
+  big-bang") a fix made in Python is made twice. It is small enough for that to
+  be the right trade.
+
+### Owed measurements, before committing rather than before starting
+
+Three things are still unmeasured, and each could change the answer:
+
+1. **Packaging.** Fable, node and esbuild joining a nix flake whose entire
+   history is packaging pain -- `nix/python-overlay.nix` exists because of it,
+   and [022](022-drop-icu.md) was fought over it. The mitigation to test is
+   committing the generated `walker.js` so the toolchain is a developer
+   dependency rather than a runtime one. This is the prerequisite most likely to
+   go badly, because it is the one this project has been bitten by before.
+2. **An F# MCP server, end to end, across all eleven tools.** What was measured
+   is schema generation for one tool. Eleven tools, several with many optional
+   parameters, over stdio, actually answering a client, is not the same claim.
+3. **What replaces `cyclopts`.** Unchosen. The CLI door is half of
+   [026](026-one-description-two-doors.md)'s subject, so the choice and that
+   ticket's answer are the same decision on .NET.
+
+### One rule to carry into the port
+
+Idiomatic F# collections are a trap in Fable-compiled code: `Set`, `Map` and
+`list` cost 5x the bundle and 2x the walk. `match` expressions compile to a
+switch and pull in no runtime library at all. This belongs in a comment beside
+the first line of F# that runs in a page.
+
 ## What is still open
 
 *Measurements 1 and 2 are made.* See [the port
