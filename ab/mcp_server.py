@@ -17,7 +17,7 @@ from typing import Annotated
 from mcp.server import MCPServer
 from pydantic import Field
 
-from . import browser, present, registry, service, session as session_mod, targets
+from . import browser, present, service, session as session_mod, targets
 from .config import settings
 from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
 
@@ -164,14 +164,6 @@ def close_tabs() -> str:
         if keep.url != "about:blank":
             keep.goto("about:blank")
         return f"closed {session.close_other_tabs(keep=keep)} tab(s)"
-
-
-@server.tool()
-def list_blockers() -> list[dict[str, str]]:
-    """List known challenge signatures, including unapproved proposals."""
-    return [{"name": s.name, "kind": s.kind.value, "condition": s.condition,
-             "pending_review": str(s.pending_review)}
-            for s in registry.listing()]
 
 
 def main() -> None:

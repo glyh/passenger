@@ -85,3 +85,28 @@ To decide:
 4. What the floor is. If the honest answer is `script` plus a presenter
    control plus a tab list, that is three tools, and worth saying out
    loud even if the conclusion is that it goes too far.
+
+## Decided so far
+
+**`list_blockers` is gone.** Eight tools are seven.
+
+It was the easy one and it did not need to wait for
+[The tool does not learn; the agent
+remembers](019-the-tool-does-not-learn.md). Even today, with the learned
+list emptied, what it returned was a table that does not change between
+calls -- and the caller does not need it in advance, because the name of
+whatever is in the way arrives *in the `blocked` record*, at the moment
+it becomes relevant. Paying a tool slot in every session to enumerate
+challenge vendors up front is the shape this ticket exists to find.
+
+Nothing replaced it. The `signatures` CLI command still lists the table
+for a human, which is who was ever going to read it as a list. If 019
+lands and the table becomes a true constant, an MCP resource is still
+available -- but a description line was not added on the way out, because
+adding text to every session to explain a tool that was removed to save
+text is the wrong trade.
+
+The remaining questions stand. `show`/`hide`, `close_tabs` and the
+`fetch`-against-`script` question are all still open, and the fourth --
+what the floor is -- is the one worth answering deliberately rather than
+by attrition.

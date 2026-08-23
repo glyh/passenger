@@ -33,8 +33,8 @@ the shellHook to **stdout**, which corrupts any stdio protocol. This flake's
 hook prints to stderr for that reason. `nix run` does not run the hook at all,
 which is why the registration above is the simpler of the two.
 
-Tools: `fetch`, `show_browser`, `hide_browser`, `browser_status`,
-`close_tabs`, `list_blockers`.
+Tools: `fetch`, `script`, `list_tabs`, `show_browser`, `hide_browser`,
+`browser_status`, `close_tabs`.
 
 Two things differ from the CLI, both deliberate:
 
