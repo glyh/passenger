@@ -3,7 +3,7 @@ id: 018
 title: Asking for a human, rather than being guessed at
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: glyh
 blocked_by: []
 ---
 
