@@ -36,6 +36,19 @@ blocked_by: [<ids that must close first>]
 
       docs/wayfinder/frontier.sh
 
+- **New ticket**: never pick the number by looking at the directory. Two
+  sessions that read at the same time pick the same one, which has happened
+  four times here. Ask for it instead, and edit the file it prints:
+
+      docs/wayfinder/frontier.sh new <slug> "<title>" [label]
+
+  The id is claimed by an exclusive create under `docs/wayfinder/ids/`, so
+  concurrent callers get different numbers. Those entries are never removed --
+  a spent id stays spent even if the run died before writing the ticket -- and
+  they belong in the same commit as the ticket. Forgetting them is not fatal:
+  the allocator also reads the ticket filenames and git history, so an
+  uncommitted ledger only loses the protection between two live sessions.
+
 - **Resolve**: append a `## Answer` section to the ticket, set
   `status: closed`, and add a one-line pointer to the map's
   Decisions-so-far.
