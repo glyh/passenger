@@ -59,16 +59,34 @@ To watch for while doing it:
    with the prose. The one line most likely to be missed is `show_browser`
    being the way to ask for a human deliberately, not just the answer to a
    `blocked` reply.
-2. **Whether anything holds the two together.** The skill and the code are now
-   in one repo, which is the whole point -- but nothing fails if the skill
-   goes stale. 032's answer names no test. Whether one is possible, or whether
-   proximity plus a single copy is the honest floor, is worth ten minutes
-   before concluding it is not.
-3. **The README.** It has its own prose about modes and about what gets
+2. **Drift between the skill and the code: accepted, not solved.** Nothing
+   fails if the skill goes stale, and no test was written. The realistic
+   candidates were a test asserting phrases appear in `SKILL.md` -- brittle,
+   and green while the sentence is wrong -- or a checklist line. This was
+   settled as a general problem rather than this repo's: a skill is
+   documentation of an interface, and documentation drifting from the thing it
+   documents is the same shape as a library's docs falling behind its API.
+   Nobody has solved that; one copy in the same repo as the code is the honest
+   floor. The mitigation is proximity, which is why the skill ships from here
+   and not from the vault.
+
+3. **A wikilink is not a load, and that is a taken risk.** Point 6's premise
+   is that a skill is the one address a skill can name -- but naming it does
+   not invoke it. If an agent reads `[[agent-browser]]` in a vault skill and
+   does not follow it, it gets *less* than before the cut, since the docstring
+   prose it would have fallen back on is gone. Three options were weighed and
+   the first was chosen: trust that skills citing skills works. Refused were a
+   one-line floor left in each docstring (the duplication returning in
+   miniature) and probing it first the way point 5 was probed. The probe was
+   recommended and declined, so this is a decision made on judgement rather
+   than measurement -- recorded here so that a later session finding walls
+   being missed in the vault knows where to look first, and knows the cheap
+   experiment was never run.
+4. **The README.** It has its own prose about modes and about what gets
    recognised, and [019](019-the-tool-does-not-learn.md) already made it point
    at `status` rather than keep a copy of the signature list. Check it does
    not become the next place the paragraph lives.
-4. **CLI parity.** The docstrings serve the MCP door; `ab/cli.py` is the
+5. **CLI parity.** The docstrings serve the MCP door; `ab/cli.py` is the
    other one. Nothing here should change what a human reading `--help` gets,
    and if it does, that is [One description, two
    doors](026-one-description-two-doors.md)'s problem arriving early.
