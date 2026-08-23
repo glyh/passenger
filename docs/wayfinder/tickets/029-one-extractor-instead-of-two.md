@@ -183,10 +183,21 @@ everything else here is conditional on.
 
 1. **Whether one mode is actually reachable.** The moonofalabama test above.
    Everything else is conditional on it.
-2. **Where the algorithm runs.** *Reopened.* The answer recorded above -- C#
-   over a `DOMSnapshot`, no JavaScript in the page -- was overturned when 030
-   closed no. The walker stays JavaScript for now, and where a *new* extractor
-   runs is open again.
+2. **Where the algorithm runs.** *Reopened.* [030](030-the-walker-reads-a-snapshot.md)
+   closed no, so the walker stays JavaScript -- but it asked where *the current
+   walker* runs, and this asks where a *new* extractor runs. Not the same
+   question: the walker's semantics are `innerText` plus `checkVisibility()`
+   over a thin tree, while this one must find a root without a selector list,
+   detect repeated siblings to strip moonofalabama's comments, and emit tables.
+   Keeping that in an unstructurable string is a much larger ask.
+
+   The joint to push on is 030's claim that any harness without a live browser
+   "stubs" innerText, visibility and layout. A `DOMSnapshot` is a *recording*
+   made by a real browser, not a stub -- real computed styles, real bounds,
+   real paint order. Except for `innerText`, which is a live layout computation
+   the snapshot does not carry, so reconstructing it is a reimplementation
+   rather than a replay. 030 is right about that one and overreaches on the
+   other two.
 3. **What the correctness bar is.** Trafilatura is checkable against its own
    published evaluation; that evaluation scores article extraction only, and
    scores nothing about keeping a listing. An extractor asked to do both has
