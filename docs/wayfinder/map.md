@@ -428,6 +428,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   between — a strip pass beside the walker, or a trafilatura reduced to the one
   thing it still wins at.
 
+- [Whether article's last job can be done structurally](tickets/044-articles-last-job-structurally.md)
+  — it can, and `article` keeps its job anyway. The comment/post separation 025
+  called uncomputable is computable from structure rather than text, so 011 is
+  untouched and 025's step from "not from the text" to "therefore `article`" is
+  what falls. But `article` already reads that page correctly, so the capability
+  worth having is elsewhere: `dom` fidelity *minus* a run. A `drop_run` flag on
+  `dom` taking a selector, only ever dropping runs the caller named, named for
+  the mechanism and never for "discussion"; `article` and trafilatura untouched
+  until a measurement that needs the flag. The false positive that was going to
+  decide it was designed away rather than measured, the same move 021 made on
+  `auto`.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

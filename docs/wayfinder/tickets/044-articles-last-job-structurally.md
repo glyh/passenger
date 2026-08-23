@@ -2,8 +2,8 @@
 id: 044
 title: Whether article's last job can be done structurally, and what to keep of trafilatura
 labels: [wayfinder:grilling]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -229,3 +229,50 @@ deliver the second.
    somewhere to go. Removing that is a separate loss from removing `article`,
    and it should be decided on purpose rather than fall out of the
    implementation.
+
+## Answer
+
+**Yes, structurally -- and `article` keeps its job anyway.** The two halves of
+the title come apart, which is the useful result.
+
+**`article`'s last job can be done another way.** 025 kept `article` on one
+mechanism on one page: separating a comment thread from a post "needs exactly
+the page-type judgement 011 established is not computable from the text."
+Measured, that separation is computable -- just not from the text. On
+moonofalabama, `#content` holds 106 children of which 100 are comments carrying
+90% of the characters, 81 sharing an internal shape exactly, beside a post that
+is the one child whose shape occurs once. No character count is involved, so
+[011](011-listing-clears-the-yield-floor.md) is not contradicted; what is
+contradicted is 025's step from "not from the text" to "therefore `article`".
+Full measurements in [the structural signal
+findings](../assets/029-structural-signal-findings.md).
+
+**And nothing about trafilatura changes, because the useful thing turned out to
+be somewhere else.** `article` already reads moonofalabama correctly -- it
+returns the 9,569-character post. A structural reimplementation of that would
+buy the caller nothing. What neither mode offers today is the page at `dom`
+fidelity *minus* a run: `checkVisibility()` filtering, resolved links and
+withheld-content markers kept, comments gone. So the answer is a flag on `dom`,
+`article` untouched, and trafilatura's fate deferred to a measurement that
+cannot be made until the flag exists.
+
+**The whole design is in *Settled by grilling* above** and is not repeated here.
+The two decisions that most changed the shape: stripping happens only where the
+caller named a run -- never by rule, never by threshold -- and the flag is named
+for the mechanism rather than for "discussion", because the same structure is
+also a related rail.
+
+**Decision 1 was dissolved rather than answered**, and that is the pattern worth
+carrying. The listing-with-a-lead-paragraph false positive was going to decide
+this ticket in the bad direction. It was never measured; caller-named runs
+removed the failure mode instead. A risk that only exists because the tool acts
+on its own can be designed away rather than measured away -- which is the same
+move [021](021-remove-auto-mode.md) made when it deleted `auto` instead of
+tuning it.
+
+**What leaves here:** the build, as [Build
+drop_run](045-build-drop-run.md), blocked on
+[043](043-tidy-hides-walker-differences.md) because it changes what the walker
+emits and the walker suite cannot currently see part of that. The deletion
+trigger for trafilatura is recorded on that ticket, since it needs the flag to
+run.
