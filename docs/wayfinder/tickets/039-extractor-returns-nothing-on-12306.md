@@ -3,7 +3,7 @@ id: 039
 title: The dom extractor returns nothing where inner_text returns a page
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
