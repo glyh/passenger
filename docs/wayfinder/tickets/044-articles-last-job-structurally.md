@@ -56,6 +56,66 @@ construction, including keeping trafilatura and taking only the part of it that
 still earns its place. Neither blocks the other; they are competing shapes for
 the same territory, and the structural measurement feeds both.
 
+## Settled by grilling, 2026-08-24
+
+Recorded so it is not re-litigated. What remains open is below the line.
+
+**Stripping happens only where the caller asked for it by name.** `dom`'s
+promise -- every visible line -- is not weakened, and nothing fires by itself.
+
+**`article` is not touched at all.** Not reimplemented, not reduced, not given
+a new backend. Trafilatura stays exactly where it is, and `drop_run` is a `dom`
+concern only. Passing `drop_run` with `mode=article` is **refused**, not
+ignored: a silently ignored flag is 039's skeleton wearing a parameter -- it
+looks like it worked.
+
+**What the flag buys is a capability neither mode has**: the page read at
+`dom` fidelity -- `checkVisibility()`, resolved links, withheld-content markers
+-- with a named repeated run removed. Not a trafilatura reimplementation, which
+would buy nothing, since `article` already reads moonofalabama correctly.
+
+**It is a flag on `dom`, not a third mode.** The mode list stays at two.
+
+**The flag is named for the mechanism, never for the meaning.** It drops a
+repeated sibling run; it does not "strip the discussion", because the same
+structure is also a related-stories rail or a tag list, and naming it for
+comments would be this side ruling on what a page means
+([038](038-a-fetched-that-says-this-reads-like-a-wall.md)).
+
+**The result says what went**, with a sample of it -- `{siblings: 100, chars:
+55745, share: 0.90, first: "Posted by: karlof1 | …"}`. The sample is the page's
+own words quoted back, the same move [015](015-only-the-first-screen-exists.md)
+settled, and it is what lets a caller tell a comment thread from a mistakenly
+dropped rail without a second fetch.
+
+**Only runs the caller names are dropped.** Not the largest, not everything over
+a threshold. This is what removes the risk in decision 1 below: a misidentified
+run is simply listed and not named.
+
+**`fetch` gains a body-less read**, as `script` already has. The caller probes
+for the run inventory at near-zero context cost, then fetches naming the run.
+Without it the caller would pay 128,718 characters to learn it did not want
+them, and for an agent the page *is* the context budget.
+
+**A run's identity is a selector**, reported and re-resolved against the fresh
+DOM, since the probe and the drop are two page loads. It either matches or it
+does not, and the result says how many siblings it actually dropped. This also
+lets a site skill record `#content > div[class*=comment]` and skip the probe
+forever after, which is where [019](019-the-tool-does-not-learn.md) puts that
+knowledge.
+
+**What counts as a run is the caller's, with a definitional default.**
+`min_siblings`, defaulting to **2** -- "repeated" *means* two or more, so no
+tuned constant lives on this side. The caller raises it to quieten a noisy page.
+The number of runs printed is capped as presentation, and the result says how
+many were not listed.
+
+**The detection lives in the walker**, because it needs the live DOM.
+
+**`dom`'s escape hatch survives** untouched, so decision 7 is moot.
+
+---
+
 ## What any replacement has to do
 
 Inherited from [029](029-one-extractor-instead-of-two.md), which is closed in
@@ -97,14 +157,15 @@ deliver the second.
 
 ## To decide
 
-1. **Whether the structural separation survives the case that would break it.**
-   A repeated run beside a uniquely-shaped prose sibling is the proposed
-   signature of "document with comments". A **listing with a lead paragraph**
-   satisfies it too -- search results under an intro, a category page with a
-   blurb, a forum index with a pinned notice -- and stripping those is precisely
-   the failure `dom` exists to prevent. Untested, and decisive in the bad
-   direction: if it misfires, 025's recommendation 2 stands as written and this
-   ticket closes.
+1. ~~**Whether the structural separation survives the case that would break
+   it.**~~ **Dissolved by the grilling, not measured.** The danger was a
+   **listing with a lead paragraph** -- search results under an intro, a
+   category page with a blurb -- which satisfies "a repeated run beside a
+   uniquely-shaped prose sibling" and would have been stripped as if it were a
+   comment thread. That was only ever a risk while the strip fired *by itself*.
+   Since only runs the caller names are dropped, such a run is listed and simply
+   not chosen. americanthinker is the standing example: 263 siblings of teaser
+   grid, which must appear in the inventory and must not be dropped.
 
 2. **Whether trafilatura is ported, kept, or reduced.** Three routes, and they
    are not degrees of one thing:
@@ -142,10 +203,13 @@ deliver the second.
    settled: report that a repeated run of N siblings was found and what it held,
    and let the caller decide. That framing may matter more than the algorithm.
 
-5. **What the acceptance set is, given 025's cannot be re-run.** The five pages
-   are recorded by site name and character count and **no URL for any of them
-   exists** in the ticket or the assets. Whatever set this ticket uses, its URLs
-   go in the asset.
+5. ~~**What the acceptance set is.**~~ **Done.** Five replacement pages found
+   and each verified to still carry the diagnostic 025 relied on -- chinadaily's
+   `_2`..`_4` pagination links, gmw's hidden `div.g-wxTips` WeChat overlay,
+   americanthinker's 30 `<article>` teasers, moonofalabama's 100 comment
+   siblings. URLs and diagnostics in [the acceptance
+   set](../assets/044-acceptance-set.md). They are *not* 025's pages, which are
+   unrecoverable; compare behaviours, not its numbers.
 
 6. **Where a strip pass would run, if there is one.** Inherited from 029, and
    reopened rather than answered. Its recorded answer -- C# over a
