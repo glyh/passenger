@@ -89,3 +89,46 @@ To decide:
 5. **Whether this replaces 040's refcount or sits beside it.** If 2 is built,
    per-lane screens make the claim table redundant. If 1 or 3 is built, the
    refcount stays and this ticket is orthogonal to it.
+
+## What reading the presentation layer adds
+
+Not claimed and not started. This is what one pass over `present.py`,
+`webserve.py`, `session.py` and `viewer.html` says about option 1, recorded so
+whoever does claim it does not rediscover it.
+
+**Option 1 is already true at two of the three doors.** RFB is a broadcast
+protocol and wayvnc serves a websocket, so a second client is a solved problem
+outside this repo. `LinkPresenter` hands back the URL and `NullPresenter`
+prints the `ws://` endpoint; open either on a phone and there are two viewers
+on one framebuffer today, with nothing in this codebase involved. The singular
+assumption lives entirely in `WindowPresenter`: one pid in `viewer.pid`
+(`session.py:243`), an early return when it is alive (`present.py:132`), and a
+`dismiss` that reaps exactly it (`present.py:168`). Making that plural is a set
+of pids where there is one -- or a table beside `screen_claims`, which is the
+same refcount shape 040 already built. That part really is a day.
+
+**The cost is not the bookkeeping; it is that two viewers fight over the size.**
+002 and 003 settled that the viewer owns the framebuffer size and asks for it
+continuously: `viewer.html` sets `rfb.resizeSession = true`, so every client
+resizes the one shared output to fit its own window, and asks again whenever
+that window changes. Two viewers of different sizes therefore oscillate --
+each correcting the other, a phone beside a desktop being the worst of it.
+There is one output and one framebuffer, and "several viewers onto the same
+screen" means several clients with conflicting opinions about how big the
+screen is. First-connected-wins, smallest-wins, and a secondary viewer that
+scales locally instead of resizing are all available; picking one *is* this
+option, and picking wrong regresses 002/003, which is the most carefully
+reasoned thing on this map.
+
+**Decision 4 has a wrong answer that looks right.** If `presented()` becomes
+"any recorded viewer is alive", then `handoff.wait_for_dismissal` ends when the
+*last* window closes, so the person watching from the couch holds an agent's
+handoff open after the person who solved the captcha has walked away. Presence
+is a completion signal (018), and only the viewer that was summoned should
+carry it -- which means a second viewer needs to be distinguishable from the
+first, and that is another handle, on a ticket whose decision 3 is already
+worried about handles.
+
+**Left open deliberately.** Nothing here is blocking, and the estimate has
+moved: option 1 is a day of bookkeeping plus a resize policy that has to be
+argued against two closed tickets.
