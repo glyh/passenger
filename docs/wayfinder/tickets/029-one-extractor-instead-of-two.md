@@ -4,7 +4,7 @@ title: One extractor instead of two
 labels: [wayfinder:grilling]
 status: open
 assignee:
-blocked_by: [023]
+blocked_by: [023, 030]
 ---
 
 ## Question
@@ -112,6 +112,13 @@ round trips, which is why Blazor's own renderer batches. And injecting a
 multi-megabyte .NET runtime into the page contradicts the one property the
 whole tool rests on: a session sites cannot distinguish from an ordinary
 browser. Bring the DOM to C#, not C# to the DOM.
+
+**Split out, and takeable now.** Everything in this section is available in
+Python today and needs no C# at all, so it left as [The walker reads a
+snapshot, not the page](030-the-walker-reads-a-snapshot.md). This ticket
+keeps only the question C# does not answer -- whether one mode is
+reachable -- and waits on 030 for the substrate and the fixtures that
+make the moonofalabama experiment cheap.
 
 **The testability is the prize.** `_DOM_JS` cannot be unit tested: it is a
 string of JavaScript that needs a browser, which is why

@@ -217,11 +217,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   rather than a green test run, and only after 021 and 022 have landed —
   025 now has. The build is far larger than one session, so it is not yet
   sliced into tickets. Its second phase has fired: 025 kept `article`, so
-  something in C# has to do what trafilatura does. How large that is, and
-  whether it is C# at all, is [One extractor instead of
+  something in C# has to do what trafilatura does. How large that is is
+  [One extractor instead of
   two](tickets/029-one-extractor-instead-of-two.md) — reimplement rather
-  than port, strong enough that one mode suffices, and a DOM-native
-  algorithm may have to run in the page as JavaScript rather than in C#.
+  than port, strong enough that one mode suffices. Where it runs is no
+  longer open: a `DOMSnapshot` hands every live-DOM fact to ordinary code,
+  so there is no JavaScript in the page and no XPath library to find, and
+  [The walker reads a snapshot, not the
+  page](tickets/030-the-walker-reads-a-snapshot.md) proves that design in
+  Python first.
 
 - **A page can defer content and say nothing.** A page that withholds content
   usually says so, and 016 decided the agent should be the one to notice. But
