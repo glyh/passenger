@@ -220,6 +220,20 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   ICU](tickets/022-drop-icu.md), which inherits the one open question: what a
   `word_count` nothing decides with should count.
 
+- [Drop ICU](tickets/022-drop-icu.md)
+  — the number is `char_count`, `len(text)`, and PyICU is gone with the
+  question it answered. 008 was right for its consumers; both had since been
+  deleted, leaving a dictionary segmenter -- the project's one native
+  dependency -- carried for a display field. Characters are script-independent
+  and track tokens better than words do, which is the caller's real question:
+  the zh.wikipedia fixture reads 9,713 characters against 331 `split()` words.
+  `len(text.split())` under the old name was the one forbidden replacement and
+  the reason now lives on the property. Link targets are counted, since they
+  are in the markdown the caller receives; `ab/text.py` and its tests are gone
+  entirely. The flake stays -- it pins everything, not just the native build --
+  and `uv.lock` went, a second dependency record nothing had read since
+  7f50c99.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made

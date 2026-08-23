@@ -37,6 +37,14 @@ to answer to. Type safety is *not* a motive: strict mypy with
 a stricter contract than the C# port would get for free, and item 2 below
 is about not losing it.
 
+*Updated by [Drop ICU](022-drop-icu.md).* Half of that motive is gone: there
+is no PyICU any more, so "dotnet carries ICU in the BCL" argues for nothing,
+and the Python side has no native dependency left to compile against a host
+library. What survives is the overlay -- two of six dependencies still missing
+or stale in nixpkgs -- which is a smaller claim than the one recorded above.
+Weigh the port on the remaining measurements, not on packaging pain that has
+already been removed.
+
 **Extraction is decided elsewhere, and now is.** [Whether dom alone is
 enough](025-whether-dom-alone-is-enough.md) asked, in Python, whether
 `article` comes out. It does not: `dom` alone is not enough, on a comment
