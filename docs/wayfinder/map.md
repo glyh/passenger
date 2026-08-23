@@ -282,6 +282,20 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   ten fixtures. Read once at import, which also made `pythonImportsCheck`
   catch the file missing from the wheel, as it promptly did.
 
+- [checkVisibility() catches only
+  display:none](tickets/035-checkvisibility-only-catches-display-none.md)
+  — it did, and only one of the three missing options was worth taking. With
+  no arguments the call reports on `display:none` alone, so
+  `visibility:hidden`, `opacity:0` and `content-visibility` had all been
+  leaking into every `dom` read. `visibilityProperty` is now on: it removed two
+  lines of hidden furniture across nine pages and cost nothing.
+  `opacityProperty` is refused on measurement, not caution — scroll-triggered
+  reveal holds below-the-fold content at `opacity: 0` and this tool never
+  scrolls, so apple.com fell from 13,081 characters to 3,761 of real body text,
+  against a gain of three lines of dialog chrome. Furniture surviving is a
+  cost; content vanishing is a lie. `contentVisibilityAuto` changed nothing
+  anywhere and stays untaken.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made

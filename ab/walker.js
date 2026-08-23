@@ -100,11 +100,21 @@
     }
     if (node.nodeType !== 1) return;
     if (OPAQUE.has(node.tagName) || stripped.has(node)) return;
-    // Narrower than it looks: with no arguments this reports on `display:none`
-    // and nothing else, so `visibility:hidden`, `opacity:0` and
-    // `content-visibility` all pass through. Measured, and left alone here --
-    // widening it changes what every page returns, which is ticket 035.
-    if (node.checkVisibility && !node.checkVisibility()) return;
+    // `visibilityProperty` is opted into; the other two options are not, and
+    // that asymmetry is measured rather than cautious (ticket 035).
+    //
+    // With no arguments at all this reports on `display:none` and nothing
+    // else, which is not what the call looks like it does. Adding
+    // `visibilityProperty` drops hidden furniture and cost nothing on nine
+    // pages. Adding `opacityProperty` is the one that must not be taken:
+    // scroll-triggered reveal holds below-the-fold content at `opacity: 0`
+    // until the reader arrives, and this tool never scrolls, so apple.com
+    // went from 13,081 characters to 3,761 -- real body text, not chrome, for
+    // a gain of three lines of dialog furniture elsewhere.
+    // `contentVisibilityAuto` changed nothing anywhere it was tried, and the
+    // page picked to exercise it returned nothing at all, so it is untested
+    // rather than safe.
+    if (node.checkVisibility && !node.checkVisibility({visibilityProperty: true})) return;
 
     const raw = node.tagName === 'A' ? (node.getAttribute('href') || '') : '';
     // node.href resolves against the document, which is the point -- but it

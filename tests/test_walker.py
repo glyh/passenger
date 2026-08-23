@@ -287,27 +287,32 @@ def test_a_code_block_is_fenced_with_its_indentation_intact(page):
     assert "    return x + 1" in text.splitlines()
 
 
-def test_display_none_is_filtered_and_nothing_else_is(page):
-    """What `checkVisibility()` actually does, which is less than it looks.
+def test_display_none_and_visibility_hidden_go_but_opacity_stays(page):
+    """What `checkVisibility()` filters, and the one option deliberately refused.
 
-    Ticket 025 recorded `dom` correctly dropping gmw's hidden WeChat share
-    overlay where trafilatura swallowed it, and that difference is part of why
-    025 kept both extractors. The mechanism is narrower than the name suggests:
-    called with no arguments, `checkVisibility()` defaults `visibilityProperty`,
-    `opacityProperty` and `contentVisibilityAuto` all to false, so it reports
-    only `display:none`. The other three hiding mechanisms leak into the
-    extraction today -- measured, not assumed -- and this test pins that
-    rather than wishing otherwise. Widening it changes what every page
-    returns, so it is ticket 035's to measure, not this one's to slip in.
+    Ticket 025 recorded `dom` dropping gmw's hidden WeChat share overlay where
+    trafilatura swallowed it, and that difference is part of why 025 kept both
+    extractors. The mechanism turned out to be narrower than its name: called
+    with no arguments, `checkVisibility()` defaults `visibilityProperty`,
+    `opacityProperty` and `contentVisibilityAuto` to false, so it reported only
+    `display:none` and three hiding mechanisms leaked (ticket 035).
+
+    `visibilityProperty` is now on. `opacityProperty` is not, and that is the
+    measurement rather than caution: scroll-triggered reveal holds
+    below-the-fold content at `opacity: 0` until a reader arrives, and this
+    tool never scrolls -- apple.com fell from 13,081 characters to 3,761, real
+    body text, against a gain of three lines of dialog chrome elsewhere. So
+    opacity staying visible is the deliberate choice, and this pins it.
     """
     page.set_content(
         "<body><main>" + FILLER
         + "<p style='display:none'>Hidden by display</p>"
         "<p style='visibility:hidden'>Hidden by visibility</p>"
-        "<p style='opacity:0'>Hidden by opacity</p>"
+        "<p style='opacity:0'>Faded out but present</p>"
         "</main></body>")
     text = dom_text(page)
     assert "Hidden by display" not in text
-    # Not an endorsement. See the docstring and ticket 035.
-    assert "Hidden by visibility" in text
-    assert "Hidden by opacity" in text
+    assert "Hidden by visibility" not in text
+    # Deliberate. See the docstring and ticket 035; opacity is not a hiding
+    # mechanism this tool can distinguish from an unfinished animation.
+    assert "Faded out but present" in text
