@@ -4,7 +4,7 @@ title: Remove auto mode
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: [025]
+blocked_by: [025, 028]
 ---
 
 ## Question
@@ -66,6 +66,12 @@ To decide:
    argument is gone. So: does `word_count` stay a word count, become a
    character count, or stop being reported? `unlinked` exists only for
    measuring and follows whatever this decides.
+
+   **Also blocked on [The root heuristic picks a
+   decoy](028-the-root-heuristic-picks-a-decoy.md).** `auto` is what currently
+   hides that bug: it measures `dom` at 11 words on americanthinker, under
+   `_MIN_COMPARABLE_WORDS`, and returns `article` instead. Remove `auto` with
+   the root still broken and the failure stops being conditional.
 
    **Decided: the dependency comes out.** Carried as [Drop
    ICU](022-drop-icu.md), which this blocks, so that the auto removal

@@ -166,6 +166,8 @@ was supposed to read badly it read fine. The verdict splits by *why* each
 failure happens, and the two halves have different answers.
 
 1. **Split the root heuristic out as its own ticket, and rank it above 021.**
+   Filed as [The root heuristic picks a
+   decoy](028-the-root-heuristic-picks-a-decoy.md), which now blocks 021.
    `_ROOTS` is a six-entry tuple taking the first match over 40 chars, and on
    americanthinker that is a live bug today, in `dom` mode, independent of
    this ticket, of 021 and of 023. Candidate rule: among *all* matching
