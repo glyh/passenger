@@ -44,16 +44,21 @@ Two things differ from the CLI, both deliberate:
   again -- the profile kept the result. `wait_seconds` opts into blocking.
 - **The daemon starts on demand.** A human runs `serve` first; an agent should
   not have to know that.
-- **`show_browser` is also how an agent asks for a human deliberately.** Only
-  the vendors in the signature table come back as `blocked`; a login wall or a
-  challenge nobody has a signature for arrives as thin content, and the agent
-  reading it can see perfectly well what it is. `show_browser(tab, wait_seconds,
-  notify_human)` brings that tab to the front, optionally goes and finds
-  someone, and waits -- until they *close the viewer*, which is the only
-  "done" signal this side can observe without ruling on the page. It never
-  says whether the challenge was solved. Read the tab afterwards with
-  `script` and judge. The CLI has none of this on purpose: there, the caller
-  is the human.
+- **`show_browser` exists at all.** The CLI has nothing like it on purpose:
+  there, the caller is already the human. Over MCP the caller is not, so
+  summoning one is a tool. It waits until they *close the viewer*, which is
+  the only "done" signal this side can observe without ruling on the page.
+
+**Operating knowledge for the agent lives in `skills/using-agent-browser`,**
+not in the tool docstrings, which carry the call contract and stop there. That
+skill is the one place that says what `blocked` does not catch, how to
+recognise a wall this side cannot name, that a fetch is only the first screen,
+and why reading a page beats driving it. It is shipped from this repo and
+symlinked into the agent's skill directory, so it sits beside the code it
+describes. Six skills in the owner's notes had each hand-copied a paragraph of
+it before that existed; ticket 032 has the reasoning, and the rule that came
+out of it -- the tool reports what it measured, the skill holds what to look
+for.
 
 ## Layout
 
@@ -74,6 +79,8 @@ lives in the shell.
             config.py    the AGENT_BROWSER_* env boundary
             cli.py       cyclopts; the only place a failure becomes terminal output
             mcp_server.py  the MCP frontend over the same service layer
+
+    skill   skills/using-agent-browser/SKILL.md   how an agent operates this
 
 Detection is pure because the shell measures first: `probe.probe()` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,

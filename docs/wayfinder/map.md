@@ -44,7 +44,7 @@ remembers](tickets/019-the-tool-does-not-learn.md).
 **The tool measures; the skill judges.** The tool reports what it *measured* --
 a fraction of the viewport, a character count, a vendor's own markup -- and
 never rules on what a page *means*. Recognition patterns and heuristics live
-in the `agent-browser` skill, where a caller reads them, rather than in a table
+in the `using-agent-browser` skill, where a caller reads them, rather than in a table
 this side matches. Four mechanisms have now been deleted for crossing that line
 (a yield floor, a `min_words` tier, a learned signature registry, a wall hint);
 `BUILTIN` stays, because a vendor either serves that markup or does not. See [A
@@ -321,7 +321,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 - [Six skills restate the server
   instructions](tickets/032-skills-restate-the-instructions.md)
-  — one `agent-browser` skill shipped from this repo holds the operating
+  — one `using-agent-browser` skill shipped from this repo holds the operating
   knowledge, and the docstrings are cut to the call contract rather than
   mirrored. The defensive reason for the copying turned out not to exist: two
   probes found no context where a docstring arrives but the server
@@ -344,6 +344,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   holds what to look for. It stops at `BUILTIN` — a vendor's own markup is a
   fixed fact, and taking the rule further would delete the `blocked` outcome
   and the handoff with it. The wall phrases move into the skill as examples.
+
+- [One skill for this server, and docstrings cut to the
+  contract](tickets/036-one-skill-for-this-server.md)
+  — `skills/using-agent-browser/SKILL.md` ships from this repo and is
+  symlinked into the agent's skill directory; `fetch` lost four paragraphs,
+  `show_browser` three, and the `instructions` block went from 1,400
+  characters to a pointer. Field descriptions and the CLI are untouched. One
+  sentence of prose stayed — `show_browser` is how you ask for a human
+  deliberately — because when a tool applies is contract, not operating
+  knowledge. The README was carrying the same paragraph and was trimmed the
+  way 019 trimmed it before, which made it the third copy found, not the
+  seventh.
 
 ## Fog
 

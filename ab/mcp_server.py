@@ -11,6 +11,15 @@ the tool design:
 
 2. The daemon starts on demand. A human runs `serve` first; an agent should
    not have to know that.
+
+The docstrings here carry the *call contract* and nothing else. Operating
+knowledge -- what `blocked` misses, how to recognise a wall, that a fetch is
+one screen -- lives in the `using-agent-browser` skill, shipped from this repo
+under `skills/`. It used to live here too, and six skills in the owner's notes
+had hand-copied it by the time anyone noticed; ticket 032 found that a
+docstring and these instructions arrive on the same event, so a second copy
+here buys nothing and drifts. Field descriptions are not part of that cut:
+`mode`'s is 021's replacement for deleted code, and it stays.
 """
 from typing import Annotated
 
@@ -29,20 +38,10 @@ server = MCPServer(
         "distinguish from an ordinary browser. Use this instead of a plain "
         "HTTP fetch when a page needs a login, is behind anti-bot protection, "
         "or renders its content with JavaScript.\n\n"
-        "If a fetch returns type='blocked', a human must solve a challenge: "
-        "tell the user what is blocking, then use `show_browser` with the "
-        "tab from that reply to put it in front of them. Solve nothing "
-        "yourself. Only known vendors come back as 'blocked' -- when a page "
-        "instead reads as a login wall or a challenge you recognise, "
-        "`show_browser` is how you ask for a human anyway.\n\n"
-        "For anything a plain fetch cannot reach -- a search box, a tab, the "
-        "next page of a list -- use `script`, which runs Playwright code "
-        "against a real tab. Prefer reading over driving: after a human has "
-        "navigated, `script` with the tab they used costs nothing and is "
-        "invisible to the site, whereas synthetic clicks and fills have no "
-        "cursor path and no keystroke timing, which is what behavioural "
-        "anti-bot systems score. Driving spends the reputation of a session "
-        "whose value is that it has never done anything unusual."
+        "How to operate it -- what `blocked` does and does not catch, "
+        "recognising a wall it cannot name, why a fetch is only the first "
+        "screen, and why reading beats driving -- is the "
+        "`using-agent-browser` skill. Load it before the first call."
     ),
 )
 
@@ -75,29 +74,6 @@ def fetch(
 
     Returns either the page content, or a 'blocked' record naming what is in
     the way and how a human can clear it.
-
-    This is goto, settle, read. Anything the page defers until a reader
-    scrolls or clicks is not in the result, and nothing here will tell you so
-    -- the page looks complete because it is complete, for a reader who never
-    moved. Before concluding you have a whole comment section or a whole
-    listing, look in the markdown for the page's own account of what it kept
-    back: a stated total, an expander, a pager. Reaching the rest is `script`.
-
-    What is in a picture is not in the markdown and never was, so a page whose
-    answer lives in a photograph, a menu board or a chart reads as a short
-    page rather than a truncated one. `largest_image` is the biggest thing the
-    page renders that is not text, as a share of the window: 0.0 on a docs
-    page, 0.10 on an illustrated article, 0.27 on a comic, 0.38 on a
-    three-photo note, above 1.0 on a marketing hero. Read it against
-    `char_count` -- a large picture and little text is the case worth acting
-    on -- and reach the picture itself with `script`, either
-    `page.request.get(largest_image_src)` or, when that is a selector rather
-    than a URL, `page.locator(largest_image_src).screenshot(path=...)`.
-
-    This tool recognises a fixed table of challenge vendors and nothing else,
-    and it learns nothing between calls. A wall it cannot name arrives as
-    ordinary content -- yours to recognise, and yours to remember, because
-    nothing on this side will remember it for you.
     """
     _ensure_daemon()
     request = FetchRequest(
@@ -172,18 +148,9 @@ def show_browser(
 ) -> str:
     """Put the browser on screen so the user can log in or solve a challenge.
 
-    Also the way to ask for a human deliberately. A `blocked` reply means a
-    known vendor was recognised, but plenty of walls are not in that table:
-    if a page comes back as thin content that plainly says "verify you are
-    human", or wants a login, you have seen enough -- call this with that
-    tab and a wait, tell the user what is in the way, and read the tab again
-    with `script` afterwards.
-
-    The wait ends when the human closes the viewer window, or the budget runs
-    out; it says which. It never inspects the page, so it cannot tell you
-    whether the challenge was solved -- read the tab and judge for yourself.
-    Whatever you learn about the site is worth remembering; this tool will
-    not remember it for you.
+    Also how you ask for a human deliberately, not only in answer to a
+    `blocked` reply. Never inspects the page: the wait ends when the human
+    closes the viewer, and it says which.
     """
     _ensure_daemon()
     if tab is not None:

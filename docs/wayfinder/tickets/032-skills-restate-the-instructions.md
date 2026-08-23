@@ -128,7 +128,7 @@ repo's to solve.
 
 ## Answer
 
-**Point 6, and the docstrings go with it.** One `agent-browser` skill,
+**Point 6, and the docstrings go with it.** One `using-agent-browser` skill,
 shipped from this repo, holds the operating knowledge; the six vault skills
 carry only what is theirs and link to it by name; the tool docstrings are cut
 to the call contract and the server `instructions` block shrinks to a pointer.
@@ -174,7 +174,7 @@ process, but this is testimony rather than a wire capture.
 
 ### Where it lives
 
-`skills/agent-browser/` in this repo, symlinked into `~/.agents/skills/` --
+`skills/using-agent-browser/` in this repo, symlinked into `~/.agents/skills/` --
 the arrangement seven skills on this machine already use
 (`efficient-text-process`, `ocaml-alcotest`, `safe-git-rebase` and the rest
 are symlinks into `~/pullground/my-skills`). The ticket's worry about a
