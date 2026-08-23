@@ -3,7 +3,7 @@ id: 029
 title: One extractor instead of two
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
