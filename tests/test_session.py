@@ -1,0 +1,222 @@
+"""The session record and its process predicates.
+
+Every test here is a scar. Commit 5275197 fixed a stale `wayvnc` serving a
+dead compositor while every status read healthy -- a black screen with nothing
+reporting a fault -- and two bugs surfaced by hand during that work:
+`os.kill(pid, 0)` counting zombies as alive, and the VNC port drifting upward
+on every restart because SIGTERM is asynchronous. Neither would have been
+caught by review, and until now nothing stopped either returning.
+
+These run against real processes rather than fixture text. `_alive` reads
+`/proc/<pid>/stat`, and a `true` that nobody reaped is a zombie in about
+200ms -- so the thing under test is the actual read and the actual parse,
+not a seam holding a string somebody typed. `true` and `sleep` are not
+cage, wayvnc and Chrome: nothing here starts the real stack.
+
+State is redirected in conftest.py, which is load-bearing -- see the note
+there about what `teardown()` would otherwise do to a live session.
+"""
+import os
+import signal
+import socket
+import subprocess
+import sys
+import time
+import uuid
+
+import pytest
+
+from ab import session
+from ab.config import settings
+
+
+def _state(pid: int) -> str:
+    """The process state letter, read without disturbing it."""
+    return open(f"/proc/{pid}/stat").read().rpartition(")")[2].split()[0]
+
+
+@pytest.fixture
+def zombie():
+    """A pid that is exited-but-unreaped, which is what Chrome leaves in cage.
+
+    Deliberately never polled: `Popen.poll` waits on the child, and a reaped
+    child is not a zombie -- so polling for readiness would quietly destroy
+    the thing under test. The state letter is read straight out of /proc
+    instead.
+    """
+    child = subprocess.Popen(["true"])
+    for _ in range(200):
+        time.sleep(0.01)
+        if _state(child.pid) == "Z":
+            break
+    else:
+        child.kill(); child.wait(); pytest.fail("no zombie to test with")
+    yield child.pid
+    child.wait()
+
+
+@pytest.fixture
+def running():
+    child = subprocess.Popen(["sleep", "30"])
+    yield child.pid
+    child.kill()
+    child.wait()
+
+
+def _record(**overrides) -> session.NestedSession:
+    fields = dict(cage_pid=os.getpid(), chrome_pid=os.getpid(),
+                  vnc_pid=os.getpid(), vnc_host=settings.vnc_host,
+                  vnc_port=settings.vnc_port,
+                  ctl_socket=session.ctl_socket(settings.vnc_port),
+                  wayland_display="wayland-test")
+    return session.NestedSession(**{**fields, **overrides})
+
+
+def _write(record: session.NestedSession) -> None:
+    session.SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    session.SESSION_FILE.write_text("\n".join(
+        f"{key}={value}" for key, value in record.model_dump(mode="json").items()))
+
+
+# --- _alive ------------------------------------------------------------
+
+def test_a_zombie_does_not_count_as_alive(zombie):
+    """The bug: os.kill(pid, 0) succeeds on an unreaped child, so a session
+    whose Chrome had died inside cage reported itself live, and the viewer
+    showed a black screen with every status agreeing it was fine.
+    """
+    os.kill(zombie, 0)  # the old check -- still passes, which is the point
+    assert session._alive(zombie) is False
+
+
+def test_a_running_process_is_alive(running):
+    assert session._alive(running) is True
+
+
+def test_a_pid_that_is_not_there_is_not_alive():
+    assert session._alive(2**22) is False
+
+
+# --- the port ----------------------------------------------------------
+
+def test_free_port_takes_the_configured_port_when_nothing_holds_it():
+    assert session.free_port() == settings.vnc_port
+
+
+def test_free_port_steps_over_a_port_someone_else_holds():
+    """Scanned rather than fixed so a second session -- or anyone else's
+    wayvnc -- cannot silently take the port this one is about to advertise.
+    """
+    with socket.socket() as held:
+        held.bind((settings.vnc_host, settings.vnc_port))
+        held.listen()
+        assert session.free_port() == settings.vnc_port + 1
+
+
+def test_teardown_gives_the_port_back_before_it_returns():
+    """The port-drift regression, asserted on the port rather than on the pids.
+
+    SIGTERM is asynchronous. A teardown that fired and forgot left the old
+    listener holding the port, so the session started immediately afterwards
+    quietly claimed a different one and the port climbed on every restart.
+
+    The child dies *slowly* on purpose: against one that exits instantly this
+    test would pass even if `_stop_all` never waited at all, and would be
+    green for the wrong reason.
+    """
+    slow = subprocess.Popen([
+        sys.executable, "-c",
+        "import socket, signal, sys, time\n"
+        "s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()\n"
+        "signal.signal(signal.SIGTERM, lambda *_: (time.sleep(0.5), sys.exit(0)))\n"
+        "time.sleep(30)\n",
+        settings.vnc_host, str(settings.vnc_port)])
+    for _ in range(200):          # wait until it really holds the port
+        time.sleep(0.01)
+        if session.free_port() != settings.vnc_port:
+            break
+    else:
+        slow.kill(); pytest.fail("child never took the port")
+
+    try:
+        session._stop_all(_record(vnc_pid=slow.pid, cage_pid=slow.pid))
+        assert session.free_port() == settings.vnc_port
+    finally:
+        if slow.poll() is None:
+            slow.kill()
+        slow.wait()
+
+
+# --- the record --------------------------------------------------------
+
+def test_a_malformed_record_reads_as_absent():
+    """The caller's next move is to start a fresh session either way, so a
+    half-written record must not raise on the way past.
+    """
+    session.SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+    session.SESSION_FILE.write_text("cage_pid=1\nnot a pair\nvnc_port=")
+    try:
+        assert session.current() is None
+    finally:
+        session.SESSION_FILE.unlink(missing_ok=True)
+
+
+def test_a_session_whose_chrome_is_gone_is_not_live(zombie, running):
+    """The black screen, exactly: cage and wayvnc still up, Chrome dead.
+
+    `alive` is keyed on Chrome because cage outliving it is the stale state
+    the record exists to detect.
+    """
+    _write(_record(chrome_pid=zombie, cage_pid=running, vnc_pid=running))
+    try:
+        assert session.current() is not None
+        assert session.live() is None
+    finally:
+        session.SESSION_FILE.unlink(missing_ok=True)
+
+
+# --- the viewer --------------------------------------------------------
+
+def test_viewer_pid_is_keyed_on_the_pid_not_the_name(running):
+    """So a VNC client the user opened for something else is never mistaken
+    for ours, in either direction.
+    """
+    session.record_viewer(running)
+    assert session.viewer_pid() == running
+    session.clear_viewer()
+    assert session.viewer_pid() is None
+
+
+def test_a_viewer_that_died_is_not_reported(zombie):
+    session.record_viewer(zombie)
+    try:
+        assert session.viewer_pid() is None
+    finally:
+        session.clear_viewer()
+
+
+def test_pids_running_matches_on_the_command_line():
+    """Matched on argv, so the fragment has to be unique to this run.
+
+    A literal like "nothing-runs-with-this" is not: it appears in this file,
+    and therefore in the argv of any shell that was handed this file's text --
+    which is how the first draft of this test failed against the process that
+    wrote it.
+    """
+    tag = f"agent-browser-test-{uuid.uuid4().hex}"
+    child = subprocess.Popen(
+        [sys.executable, "-c", f"import time; time.sleep(30)  # {tag}"])
+    try:
+        # Waited for rather than asserted immediately: between fork and exec
+        # the child's cmdline is not yet its own, so reading /proc straight
+        # away is a race. It happens to win on a fast machine and loses in
+        # the nix sandbox, which is the worst way round to find out.
+        for _ in range(200):
+            if child.pid in session.pids_running(tag):
+                break
+            time.sleep(0.01)
+        assert child.pid in session.pids_running(tag)
+        assert session.pids_running(f"absent-{uuid.uuid4().hex}") == []
+    finally:
+        child.kill()
+        child.wait()

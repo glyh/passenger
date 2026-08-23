@@ -100,6 +100,30 @@
           '';
         };
 
+        # `nix flake check` runs the suite against the pinned interpreter, so
+        # "did I break it" is one command from a clean checkout -- there is no
+        # remote and no CI to hold that. Kept out of packages.default's
+        # checkPhase deliberately: these tests spawn processes and bind a
+        # loopback port, and an environment fault should read as a failing
+        # check rather than an unbuildable package.
+        checks.default = pkgs.runCommand "agent-browser-tests"
+          {
+            nativeBuildInputs = [
+              (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
+            ];
+          }
+          ''
+            cd ${source}
+            # HOME is unset in the sandbox, and Settings' state_dir defaults to
+            # a path under it. conftest.py overrides that anyway; this keeps
+            # import time from failing before conftest gets to run.
+            export HOME=$TMPDIR
+            # The source is a read-only store path; without this pytest
+            # warns twice about a cache directory it cannot create.
+            pytest -q -p no:cacheprovider
+            touch $out
+          '';
+
         # A real derivation. The closure describes every dependency, so this
         # builds and runs with no network and no compiler. It used to be a
         # shell script that called `uv run`, which resolved the Python side at
@@ -116,8 +140,10 @@
 
           nativeBuildInputs = [ pkgs.makeWrapper ];
 
-          # No test suite yet (ticket 001). Import-checking both entry points
-          # is the cheapest thing that still catches a missing dependency.
+          # The suite lives in `nix flake check`, not here -- it spawns
+          # processes and binds a port, and packaging should not fail on that.
+          # Import-checking both entry points still catches a missing
+          # dependency, which is what this stage is for.
           doCheck = false;
           pythonImportsCheck = [ "ab.cli" "ab.mcp_server" ];
 

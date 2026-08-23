@@ -3,7 +3,7 @@ id: 023
 title: Whether this moves to C#
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
