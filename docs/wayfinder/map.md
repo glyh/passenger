@@ -115,13 +115,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   questions about everyone's markdown, and stop being asked.
 
 - [Only the first screen exists](tickets/015-only-the-first-screen-exists.md)
-  — say it from the text already returned. The page prints `共 153 条评论` and
-  five `展开 N 条回复`, and the extraction already contains every one of them,
-  so the hedge is a pure function over a string this project produced rather
-  than a second look at the page. Numbered markers only: bare "load more" is
-  furniture on the Rust blog and on BBC. Scrolling once to see whether the page
-  grew was rejected — it points at the wrong content on a note, and it makes
-  every read a driving act.
+  — the page says how much it withheld (`共 153 条评论`, five `展开 N 条回复`)
+  and the extraction already contains every one of those strings. Scrolling
+  once to see whether the page grew was rejected: it points at the wrong
+  content on a note, and it makes every read a driving act.
+- [The result says what it did not reach](tickets/016-the-result-says-what-it-missed.md)
+  — and then nothing was built, because 015's own finding kills it. If the
+  markers are in the markdown the caller holds, reading them is the caller's
+  job; a per-language regex table is a worse recognizer than the agent it would
+  serve. The problem was attention, not information, and the remedy is a
+  sentence in the agent's memory rather than machinery here. Revisit only if
+  output is ever capped, since markers can then fall outside what the caller
+  receives.
 
 - [The extract mode decides whether a page counts as blocked](tickets/005-mode-decides-blocked.md)
   — the tier is gone, not fixed. A signature match is a positive claim made from
@@ -147,8 +152,9 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 ## Fog
 
-- **A page can defer content and say nothing.** 015's signal only speaks
-  when the page does. The xiaohongshu listing — 22 notes where 619 exist —
+- **A page can defer content and say nothing.** A page that withholds content
+  usually says so, and 016 decided the agent should be the one to notice. But
+  the xiaohongshu listing — 22 notes where 619 exist —
   carries no marker at all, and neither does a plain infinite scroller; both
   are reachable by `script` and invisible to anything cheaper. Scrolling once
   and measuring whether the document grew *does* catch them (+51% and +214%

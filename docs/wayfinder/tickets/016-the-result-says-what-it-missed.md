@@ -2,8 +2,8 @@
 id: 016
 title: The result says what it did not reach
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -53,3 +53,45 @@ To decide while building:
    rather than embarrassing.
 4. Whether `word_count` should be joined by the count of markers, or
    whether the list standing alone is enough.
+
+## Answer
+
+No. Not built, and the reasoning is the same test that closed [The
+extract mode decides whether a page counts as
+blocked](005-mode-decides-blocked.md): **does the tool know anything the
+caller does not?**
+
+Here it does not. `共 153 条` and all five `展开 N 条回复` are in the
+markdown `fetch` already returns -- that was the finding this ticket was
+built on, and taken one step further it is the argument against the
+ticket. The caller is holding the evidence. Summing five integers is not
+a capability. A pure function over `Extraction.text` would be this layer
+computing, on the caller's behalf, something the caller can see.
+
+It would also do it *worse*. The design called for a table of marker
+patterns per language, and admitted up front that the table would never
+be complete. An agent reading `展开 23 条回复` knows what it means, and
+knows the Vietnamese and the Hebrew too, with no table and no
+maintenance. Encoding the recognition into regexes replaces a good
+recognizer with a poor one and pays upkeep for the privilege.
+
+What the ticket was really solving was **attention, not information**:
+the agent has the string and does not look at it. The remedy for that is
+a sentence, not machinery, and it belongs where [The tool does not learn;
+the agent remembers](019-the-tool-does-not-learn.md) says it belongs --
+with the agent. Recorded there rather than here.
+
+### What would bring it back
+
+One thing, and it is on the map already: nothing bounds the size of a
+fetch, and one Hacker News thread measured 462,337 characters. If output
+is ever capped or summarised, the markers can fall outside what the
+caller receives -- and then computing over the full text *before* the cut
+is genuinely privileged, because the caller can no longer see what the
+tool saw. Whatever answers the map's unbounded-output patch should decide
+this in the same breath.
+
+The measurements stand regardless: [Saying what a fetch did not
+reach](../assets/015-deferred-content-findings.md) is what makes the
+guidance specific rather than vague, and what proves the growth probe was
+the wrong default.

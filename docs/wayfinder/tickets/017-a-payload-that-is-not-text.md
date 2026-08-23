@@ -4,19 +4,25 @@ title: A payload that is not text
 labels: [wayfinder:grilling]
 status: open
 assignee:
-blocked_by: [016]
+blocked_by: []
 ---
 
 ## Question
 
-Graduated from the map's Fog, which
-[Only the first screen exists](015-only-the-first-screen-exists.md) made
-specifiable: it established that a result *can* carry a channel saying
-what it did not reach, and that the honest form of such a channel quotes
-evidence rather than rendering a verdict.
+Graduated from the map's Fog. It was first written as the second half of
+[The result says what it did not reach](016-the-result-says-what-it-missed.md),
+inheriting a channel from it -- but 016 was closed unbuilt, and this
+question is *stronger* without it rather than orphaned.
 
-The open half is whether the same channel should speak for content that
-is not text at all. A plain `fetch` cannot distinguish "there is nothing
+The reason is the test that closed 016. There the tool knew nothing the
+caller did not: the markers saying content was withheld were sitting in
+the markdown the caller already held. Here that is not true. The caller
+receives text. A photograph is not in it, was never in it, and no amount
+of reading the result will reveal that the price list was in the picture.
+This is the one place in this area where the tool holds something the
+caller structurally cannot see.
+
+So the question is whether it should say so. A plain `fetch` cannot distinguish "there is nothing
 here" from "what is here is not words": a video note returns its player
 furniture and its comments, and a 图文 note returns a real paragraph that
 omits the price list living in the photograph. `script` is the cure --
@@ -24,12 +30,15 @@ omits the price list living in the photograph. `script` is the cure --
 page](014-content-that-lives-in-pictures.md) measured it -- but only for
 a caller who already suspects, and nothing tells them to.
 
-Note the asymmetry with 015, which is the reason this is its own
-question. Deferred content announces itself: the page prints `展开 23
-条回复` in the text we already hold. A photograph announces nothing. The
-evidence would have to be *counted* off the page -- images, videos, their
-sizes -- which is a measurement, not a quotation, and it is a measurement
+The asymmetry with 015 is the whole of it. Deferred content announces
+itself, in text we hand over. A photograph announces nothing. So the
+evidence cannot be quoted, only *counted* off the page -- images, videos,
+their sizes -- which is a measurement rather than a quotation, and one
 with no natural threshold. Every page has images.
+
+That cuts both ways and is why this is a grilling rather than a task.
+Privileged information is a reason to speak; a count with no threshold is
+a reason to expect the speaking to be noise.
 
 To decide:
 
@@ -40,6 +49,8 @@ To decide:
    the article extractor kept 40 words off a page whose main element is a
    carousel says more than an image count would.
 3. Whether the answer is "nothing at all". 014 closed by deciding the
-   cure was enough and the warning was not worth building; this asks
-   whether 016's channel changes that arithmetic, since the cost of
-   speaking is now much lower than it was when 014 said no.
+   cure was enough and the warning was not worth building, and 016 has
+   since closed unbuilt on a related question -- so the burden here is to
+   show why this one is different. The argument that it is: 014 and 016
+   both concerned things the caller could reach or read for itself, and
+   this does not.

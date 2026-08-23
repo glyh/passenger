@@ -165,5 +165,10 @@ says nothing either. For those, `script` remains the whole answer, and
 the tool stays quiet rather than guessing. That gap is now named in the
 map's Fog instead of being invisible.
 
-Built as [The result says what it did not
-reach](016-the-result-says-what-it-missed.md).
+Not built. [The result says what it did not
+reach](016-the-result-says-what-it-missed.md) took this answer one step
+further and it does not survive the step: if the markers are already in
+the markdown the caller holds, then reading them is the caller's job, and
+a per-language regex table is a worse recognizer than the agent it would
+be serving. What stands is the measurement -- and the guidance, which now
+lives with the agent rather than in this layer.
