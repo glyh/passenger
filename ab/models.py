@@ -6,7 +6,6 @@ once, at the edge. Nothing downstream sees a raw dict.
 """
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -109,27 +108,17 @@ class PageProbe(BaseModel, frozen=True):
     matched_selectors: frozenset[str] = frozenset()
 
 
-class KnownBlocker(BaseModel, frozen=True):
-    type: Literal["known"] = "known"
+class Blocker(BaseModel, frozen=True):
+    """A signature matched this page, so a human is genuinely required.
+
+    Was `KnownBlocker`, against a `NovelBlocker` that meant only "this page
+    had fewer words than a number I was handed". That second kind is gone
+    (ticket 005), and with one kind left the distinguishing adjective is
+    noise -- as is the discriminator that let a union be told apart.
+    """
+
     signature: Signature
     probe: PageProbe
-
-
-class NovelBlocker(BaseModel, frozen=True):
-    """Nothing matched, but the page yielded too little to be real content."""
-
-    type: Literal["novel"] = "novel"
-    probe: PageProbe
-
-
-Blocker = KnownBlocker | NovelBlocker
-
-
-class Evidence(BaseModel, frozen=True):
-    probe: PageProbe
-    iframe_srcs: tuple[str, ...] = ()
-    visible_text: tuple[str, ...] = ()
-    screenshot: Path | None = None
 
 
 class Extraction(BaseModel, frozen=True):
@@ -138,11 +127,11 @@ class Extraction(BaseModel, frozen=True):
 
     @property
     def word_count(self) -> int:
-        """How much the page *said*, which is what `min_words` asks.
+        """How much the page *said*, which is what `choose` weighs.
 
         Link targets are stripped first: they are markup, and counting them
-        would let a nav bar's worth of hrefs lift a gutted page over the
-        threshold that decides it was blocked.
+        would let a nav bar's worth of hrefs stand in for content the article
+        extractor actually kept.
         """
         return count_words(unlinked(self.text))
 
@@ -152,7 +141,6 @@ class FetchRequest(BaseModel, frozen=True):
     extract_mode: ExtractMode = ExtractMode.AUTO
     wait_until: WaitUntil = WaitUntil.DOM_CONTENT_LOADED
     settle_ms: int = Field(default=1500, ge=0)
-    min_words: int = Field(default=80, ge=0)
     allow_handoff: bool = True
     reuse_tab: bool = True
     keep_tab: bool = False
@@ -175,7 +163,6 @@ class ScriptRequest(BaseModel, frozen=True):
     # continues a sequence, or picks up the tab a human just navigated.
     tab: str | None = None
     extract_mode: ExtractMode = ExtractMode.AUTO
-    min_words: int = Field(default=80, ge=0)
     # A sequence that pages a listing should not pay a full read per step.
     read_page: bool = True
     timeout_s: int = Field(default=60, ge=1)

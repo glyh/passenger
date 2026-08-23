@@ -42,26 +42,6 @@ def listing() -> tuple[Signature, ...]:
     return BUILTIN + tuple(load().learned)
 
 
-def _condition_key(signature: Signature) -> tuple[str | None, str | None, str | None]:
-    """What the signature matches on, ignoring its generated name and stamp."""
-    return (signature.selector, signature.title_re, signature.url_re)
-
-
-def remember(signature: Signature) -> None:
-    """Store a proposal, unless an equivalent one is already on file.
-
-    Dedup is on the *condition*, not the name: names carry a timestamp, so
-    comparing them would file a fresh duplicate on every encounter with the
-    same page.
-    """
-    registry = load()
-    key = _condition_key(signature)
-    if any(_condition_key(s) == key for s in registry.learned):
-        return
-    registry.learned.append(signature)
-    save(registry)
-
-
 def approve(name: str) -> Signature:
     registry = load()
     for index, signature in enumerate(registry.learned):
@@ -84,5 +64,5 @@ def forget(name: str) -> None:
     save(registry)
 
 
-__all__ = ["load", "save", "active", "listing", "remember", "approve", "forget",
+__all__ = ["load", "save", "active", "listing", "approve", "forget",
            "AgentBrowserError"]

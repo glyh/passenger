@@ -8,8 +8,7 @@ import re
 from typing import assert_never
 from urllib.parse import urlparse
 
-from .models import (Blocker, Evidence, KnownBlocker, NovelBlocker, PageProbe,
-                     Signature, SignatureKind)
+from .models import Blocker, PageProbe, Signature, SignatureKind
 
 BUILTIN: tuple[Signature, ...] = (
     Signature(name="cloudflare-interstitial",
@@ -51,68 +50,22 @@ def matches(signature: Signature, probe: PageProbe) -> bool:
     return True
 
 
-def classify(probe: PageProbe, signatures: tuple[Signature, ...],
-             min_words: int) -> Blocker | None:
-    """Tier 1 then tier 2. None means the page looks like real content."""
+def classify(probe: PageProbe,
+             signatures: tuple[Signature, ...]) -> Blocker | None:
+    """A signature matched, or nothing did. None means the page is real content.
+
+    There used to be a second tier: a page whose word count fell below
+    `min_words` was reported as an unrecognised blocker. It was removed in
+    ticket 005 because it was a verdict with no privileged information behind
+    it. Its entire evidence was a number the caller already had, on
+    `Fetched.word_count` -- and worse, that number came from whichever
+    extraction the caller's `mode` happened to produce, so the same page came
+    back as content or as blocked depending on a presentation choice.
+
+    A signature match is a positive claim this tool can defend, made from
+    things the caller cannot see. A short page is the caller's to judge.
+    """
     for signature in signatures:
         if matches(signature, probe):
-            return KnownBlocker(signature=signature, probe=probe)
-    if probe.word_count < min_words:
-        return NovelBlocker(probe=probe)
-    return None
-
-
-def blocker_name(blocker: Blocker) -> str:
-    match blocker:
-        case KnownBlocker(signature=signature):
-            return signature.name
-        case NovelBlocker():
-            return "unknown-blocker"
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-def is_novel(blocker: Blocker) -> bool:
-    match blocker:
-        case KnownBlocker():
-            return False
-        case NovelBlocker():
-            return True
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-def propose_signature(evidence: Evidence, stamp: int) -> Signature | None:
-    """Derive a candidate rule from a novel blocker.
-
-    Returns None when nothing distinctive was observable -- better no rule than
-    one with no condition, which would be either inert or indiscriminate.
-
-    Always pending_review: a rule inferred from a single page is exactly the
-    kind that starts matching pages it shouldn't.
-    """
-    host = urlparse(evidence.probe.url).netloc
-    third_party = _third_party_frame_host(evidence.iframe_srcs, host)
-
-    common = {
-        "name": f"learned-{host}-{stamp}",
-        "kind": SignatureKind.UNKNOWN,
-        "pending_review": True,
-        "seen_at": evidence.probe.url,
-        "evidence": evidence.screenshot,
-    }
-    if third_party is not None:
-        return Signature(selector=f"iframe[src*='{third_party}']", **common)
-    if evidence.probe.title.strip():
-        return Signature(title_re="^" + re.escape(evidence.probe.title[:60]),
-                         **common)
-    return None
-
-
-def _third_party_frame_host(srcs: tuple[str, ...], page_host: str) -> str | None:
-    """A frame from someone else's domain is the most reliable single tell."""
-    for src in srcs:
-        frame_host = urlparse(src).netloc
-        if frame_host and frame_host not in page_host:
-            return frame_host
+            return Blocker(signature=signature, probe=probe)
     return None

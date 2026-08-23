@@ -11,38 +11,23 @@ from typing import Any, Callable
 from . import probe as probe_mod
 from . import notify, present, registry
 from .config import HANDOFF_TIMEOUT_S
-from .detect import blocker_name, classify, is_novel, propose_signature
+from .detect import classify
 from .errors import HandoffTimeout, WindowError
-from .models import Blocker, Evidence, Extraction, Signature
+from .models import Blocker, Extraction
 
 _POLL_INTERVAL_S = 2
 
 Extractor = Callable[[Any], Extraction]
 
 
-def record_novel(page: Any, blocker: Blocker) -> tuple[Evidence, Signature | None]:
-    """Capture what a novel blocker looked like and propose a rule for it.
-
-    Runs whether or not a handoff follows: a suppressed handoff is exactly when
-    you most want to know what you hit.
-    """
-    stamp = probe_mod.now()
-    evidence = probe_mod.capture_evidence(page, blocker.probe, stamp)
-    proposal = propose_signature(evidence, stamp)
-    if proposal is not None:
-        registry.remember(proposal)
-    return evidence, proposal
-
-
 def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
-                   min_words: int,
                    timeout_s: int = HANDOFF_TIMEOUT_S) -> Extraction:
     """Summon the window, ask, and poll until the block clears.
 
     Raises HandoffTimeout rather than returning None -- a caller that forgets
     to check would otherwise print an empty document as if it were content.
     """
-    name = blocker_name(blocker)
+    name = blocker.signature.name
     message = f"[{name}] needs you: {blocker.probe.url}"
 
     presenter = present.select()
@@ -60,7 +45,7 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             time.sleep(_POLL_INTERVAL_S)
-            resolved = _recheck(page, extractor, min_words)
+            resolved = _recheck(page, extractor)
             if resolved is not None:
                 print(f"   resolved ({resolved.word_count} words)\n",
                       file=sys.stderr)
@@ -72,13 +57,13 @@ def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
             presenter.dismiss()
 
 
-def _recheck(page: Any, extractor: Extractor, min_words: int) -> Extraction | None:
-    """One poll. None means still blocked (or mid-navigation)."""
+def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
+    """One poll. None means the signature still matches (or mid-navigation)."""
     try:
         extraction = extractor(page)
         signatures = registry.active()
         page_probe = probe_mod.probe(page, extraction, signatures)
-        if classify(page_probe, signatures, min_words) is None:
+        if classify(page_probe, signatures) is None:
             return extraction
     except Exception:
         return None  # navigating; try again next tick
@@ -92,4 +77,4 @@ def _bring_to_front(page: Any) -> None:
         pass
 
 
-__all__ = ["record_novel", "wait_for_human", "is_novel", "Extractor"]
+__all__ = ["wait_for_human", "Extractor"]

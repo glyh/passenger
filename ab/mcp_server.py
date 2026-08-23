@@ -58,9 +58,6 @@ def fetch(
     settle_ms: Annotated[int, Field(
         description="Milliseconds to let client-side rendering finish.",
         ge=0, le=30000)] = 1500,
-    min_words: Annotated[int | None, Field(
-        description="Below this word count a page is treated as blocked. "
-                    "0 disables that check.")] = None,
     wait_seconds: Annotated[int, Field(
         description="Block for up to this long waiting for a human to solve a "
                     "challenge. 0 (default) returns immediately instead.",
@@ -77,8 +74,6 @@ def fetch(
         extract_mode=mode,
         wait_until=WaitUntil.DOM_CONTENT_LOADED,
         settle_ms=settle_ms,
-        min_words=(settings.min_content_words if min_words is None
-                   else min_words),
         allow_handoff=wait_seconds > 0,
         handoff_timeout_s=max(wait_seconds, 1),
         reuse_tab=True,
@@ -104,8 +99,6 @@ def script(
         "Whether the reply carries the ending page as markdown. Turn it off "
         "for steps whose content you do not need -- paging a listing, say."))]
         = True,
-    min_words: Annotated[int | None, Field(
-        description="Below this the ending page is reported as blocked.")] = None,
     timeout_seconds: Annotated[int, Field(
         description="Per-call budget for each Playwright operation.",
         ge=1, le=600)] = 60,
@@ -119,8 +112,6 @@ def script(
     _ensure_daemon()
     return service.run(ScriptRequest(
         source=source, tab=tab, extract_mode=mode, read_page=read_page,
-        min_words=(settings.min_content_words if min_words is None
-                   else min_words),
         timeout_s=timeout_seconds))
 
 

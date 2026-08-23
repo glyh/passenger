@@ -6,13 +6,12 @@ in a union rather than as a raised exception, and each frontend decides what to
 do with it -- the CLI exits 2, the MCP server hands the agent something it can
 act on.
 """
-from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel
 
 from . import browser, handoff, probe as probe_mod, registry, script
-from .detect import blocker_name, classify, is_novel
+from .detect import classify
 from .errors import HandoffTimeout, ScriptError
 from .extract import extract
 from .models import (Blocker, ExtractMode, Extraction, FetchRequest,
@@ -29,12 +28,18 @@ class Fetched(BaseModel, frozen=True):
 
 
 class Blocked(BaseModel, frozen=True):
+    """A signature matched, so a human is genuinely required.
+
+    `evidence` and `proposed_condition` used to ride along: a page that merely
+    yielded few words was screenshotted and turned into a candidate rule.
+    That path is gone with the word-count tier (ticket 005) -- it was proposing
+    to block whole domains by their own name.
+    """
+
     type: Literal["blocked"] = "blocked"
     name: str
     kind: SignatureKind
     url: str
-    evidence: Path | None = None
-    proposed_condition: str | None = None
     hint: str = ""
 
 
@@ -70,8 +75,8 @@ class Failed(BaseModel, frozen=True):
 ScriptOutcome = Ran | Failed
 
 
-def inspect(page: Any, extract_mode: ExtractMode,
-            min_words: int) -> tuple[Extraction, Blocker | None]:
+def inspect(page: Any,
+            extract_mode: ExtractMode) -> tuple[Extraction, Blocker | None]:
     """Read the page and decide whether it counts as content.
 
     The tail both doors share: `fetch` runs it once after its navigation, and
@@ -82,7 +87,7 @@ def inspect(page: Any, extract_mode: ExtractMode,
     extraction = extract(page, extract_mode)
     signatures = registry.active()
     page_probe = probe_mod.probe(page, extraction, signatures)
-    return extraction, classify(page_probe, signatures, min_words)
+    return extraction, classify(page_probe, signatures)
 
 
 def fetch(request: FetchRequest) -> FetchOutcome:
@@ -94,8 +99,7 @@ def fetch(request: FetchRequest) -> FetchOutcome:
         def extractor(target: Any) -> Extraction:
             return extract(target, request.extract_mode)
 
-        extraction, blocker = inspect(page, request.extract_mode,
-                                      request.min_words)
+        extraction, blocker = inspect(page, request.extract_mode)
 
         outcome: FetchOutcome
         if blocker is None:
@@ -146,11 +150,10 @@ def _look(page: Any, request: ScriptRequest) -> FetchOutcome | None:
     """What the tab holds now, in the shape `fetch` returns -- if asked."""
     if not request.read_page:
         return None
-    extraction, blocker = inspect(page, request.extract_mode, request.min_words)
+    extraction, blocker = inspect(page, request.extract_mode)
     if blocker is None:
         return _fetched(page, extraction)
-    evidence, proposed = _note_novel(page, blocker)
-    return _blocked(blocker, evidence, proposed,
+    return _blocked(blocker,
                     "run `agent-browser show`, solve it, then call again "
                     "with this same tab -- it is still open, and still there")
 
@@ -166,39 +169,25 @@ def _fetched(page: Any, extraction: Extraction) -> Fetched:
 
 def _resolve(page: Any, blocker: Blocker, request: FetchRequest,
              extractor: handoff.Extractor) -> FetchOutcome:
-    """Capture evidence, then either wait for a human or report the block."""
-    evidence_path, proposed = _note_novel(page, blocker)
+    """Either wait for a human or report the block.
 
+    Reached only on a signature match now. That is what makes presenting the
+    window the right response rather than an intrusion: something specific and
+    positive said a human is required, instead of a word count saying the page
+    was short (ticket 010).
+    """
     if request.allow_handoff:
         try:
             extraction = handoff.wait_for_human(
-                page, blocker, extractor, request.min_words,
-                request.handoff_timeout_s)
+                page, blocker, extractor, request.handoff_timeout_s)
             return _fetched(page, extraction)
         except HandoffTimeout as timeout:
-            return _blocked(blocker, evidence_path, proposed,
-                            f"nobody solved it within {timeout.seconds}s")
-    return _blocked(blocker, evidence_path, proposed,
+            return _blocked(blocker, f"nobody solved it within {timeout.seconds}s")
+    return _blocked(blocker,
                     "run `agent-browser show`, solve it, then fetch again -- "
                     "the profile keeps the result")
 
 
-def _note_novel(page: Any, blocker: Blocker) -> tuple[Path | None, str | None]:
-    """Capture what an unrecognised blocker looked like, and propose a rule.
-
-    Runs whether or not a handoff follows: a suppressed handoff is exactly
-    when you most want to know what you hit.
-    """
-    if not is_novel(blocker):
-        return None, None
-    evidence, proposal = handoff.record_novel(page, blocker)
-    return (evidence.screenshot,
-            proposal.condition if proposal is not None else None)
-
-
-def _blocked(blocker: Blocker, evidence: Path | None, proposed: str | None,
-             hint: str) -> Blocked:
-    kind = (blocker.signature.kind if blocker.type == "known"
-            else SignatureKind.UNKNOWN)
-    return Blocked(name=blocker_name(blocker), kind=kind, url=blocker.probe.url,
-                   evidence=evidence, proposed_condition=proposed, hint=hint)
+def _blocked(blocker: Blocker, hint: str) -> Blocked:
+    return Blocked(name=blocker.signature.name, kind=blocker.signature.kind,
+                   url=blocker.probe.url, hint=hint)

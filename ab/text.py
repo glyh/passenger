@@ -44,6 +44,6 @@ def unlinked(text: str) -> str:
     `[label](url)`, and a URL segments into a surprising number of "words" --
     741 of them cost a Wikipedia page 5,477, half again what it says. Counting
     markup as content would let a page's link density stand in for how much of
-    it an extractor kept, which is what `choose` and `min_words` are asking.
+    it an extractor kept, which is what `choose` is asking.
     """
     return _LINK_TARGET.sub("]", text)

@@ -2,8 +2,8 @@
 id: 010
 title: A fetch of an ordinary page put the browser on screen and waited
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -67,3 +67,36 @@ To decide:
 4. What an unattended caller should get. There is no signal today that
    distinguishes a terminal a human is watching from a cron job, and the
    answer for the two is different.
+
+## Answer
+
+Closed by [The extract mode decides whether a page counts as
+blocked](005-mode-decides-blocked.md), which removed the verdict this
+ticket was arguing about the consequences of.
+
+The ticket's own analysis is what decided it. It had already separated
+the two verdicts and shown they are not equally strong -- a signature
+match is specific positive evidence that a human is required, a
+`NovelBlocker` is only *this page had fewer words than a number I was
+handed*. This ticket proposed to stop the weak one triggering the
+strongest action. 005 went further and asked why the weak one was a
+verdict at all, and the answer was that it had no evidence the caller
+did not already hold.
+
+So `_resolve` is now reached only on a signature match, which is exactly
+the asymmetry this ticket named -- reached from the other end. The CLI's
+`allow_handoff` default is left alone: opting in to a handoff is
+reasonable when the only thing that can trigger it is a Turnstile frame
+or a login wall, and the MCP door keeps its stricter `wait_seconds > 0`
+gate.
+
+Verified with this ticket's own repro: `agent-browser fetch
+https://example.com`, no flags, returns its thirty-odd words and exits 0.
+Nothing is presented and nothing waits.
+
+Questions 3 and 4 are not answered by this and are not moot. Even with a
+signature match as the only trigger, a cron job still blocks for the full
+timeout with nobody watching, and "present the window" is still welded to
+"wait for the page to change". Both carried into [Asking for a human,
+rather than being guessed at](018-asking-for-a-human.md), which is where
+the shape of a handoff gets decided.

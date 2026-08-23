@@ -32,7 +32,6 @@ def fetch(
     dom: bool = False,
     wait: WaitUntil = WaitUntil.DOM_CONTENT_LOADED,
     settle: int = 1500,
-    min_words: int | None = None,
     handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
     new_tab: bool = False,
     keep_tab: bool = False,
@@ -52,8 +51,6 @@ def fetch(
         Shorthand for --mode dom.
     settle
         Milliseconds to let client-side rendering finish.
-    min_words
-        Below this, a page is treated as blocked. 0 disables tier-2 detection.
     handoff_enabled
         With --no-handoff, exit on a blocker instead of asking for help.
     close_tabs
@@ -67,7 +64,6 @@ def fetch(
         extract_mode=ExtractMode.DOM if dom else mode,
         wait_until=wait,
         settle_ms=settle,
-        min_words=settings.min_content_words if min_words is None else min_words,
         allow_handoff=handoff_enabled,
         reuse_tab=not new_tab,
         keep_tab=keep_tab,
@@ -88,11 +84,6 @@ def _render(outcome: service.FetchOutcome, as_json: bool) -> None:
             else:
                 print(outcome.markdown)
         case service.Blocked():
-            if outcome.evidence is not None:
-                print(f"   evidence: {outcome.evidence}", file=sys.stderr)
-            if outcome.proposed_condition is not None:
-                print(f"   proposed signature: {outcome.proposed_condition} "
-                      f"(pending review)", file=sys.stderr)
             json.dump(outcome.model_dump(mode="json"), sys.stderr, indent=2)
             print(file=sys.stderr)
             raise SystemExit(2)
@@ -107,7 +98,6 @@ def script(
     tab: str | None = None,
     mode: ExtractMode = ExtractMode.AUTO,
     read_page: bool = True,
-    min_words: int | None = None,
     timeout: int = 60,
     json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
 ) -> None:
@@ -130,7 +120,6 @@ def script(
     source = sys.stdin.read() if file == "-" else Path(file).read_text()
     outcome = service.run(ScriptRequest(
         source=source, tab=tab, extract_mode=mode, read_page=read_page,
-        min_words=settings.min_content_words if min_words is None else min_words,
         timeout_s=timeout, as_json=json_out))
     _render_script(outcome, json_out)
 

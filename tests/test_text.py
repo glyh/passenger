@@ -34,9 +34,11 @@ def test_chinese_is_not_counted_as_one_word():
     assert count_words(NOTE_BODY) > 500
 
 
-def test_a_rendered_page_clears_the_default_threshold():
-    """min_words defaults to 80. Both of these are live, readable pages that
-    the old ruler put under it -- the note body measured 172, the listing 66.
+def test_a_rendered_page_measures_as_more_than_a_handful():
+    """80 was the old blocked-below threshold, gone with the word-count tier
+    (ticket 005). It stays here as a yardstick: both of these are live,
+    readable pages that the old ruler put under it -- the note body measured
+    172, the listing 66.
     """
     assert count_words(NOTE_BODY) >= 80
     assert count_words(SEARCH_LISTING) >= 80

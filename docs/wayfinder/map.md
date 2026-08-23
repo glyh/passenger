@@ -108,6 +108,19 @@ Single developer, no remote: commit to `trunk`, do not branch.
   grew was rejected — it points at the wrong content on a note, and it makes
   every read a driving act.
 
+- [The extract mode decides whether a page counts as blocked](tickets/005-mode-decides-blocked.md)
+  — the tier is gone, not fixed. A signature match is a positive claim made from
+  things the caller cannot see; a word count under `min_words` was the tool
+  ruling on a number it hands over anyway. `classify` is one dumb tier now, and
+  the guessing that hung off the other one — evidence capture, proposed
+  signatures, `registry.remember` — went with it. The registry's curation half
+  stayed.
+- [A fetch of an ordinary page put the browser on screen and waited](tickets/010-fetch-seizes-the-screen.md)
+  — closed by 005, from the other end. The handoff is reached only on a
+  signature match, so the strongest action the tool has is triggered only by its
+  strongest evidence. `fetch https://example.com` returns thirty-odd words and
+  exits 0.
+
 ## Fog
 
 - **A page can defer content and say nothing.** 015's signal only speaks

@@ -154,20 +154,29 @@ profiles burned and make you *more* detectable. You solve it once; the
 persistent profile keeps the clearance cookie. Note `cf_clearance` is bound to
 IP + User-Agent, which is why this runs locally rather than on a VPS.
 
-### Two-tier detection
+### Detection is one dumb tier
 
-1. **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
-   DataDome, PerimeterX, login walls. Cheap and exact.
-2. **"Did I actually get content?"** — anything extracting to under
-   `--min-words` (default 80) is treated as blocked. This is what catches
-   challenge types that didn't exist when this was written: it screenshots the
-   page, dumps iframe hosts and visible text to `reports/`, and proposes a new
-   signature.
+**Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
+DataDome, PerimeterX, login walls. Cheap, exact, and the only thing that can
+mark a page blocked.
 
-Proposed signatures are marked `pending_review` and **do not match** until you
-approve them. That is deliberate: a rule guessed from one page will otherwise
-false-positive forever. (Observed during development — a thin page taught it
-`^Example Domain`, which then "blocked" every later fetch of that site.)
+There was a second tier: anything extracting to under `--min-words` was
+treated as blocked, screenshotted, and turned into a proposed signature. It is
+gone. A signature match is a positive claim made from things the caller cannot
+see — a third-party challenge iframe, a title, a URL. A low word count is not:
+its whole evidence is a number already reported back as `word_count`, so the
+tool was ruling on something the caller could see for itself, and ruling badly.
+
+It was wrong in three ways at once. The count came from whichever extractor
+`--mode` selected, so the same page came back as content or as blocked
+depending on a presentation choice. It fired on every legitimately short page —
+`fetch https://example.com`, thirty-odd words, used to put the browser on your
+screen and block for five minutes. And the rules it guessed were worse than
+nothing: a thin page once taught it `^Example Domain`, which then "blocked"
+every later fetch of that site.
+
+So a short page is now simply a short page. You get the content and the word
+count, and you decide.
 
 ## Hiding the window
 
@@ -222,7 +231,6 @@ own compositor sidesteps that whole class of breakage.
     AGENT_BROWSER_STATE     state dir (default ~/.local/share/agent-browser)
     AGENT_BROWSER_PORT      CDP port (default 9222)
     AGENT_BROWSER_CHROME    chrome binary (default google-chrome-stable)
-    AGENT_BROWSER_MIN_WORDS tier-2 threshold (default 80)
     AGENT_BROWSER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
     AGENT_BROWSER_WM        window backend
     AGENT_BROWSER_VNC_HOST/PORT    default 127.0.0.1:5900 (websocket)

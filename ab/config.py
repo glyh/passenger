@@ -17,7 +17,6 @@ class Settings(BaseModel, frozen=True):
                             / ".local/share/agent-browser")
     cdp_port: int = Field(default=9222, ge=1, le=65535)
     chrome_binary: str = "google-chrome-stable"
-    min_content_words: int = Field(default=80, ge=0)
     handoff_timeout_s: int = Field(default=300, ge=1)
     # How long to wait for an attach before treating the browser as
     # stuck. Attaching initialises every open tab, so this is really a
@@ -46,7 +45,6 @@ class Settings(BaseModel, frozen=True):
             "state_dir": os.environ.get("AGENT_BROWSER_STATE"),
             "cdp_port": os.environ.get("AGENT_BROWSER_PORT"),
             "chrome_binary": os.environ.get("AGENT_BROWSER_CHROME"),
-            "min_content_words": os.environ.get("AGENT_BROWSER_MIN_WORDS"),
             "handoff_timeout_s": os.environ.get("AGENT_BROWSER_HANDOFF_TIMEOUT"),
             "attach_timeout_s": os.environ.get("AGENT_BROWSER_ATTACH_TIMEOUT"),
             "vnc_host": os.environ.get("AGENT_BROWSER_VNC_HOST"),
@@ -112,6 +110,5 @@ REPORTS_DIR = settings.reports_dir
 CDP_PORT = settings.cdp_port
 CDP_URL = settings.cdp_url
 CHROME_BIN = settings.chrome_binary
-MIN_CONTENT_WORDS = settings.min_content_words
 HANDOFF_TIMEOUT_S = settings.handoff_timeout_s
 ATTACH_TIMEOUT_S = settings.attach_timeout_s
