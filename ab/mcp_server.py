@@ -67,6 +67,13 @@ def fetch(
 
     Returns either the page content, or a 'blocked' record naming what is in
     the way and how a human can clear it.
+
+    This is goto, settle, read. Anything the page defers until a reader
+    scrolls or clicks is not in the result, and nothing here will tell you so
+    -- the page looks complete because it is complete, for a reader who never
+    moved. Before concluding you have a whole comment section or a whole
+    listing, look in the markdown for the page's own account of what it kept
+    back: a stated total, an expander, a pager. Reaching the rest is `script`.
     """
     _ensure_daemon()
     request = FetchRequest(

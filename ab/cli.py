@@ -40,6 +40,10 @@ def fetch(
 ) -> None:
     """Fetch a URL and print its content.
 
+    Reads the page as it loads: whatever it defers until you scroll or click
+    is not in the output, and the page's own stated count is often the only
+    sign. Use `script` to reach the rest.
+
     Parameters
     ----------
     url

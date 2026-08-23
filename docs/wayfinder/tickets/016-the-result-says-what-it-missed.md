@@ -77,9 +77,14 @@ recognizer with a poor one and pays upkeep for the privilege.
 
 What the ticket was really solving was **attention, not information**:
 the agent has the string and does not look at it. The remedy for that is
-a sentence, not machinery, and it belongs where [The tool does not learn;
-the agent remembers](019-the-tool-does-not-learn.md) says it belongs --
-with the agent. Recorded there rather than here.
+a sentence, not machinery. It went two places: the calling agent's memory,
+per [The tool does not learn; the agent
+remembers](019-the-tool-does-not-learn.md), and the `fetch` docstring on
+both doors -- which is the tool description an agent reads at the moment
+it calls, and reaches every caller rather than only the one that has
+worked here before. A line of prose is not the thing 020 was trying to
+delete: it changes what the caller does on every fetch, where
+`list_blockers` cost a round trip to enumerate constants.
 
 ### What would bring it back
 
