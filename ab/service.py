@@ -91,7 +91,7 @@ def inspect(page: Any,
     """
     extraction = extract(page, extract_mode)
     signatures = registry.active()
-    page_probe = probe_mod.probe(page, extraction, signatures)
+    page_probe = probe_mod.probe(page, signatures)
     return extraction, classify(page_probe, signatures)
 
 

@@ -19,7 +19,17 @@ class SignatureKind(str, Enum):
 
 
 class ExtractMode(str, Enum):
-    AUTO = "auto"
+    """Which extractor reads the page. There is no `auto`.
+
+    There was, and it measured both extractions and picked by their word
+    ratio. Ticket 011 established that the choice depends on the page's
+    *type* -- document, listing, profile -- which is not in the two blobs of
+    text a comparison is handed, so every signal it computed was a proxy for
+    something it could not measure. Ticket 021 removed it rather than tuning
+    it, and did not replace it with a default: the caller knows what it
+    pointed at, and a tool that guesses silently is worse than one that asks.
+    """
+
     ARTICLE = "article"
     DOM = "dom"
 
@@ -100,11 +110,16 @@ class PageProbe(BaseModel, frozen=True):
     Selector evaluation needs the live page, so the shell tests every candidate
     selector up front and records the hits here. Detection then becomes a pure
     function of this record, and is testable without a browser.
+
+    It carried a `word_count` until ticket 021. Nothing had read it since 005
+    deleted the tier that did, and while it sat here the same page could be
+    probed with two different numbers depending on the caller's `mode` -- a
+    presentation choice reaching into a verdict. Leaving it off means that
+    cannot be written, rather than merely not being done.
     """
 
     url: str
     title: str
-    word_count: int
     matched_selectors: frozenset[str] = frozenset()
 
 
@@ -127,10 +142,15 @@ class Extraction(BaseModel, frozen=True):
 
     @property
     def word_count(self) -> int:
-        """How much the page *said*, which is what `choose` weighs.
+        """How much the page *said*, reported for the caller's information.
+
+        Nothing decides anything with this any more. `classify` stopped
+        reading a word count in ticket 005 and `choose` went with `auto` in
+        021, which leaves it a display field on `Fetched` -- and ticket 022
+        with the question of what a display field should be counting.
 
         Link targets are stripped first: they are markup, and counting them
-        would let a nav bar's worth of hrefs stand in for content the article
+        would let a nav bar's worth of hrefs stand in for the text an
         extractor actually kept.
         """
         return count_words(unlinked(self.text))
@@ -138,7 +158,8 @@ class Extraction(BaseModel, frozen=True):
 
 class FetchRequest(BaseModel, frozen=True):
     url: str
-    extract_mode: ExtractMode = ExtractMode.AUTO
+    # Required, and deliberately: see ExtractMode.
+    extract_mode: ExtractMode
     wait_until: WaitUntil = WaitUntil.DOM_CONTENT_LOADED
     settle_ms: int = Field(default=1500, ge=0)
     allow_handoff: bool = True
@@ -162,7 +183,7 @@ class ScriptRequest(BaseModel, frozen=True):
     # None means "a blank tab", which is the one-shot case. A targetId
     # continues a sequence, or picks up the tab a human just navigated.
     tab: str | None = None
-    extract_mode: ExtractMode = ExtractMode.AUTO
+    extract_mode: ExtractMode
     # A sequence that pages a listing should not pay a full read per step.
     read_page: bool = True
     timeout_s: int = Field(default=60, ge=1)

@@ -56,8 +56,13 @@ def _ensure_daemon() -> None:
 def fetch(
     url: Annotated[str, Field(description="Page to fetch.")],
     mode: Annotated[ExtractMode, Field(
-        description="auto measures both extractors and picks; article suits "
-                    "documents, dom suits JS apps.")] = ExtractMode.AUTO,
+        description="Which extractor reads the page, and there is no default "
+                    "because the choice is yours to make: `article` removes "
+                    "boilerplate and is right for a document -- an article, a "
+                    "post, a docs page. `dom` keeps every visible line and is "
+                    "right for a listing, feed, profile or search result, "
+                    "where `article` discards the cards and returns the "
+                    "footer.")],
     settle_ms: Annotated[int, Field(
         description="Milliseconds to let client-side rendering finish.",
         ge=0, le=30000)] = 1500,
@@ -99,12 +104,13 @@ def script(
         "back; it must be JSON, so return page.url or read(page), never a "
         "locator. Example: page.fill('#q', 'x'); page.press('#q', 'Enter'); "
         "page.wait_for_selector('.result'); return read(page)"))],
+    mode: Annotated[ExtractMode, Field(
+        description="How read(page) and the page report extract content. Same "
+                    "choice as on `fetch`: `article` for a document, `dom` "
+                    "for a listing or a feed.")],
     tab: Annotated[str | None, Field(description=(
         "Which tab to run against, from a previous reply or from list_tabs. "
         "Omit for a fresh blank tab."))] = None,
-    mode: Annotated[ExtractMode, Field(
-        description="How read(page) and the page report extract content.")]
-        = ExtractMode.AUTO,
     read_page: Annotated[bool, Field(description=(
         "Whether the reply carries the ending page as markdown. Turn it off "
         "for steps whose content you do not need -- paging a listing, say."))]

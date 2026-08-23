@@ -89,7 +89,7 @@ def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
     try:
         extraction = extractor(page)
         signatures = registry.active()
-        page_probe = probe_mod.probe(page, extraction, signatures)
+        page_probe = probe_mod.probe(page, signatures)
         if classify(page_probe, signatures) is None:
             return extraction
     except Exception:

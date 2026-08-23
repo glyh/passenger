@@ -7,15 +7,19 @@ import time
 from typing import Any
 
 from .detect import selectors_of
-from .models import Extraction, PageProbe, Signature
+from .models import PageProbe, Signature
 
 _MATCH_JS = "sels => sels.filter(s => { try { return !!document.querySelector(s); }"
 _MATCH_JS += " catch (e) { return false; } })"
 
 
-def probe(page: Any, extraction: Extraction,
-          signatures: tuple[Signature, ...]) -> PageProbe:
-    """Measure everything detection needs, in as few round trips as possible."""
+def probe(page: Any, signatures: tuple[Signature, ...]) -> PageProbe:
+    """Measure everything detection needs, in as few round trips as possible.
+
+    The extraction used to be handed in, for a `word_count` no rule had read
+    since ticket 005. Ticket 021 dropped the field, and with it this
+    function's one dependency on how the caller chose to read the page.
+    """
     try:
         title = page.title()
     except Exception:
@@ -27,7 +31,6 @@ def probe(page: Any, extraction: Extraction,
     except Exception:
         hits = []
     return PageProbe(url=page.url, title=title,
-                     word_count=extraction.word_count,
                      matched_selectors=frozenset(hits))
 
 

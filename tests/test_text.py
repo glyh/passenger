@@ -2,8 +2,8 @@
 
 The numbers asserted here are the ones ticket 008 measured on live
 xiaohongshu pages, which is why the fixtures are sized to match: a note body
-of about 1,800 Chinese characters, and a search listing against the short
-ICP footer that `article` returns for the same page.
+of about 1,800 Chinese characters, and a search listing whose cards `article`
+throws away.
 """
 from ab.text import count_words, unlinked
 
@@ -11,10 +11,9 @@ from ab.text import count_words, unlinked
 # characters per word, so ~1,800 characters should land near 1,000.
 NOTE_BODY = "珠海长隆海洋王国真的值得去一趟，我们一家三口玩了两天。" * 70
 
-# What `article` returns for the search page: the ICP footer, nothing else.
-ICP_FOOTER = "小红书 京ICP备13005502号 京公网安备11010102003178号 营业执照"
-
-# What `dom` returns for the same page: forty result cards run together.
+# What `dom` returns for the search page: forty result cards run together.
+# The ICP footer `article` returns for the same page was a fixture here too,
+# for the `choose` tests ticket 021 deleted; nothing compares the two now.
 SEARCH_LISTING = "珠海长隆海洋王国保姆级亲子游玩攻略Grace06-231933" * 40
 
 
@@ -69,7 +68,9 @@ def test_link_targets_do_not_count_as_content():
     or more "words". On the xiaohongshu search page the DOM text carries 70
     links against the footer's 22, which was enough on its own to drag the
     yield ratio under the floor -- `auto` would have started picking `dom`
-    because of link density rather than because it kept more content.
+    because of link density rather than because it kept more content. That
+    comparison is gone with `auto` (ticket 021), but `word_count` is still
+    reported, and a page's link markup must not inflate it.
     """
     plain = "The docs say so"
     linked = "The [docs](https://docs.python.org/3/library/asyncio-task.html) say so"

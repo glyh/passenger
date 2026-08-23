@@ -9,7 +9,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .models import ExtractMode, PresenterName
+from .models import PresenterName
 
 
 class Settings(BaseModel, frozen=True):
@@ -37,7 +37,6 @@ class Settings(BaseModel, frozen=True):
     viewer_browser: str | None = None
     presenter: PresenterName | None = None
     webhook_url: str | None = None
-    default_extract_mode: ExtractMode = ExtractMode.AUTO
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -55,7 +54,6 @@ class Settings(BaseModel, frozen=True):
             "viewer_browser": os.environ.get("AGENT_BROWSER_VIEWER"),
             "presenter": os.environ.get("AGENT_BROWSER_PRESENTER"),
             "webhook_url": os.environ.get("AGENT_BROWSER_WEBHOOK"),
-            "default_extract_mode": os.environ.get("AGENT_BROWSER_EXTRACT"),
         }
         # Pydantic coerces the strings; unset keys fall back to the defaults.
         return cls.model_validate({k: v for k, v in raw.items() if v is not None})

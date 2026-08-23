@@ -27,9 +27,7 @@ app = cyclopts.App(
 def fetch(
     url: str,
     *,
-    mode: Annotated[ExtractMode, cyclopts.Parameter(name=["--mode", "--extract"])]
-        = ExtractMode.AUTO,
-    dom: bool = False,
+    mode: Annotated[ExtractMode, cyclopts.Parameter(name=["--mode", "--extract"])],
     wait: WaitUntil = WaitUntil.DOM_CONTENT_LOADED,
     settle: int = 1500,
     handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
@@ -49,10 +47,10 @@ def fetch(
     url
         Page to fetch.
     mode
-        auto measures both extractors and picks; article suits documents,
-        dom suits JS apps.
-    dom
-        Shorthand for --mode dom.
+        Required. article removes boilerplate, and is right for a document --
+        an article, a post, a docs page. dom keeps every visible line, and is
+        right for a listing, a feed, a profile or a search result, where
+        article throws the cards away and returns the footer.
     settle
         Milliseconds to let client-side rendering finish.
     handoff_enabled
@@ -65,7 +63,7 @@ def fetch(
     """
     request = FetchRequest(
         url=url,
-        extract_mode=ExtractMode.DOM if dom else mode,
+        extract_mode=mode,
         wait_until=wait,
         settle_ms=settle,
         allow_handoff=handoff_enabled,
@@ -99,8 +97,8 @@ def _render(outcome: service.FetchOutcome, as_json: bool) -> None:
 def script(
     file: str = "-",
     *,
+    mode: ExtractMode,
     tab: str | None = None,
-    mode: ExtractMode = ExtractMode.AUTO,
     read_page: bool = True,
     timeout: int = 60,
     json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
@@ -114,6 +112,8 @@ def script(
     ----------
     file
         Script to run. Defaults to stdin, so it reads from a heredoc.
+    mode
+        Required, as on `fetch`: article for a document, dom for a listing.
     tab
         Tab id to run against, from `tabs`. Omitted means a fresh blank tab.
     read_page

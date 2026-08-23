@@ -24,9 +24,12 @@ the same nodes -- it sees a listing and discards it as boilerplate, which every
 readability-family extractor does (measured against defuddle in ticket 009).
 The difference `dom` makes is one of judgement, not of visibility.
 
-`auto` picks by measuring rather than guessing from the URL. Note that on every
-page measured so far, `article` has won -- see README. `dom` is an escape
-hatch, not a validated fix.
+There is no third mode that picks between them. `auto` did, by measuring both
+extractions and comparing their word counts, and ticket 011 found that every
+signal available to it was a proxy for the page's *type* -- which is not in
+the text. Ticket 021 removed it and made `mode` required at both doors, so a
+page read the wrong way is now a caller's decision rather than this side's
+silent one.
 """
 import re
 from typing import Any, assert_never
@@ -34,7 +37,6 @@ from typing import Any, assert_never
 import trafilatura
 
 from .models import Extraction, ExtractMode
-from .text import count_words, unlinked
 
 _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
           "[role=navigation], [role=banner], [role=contentinfo], "
@@ -44,11 +46,6 @@ _STRIP = ("script, style, noscript, template, svg, nav, header, footer, aside, "
 # matches on every page and holds everything, so as a candidate it could never
 # lose. It is the fallback, and the walker names it as one.
 _ROOTS = ("main", "[role=main]", "article", "#content", "#main")
-
-# Below this share of the page's visible words, the article extractor is
-# assumed to have thrown away real content rather than boilerplate.
-_ARTICLE_YIELD_FLOOR = 0.35
-_MIN_COMPARABLE_WORDS = 40
 
 _DOM_JS = r"""
 ([stripSel, roots]) => {
@@ -215,25 +212,13 @@ def dom_text(page: Any) -> str:
     return tidy(raw)
 
 
-def choose(article: str, dom: str) -> Extraction:
-    """Pure: the `auto` decision, isolated so it can be tested without a page."""
-    article_words = count_words(unlinked(article))
-    dom_words = count_words(unlinked(dom))
-    if dom_words >= _MIN_COMPARABLE_WORDS:
-        if article_words < _ARTICLE_YIELD_FLOOR * dom_words:
-            return Extraction(text=dom, mode_used=ExtractMode.DOM)
-    return Extraction(text=article, mode_used=ExtractMode.ARTICLE)
-
-
 def extract(page: Any, mode: ExtractMode) -> Extraction:
-    """Shell: gather what the chosen mode needs, then decide."""
+    """Shell: run the extractor the caller asked for."""
     match mode:
         case ExtractMode.DOM:
             return Extraction(text=dom_text(page), mode_used=ExtractMode.DOM)
         case ExtractMode.ARTICLE:
             return Extraction(text=article_text(page.content(), page.url),
                               mode_used=ExtractMode.ARTICLE)
-        case ExtractMode.AUTO:
-            return choose(article_text(page.content(), page.url), dom_text(page))
         case _ as unreachable:
             assert_never(unreachable)

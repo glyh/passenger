@@ -64,7 +64,7 @@ lives in the shell.
 
     core    models.py    every boundary shape, as frozen pydantic models
             detect.py    blocked-or-not, given a measurement
-            extract.py   article/dom text handling + the `auto` decision
+            extract.py   article/dom text handling
             errors.py    ErrorCode + structural errors
 
     shell   service.py   the one fetch orchestration, shared by both frontends
@@ -81,7 +81,7 @@ Detection is pure because the shell measures first: `probe.probe()` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
 so `detect.classify()` is a function of that record alone.
 
-    PageProbe(url=..., title='Just a moment...', word_count=3)
+    PageProbe(url=..., title='Just a moment...')
       -> KnownBlocker(signature=cloudflare-interstitial)
 
 Blockers are a discriminated union closed with `assert_never`, so adding a
@@ -96,11 +96,19 @@ extraction half is the part that never goes stale.
 
 ### Extraction modes (`--extract`)
 
-| mode | what it does |
-|---|---|
-| `auto` (default) | runs the article extractor, falls back to DOM text only if it recovered under 35% of the page's visible words |
-| `article` | trafilatura boilerplate removal → markdown |
-| `dom` | visible text off the live DOM, minus nav/header/footer/aria-hidden |
+| mode | what it does | right for |
+|---|---|---|
+| `article` | trafilatura boilerplate removal → markdown | a document: an article, a post, a docs page |
+| `dom` | visible text off the live DOM, minus nav/header/footer/aria-hidden | a listing, feed, profile or search result |
+
+**There is no default, and no `auto`.** `auto` ran both extractors and picked
+by comparing their word counts; which one is right depends on the page's
+*type*, and that is not in the two blobs of text a comparison is handed, so
+every signal it computed was a proxy for something it could not measure. It is
+gone, and `mode` is required at both doors rather than defaulted, because the
+caller knows what it pointed at and a tool that guesses silently is worse than
+one that asks. The failure it used to hide is worth stating: `article` on a
+listing returns the site footer and none of the cards.
 
 Both modes render links inline as `[label](url)`, resolved against the page's
 own URL and otherwise passed through untouched — query strings included, since
@@ -141,9 +149,10 @@ including app-shaped ones:
 | Gmail inbox | 4878 w | 4144 w |
 | Google Maps | 107 w | 30 w |
 
-Both modes recovered identical event counts on Calendar (16 / 4). So `auto` has
-never actually fired its fallback. Keep `dom` for the page that eventually
-needs it; don't assume an app-shaped page is one of them without measuring.
+Both modes recovered identical event counts on Calendar (16 / 4), which is why
+`auto` never once fired its fallback on these. Don't assume an app-shaped page
+needs `dom` without measuring — and note the pages these numbers were taken on
+are all documents. A search result page is where `article` loses outright.
 (Google Maps is a reminder that some pages lose to *both* — the content is in a
 canvas, and no text extractor will help.)
 
