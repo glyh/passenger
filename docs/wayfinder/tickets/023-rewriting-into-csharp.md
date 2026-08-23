@@ -121,9 +121,24 @@ the six bounded parameters this door ships (`settle_ms`, two `wait_seconds`,
 lose their *visibility*: an agent would learn a ceiling by being refused rather
 than by reading the schema.
 
-**3 is not made, and now decides it.** It was left until last on purpose: it is
-the only one that needs C# actually running, and either of the cheap two could
-have ended the question first. Neither did.
+**3 is made, and found no blocker either.** Three tasks, both languages, all six
+snippets written and checksummed before any was run: 3/3 each side, identical
+output, on a throwaway Chrome and a local fixture. The mechanical differences --
+`await` everywhere, an explicit type argument on `EvalOnSelectorAllAsync<T>` --
+are not what breaks a first try. The failure paths differ more than the happy
+ones: C# reports compile errors with a column *and before the browser is
+touched*, gives no runtime line number until you use
+`WithEmitDebugInformation` + `WithFilePath` + the `Stream` overload of
+`CSharpScript.Create` (the `string` overload fails `CS8055`), and lets a live
+`Locator` return unchallenged -- though `crossable` was thirty hand-written
+lines on this side too. The async rewrite of the browser half remains
+**unmeasured**.
+
+**So all three are in, and none of them says no.** What is left is not a
+measurement. The packaging motive was removed by 022, the remaining costs are
+the extraction port and the async rewrite, and the one identified regression is
+the schema-visible bounds. Whether that is worth a hobby project's evenings is
+the developer's call, and it is the only thing between this ticket and closed.
 
 The three as originally written follow, unedited.
 

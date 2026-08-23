@@ -1,9 +1,9 @@
 # Port measurements: patchright-dotnet and the MCP C# SDK
 
 Asset for [Whether this moves to C#](../tickets/023-rewriting-into-csharp.md).
-Measurements 1 and 2 of three. Measurement 3 -- `script` fluency -- is **not**
-made here; it needs C# actually running against a page, and it was left until
-the two desk measurements had a chance to kill the port cheaply. They did not.
+All three measurements. 1 and 2 are desk research, run first so that either
+could kill the port cheaply; neither did. 3 needed C# actually running against a
+page, and was run after them.
 
 Measured 2026-08-24 against patchright-dotnet at v1.62.1 and
 modelcontextprotocol/csharp-sdk at v2.2.0.
@@ -24,9 +24,14 @@ driver download URL:
     https://registry.npmjs.org/playwright-core/-/playwright-core-{V}.tgz
     https://registry.npmjs.org/patchright-core/-/patchright-core-{V}.tgz
 
-`patchright-core` is the same npm tarball the Python package ships. Verified on
-this machine: our nix environment holds `patchright-core` **1.62.1**, and
-patchright-dotnet's latest release is **v1.62.1**. The evasions -- the
+`patchright-core` is the same npm tarball the Python package ships -- and that
+is now proved rather than inferred. The NuGet package was restored and its
+bundled driver compared file by file against the one in our nix environment:
+
+    diff -rq <python patchright driver>/package <nuget>/.playwright/package
+    -> no differences, 109 files each side
+
+Byte-identical, both at 1.62.1. The evasions -- the
 `Runtime.enable` suppression through isolated execution contexts, the disabled
 Console API, the command-flag tweaks, closed-shadow-root piercing -- live in
 that Node driver, and both bindings speak to it over the same protocol. Parity
@@ -128,17 +133,92 @@ plausible, which is a genuine packaging win -- and worth noting because
 [Drop ICU](../tickets/022-drop-icu.md) removed the packaging motive the port
 was originally argued on.
 
+## 3. `script`, and what the agent has to write
+
+Measured 2026-08-24, after the two above. Setup: a throwaway headless Chrome on
+its own profile and CDP port -- deliberately **not** the live session, because a
+second CDP client initialises every open tab and there were twelve of them --
+and a small local fixture page with a reveal-on-click block, a link list, and a
+JS search form. A local fixture rather than a real site so that the thing being
+measured is the snippet, not the site's flakiness.
+
+**Protocol, because the experimenter is also the subject.** All six snippets
+(three tasks, two languages) were written and checksummed *before* any of them
+was run, so "first try" means first run rather than first success. The harness
+on the Python side is the real `script.execute`; on the C# side it is Roslyn
+`CSharpScript` with a `Globals` object binding `page`, which is the nearest
+thing to 013's contract.
+
+**Fluency: a tie. 3/3 both languages, byte-identical output.**
+
+| task | Python | C# |
+|---|---|---|
+| click, wait for reveal, read it | pass | pass |
+| filter links to `/item/`, absolute hrefs | pass | pass |
+| fill, submit, wait out the placeholder, read results | pass | pass |
+
+So the ticket's stated fear -- that a compiled snippet is harder to get right
+first try -- did not reproduce on these three. The honest caveats are that three
+tasks is a small n, that they were written by one author who knows both APIs,
+and that a local fixture is the easy case. What it does establish is that the
+*mechanical* differences (`await` on everything, an explicit type argument on
+`EvalOnSelectorAllAsync<string[]>`) are not what breaks a first try.
+
+**The failure paths are where the two doors actually differ**, and that is worth
+more than the tie. Same three provoked faults each side:
+
+| fault | Python (`script.py`, built) | C# (Roslyn, out of the box) |
+|---|---|---|
+| syntax error on line 2 | `invalid syntax (line 2)` + the offending line | `e1.csx(2,9): error CS1525` -- line **and column** |
+| timeout on line 3 | `TimeoutError: ...` + `line 3: page.click("#nope", ...)` | `Timeout 900ms exceeded.` -- **no line at all** |
+| returns a `Locator` | designed refusal naming what to return instead | reported `OK`, value `Locator@h1` |
+
+Three readings, and none of them is "C# is worse":
+
+1. **Compile errors are better in C#, and earlier.** Roslyn gives a column as
+   well as a line, and it fails *before the browser is touched* -- Python's
+   `compile()` does too, but the C# version catches a whole class of typos
+   (wrong member name, wrong argument type) that Python only finds at runtime,
+   mid-navigation, after the side effects have already happened.
+2. **The runtime line number is recoverable, with a recipe worth writing down.**
+   It needs `ScriptOptions.WithEmitDebugInformation(true)` *and* `WithFilePath`,
+   *and* the `Stream` overload of `CSharpScript.Create` -- passing the source as
+   a `string` fails with `CS8055: Cannot emit debug information for a source
+   text without encoding`. With all three, the stack trace carries
+   `snippets/e2.csx:line 3`. That cost one iteration to find here and would cost
+   the port the same.
+3. **Nothing crosses the boundary for free.** C# happily returned a live
+   `Locator`. But `crossable` in `script.py` is thirty lines this project wrote
+   itself -- the framework never gave it away either. Parity, not a regression;
+   it just has to be built again.
+
+**Unmeasured, and the ticket should keep saying so:** the async rewrite. Six
+snippets and a fifty-line harness are not `browser.py`, `service.py` and
+`script.py` going async. Playwright .NET having no sync API remains a real cost,
+and this measurement did not touch it.
+
 ## Where this leaves the go/no-go
 
-**Neither cheap measurement killed it.** Measurement 1 came back better than the
-ticket feared: the evasions are shared, not reimplemented, so the biggest stated
-risk is structural rather than a matter of trusting an author. Measurement 2
-came back good with one named regression -- schema-visible bounds -- which is a
-cost to price rather than a blocker.
+**Three measurements, no blocker.** The one that was meant to be most dangerous
+came back safest: the driver is byte-identical, so the evasions are shared by
+construction rather than by a third party's diligence. The SDK is GA, speaks
+stdio in one line, and generates schemas from signatures. The central door is
+not harder to write against, and its error reporting is better in one half and
+buildable in the other.
 
-So the cheap no-go did not arrive, and the decision now rests on **measurement
-3**, which is the expensive one: three real tasks, both languages, first-try
-success at writing `script` bodies, plus the fact that Playwright .NET has no
-sync API and the browser half is therefore an async rewrite rather than a
-transliteration. That was always the measurement most likely to decide it on
-merit; it is now the only one left.
+**The costs that survive, all of them known before:**
+
+- The extraction port -- trafilatura at ~5,500 reachable lines, or whatever
+  [029](../tickets/029-one-extractor-instead-of-two.md) shrinks it to. Still the
+  bulk of the work, and untouched by anything measured here.
+- The async rewrite of the browser half, unmeasured.
+- **One functional regression, newly identified**: six bounded parameters would
+  keep their enforcement and lose their schema visibility.
+- A single-maintainer dependency, mitigated by its being 1,180 legible lines.
+
+**What this does not decide.** The measurements were run to find a blocker, and
+there is none. Whether to spend a hobby project's evenings on a port whose
+motive is now mostly preference -- the packaging half having been removed by
+[022](../tickets/022-drop-icu.md) -- is not a measurement's call. That one is
+the developer's, and it is the only thing still standing between this ticket and
+closed.
