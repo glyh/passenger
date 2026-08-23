@@ -3,7 +3,7 @@ id: 032
 title: Six skills restate the server instructions
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: glyh
 blocked_by: []
 ---
 
