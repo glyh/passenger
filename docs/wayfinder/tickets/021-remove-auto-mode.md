@@ -2,7 +2,7 @@
 id: 021
 title: Remove auto mode
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: [028]
 ---
@@ -107,3 +107,83 @@ longer an argument for anything, and question 1 is live again on its full
 case -- including *required, no default*, which this ticket calls the honest
 reading of [011](011-listing-clears-the-yield-floor.md) and which nothing has
 yet argued against on its own terms. Do not read 025 as having settled it.
+
+## Answer
+
+**`mode` is required at both doors.** `ExtractMode` has two members, `extract`
+is a two-armed match, and nothing in the tool chooses between them any more:
+
+    fetch(url, mode)                      # MCP: required: ['url', 'mode']
+    script(source, mode)                  # MCP: required: ['source', 'mode']
+    agent-browser fetch URL --mode dom    # CLI: [required]
+
+Out, as the ticket listed: `ExtractMode.AUTO`, `choose`,
+`_ARTICLE_YIELD_FLOOR`, `_MIN_COMPARABLE_WORDS`. Also out, found while
+removing them: `Settings.default_extract_mode` and `AGENT_BROWSER_EXTRACT`,
+which no module had ever read -- a setting whose only value was the default it
+carried, and that default was `auto`.
+
+### Question 1: required, no default
+
+Chosen over both defaults, on 011's own terms. The argument against it is that
+it breaks every call omitting the argument and leaves a caller who does not
+know with no fallback -- but a caller who does not know is exactly the case
+`auto` served badly, and served *silently*. There is no third thing to guess
+with; there is only whether the guess is made here or asked for. The break is
+real and is the point: a call that omits `mode` now fails at the door instead
+of quietly returning a footer.
+
+`article`-by-default lost because it makes the majority case work and the
+listing case fail in the one way this whole thread has been about -- content
+present, dropped, nothing said. `dom`-by-default is now a defensible option in
+a way it was not when the ticket was written (028 fixed the root, 025 gave
+`dom` headings, lists and fences), and it loses only because the failure it
+trades to is quieter noise on every document rather than a demand to think
+once.
+
+**The cost, stated:** `script` with `read_page=False` must still pass a `mode`
+it will not use. Defaulting it for that one case would put the guess back in
+the tool for the case where it matters least, so it stays required.
+
+### Question 2: what the description carries instead
+
+Two lines at both doors, and they say what `choose` was trying to compute:
+`article` removes boilerplate and is right for a document -- an article, a
+post, a docs page; `dom` keeps every visible line and is right for a listing,
+feed, profile or search result, where `article` throws the cards away and
+returns the footer. Naming the failure is the half that matters. The mode
+table in the README gained the same column.
+
+### Question 3: carried to 022, as the ticket decided
+
+`word_count` survives as a display field on `Fetched` and nothing reads it to
+decide anything. Whether it stays a word count, becomes a character count, or
+stops being reported is [Drop ICU](022-drop-icu.md), which this unblocks.
+`unlinked` and its test stay meanwhile: the number is still reported, and link
+markup must not inflate it.
+
+### Question 4: `--dom` is gone
+
+It existed to shorten `--mode dom` under an `auto` default. With `mode`
+required there is nothing to shorten past -- `--dom` and `--mode article` are
+the same length of thought -- and two spellings of one argument is the drift
+[One description, two doors](026-one-description-two-doors.md) is about.
+
+### Question 5: `PageProbe.word_count` is gone, and could not be otherwise
+
+Removed, along with the `extraction` argument `probe.probe` only needed to
+compute it. This is more than tidying: while the field existed, the same page
+could be probed with two different numbers depending on the caller's `mode` --
+a presentation choice reaching into a verdict, which is 005's own defect. It
+is now unrepresentable. `test_the_mode_can_no_longer_change_the_verdict` was
+deleted for that reason and the reason is recorded in the module docstring;
+the test copied a field that no longer exists.
+
+### What was verified
+
+`nix flake check` green (42 tests), `mypy --strict` clean, and both doors
+exercised live: `fetch https://example.com --mode article` (17 words,
+`mode_used: article`) and a `script` with `--mode dom` returning the same page
+with its `Learn more` link intact. `tests/test_extract.py` kept its two `tidy`
+tests and lost the four that pinned `choose`'s floors; `tests/test_detect.py`
+lost the word counts from its fixtures.

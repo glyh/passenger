@@ -208,6 +208,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   would win on every page. First test in the suite to start a browser, with
   one pinned in `flake.nix` so it runs rather than skips.
 
+- [Remove auto mode](tickets/021-remove-auto-mode.md)
+  — `mode` is required at both doors rather than defaulted. `auto` compared
+  two extractions by word count to answer a question about the page's *type*,
+  which 011 showed is not in the text; the honest replacement is to ask the
+  caller, who knows what it pointed at. The descriptions carry what `choose`
+  was trying to compute, failure named: `article` returns the footer of a
+  listing. `PageProbe.word_count` went too, so a presentation choice can no
+  longer reach into a verdict -- 005's defect, now unrepresentable. `--dom`,
+  and the never-read `AGENT_BROWSER_EXTRACT`, went with it. Unblocks [Drop
+  ICU](tickets/022-drop-icu.md), which inherits the one open question: what a
+  `word_count` nothing decides with should count.
+
 ## Fog
 
 - **A headless MCP deployment may have no way to reach a human.** 018 made
