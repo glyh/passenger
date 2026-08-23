@@ -9,7 +9,7 @@ and never learns what they are, which is what makes it testable without one.
 """
 import json
 import textwrap
-from typing import Any, Callable
+from typing import Any
 
 from .errors import ErrorCode, ScriptError
 
@@ -17,12 +17,15 @@ from .errors import ErrorCode, ScriptError
 # script's last act is nearly always to hand something back and `return` at
 # module level is a SyntaxError. The cost is one line of offset in every
 # traceback, paid back in `where()`.
-_HEADER = "def __script__(page, read):\n"
+#
+# `page` is the only name bound. `read` used to be bound beside it -- this
+# project's own extraction, in scope for the caller to call. Ticket 046 retired
+# it along with `fetch`: reading a page is a judgement, and judgement is the
+# caller's. The walker survives as a recipe in the skill, pasted into a script
+# by an agent that wants it.
+_HEADER = "def __script__(page):\n"
 
-Reader = Callable[[Any], str]
-
-
-def execute(source: str, page: Any, read: Reader) -> Any:
+def execute(source: str, page: Any) -> Any:
     """Run the script and return what it returned, checked.
 
     Raises ScriptError for the three ways this goes wrong -- source that will
@@ -32,7 +35,7 @@ def execute(source: str, page: Any, read: Reader) -> Any:
     namespace: dict[str, Any] = {}
     exec(_compile(source), namespace)  # noqa: S102 -- running this is the point
     try:
-        returned = namespace["__script__"](page, read)
+        returned = namespace["__script__"](page)
     except Exception as raised:
         raise ScriptError(
             ErrorCode.SCRIPT_RAISED,
@@ -65,7 +68,7 @@ def crossable(value: Any) -> Any:
             ErrorCode.SCRIPT_RETURN_NOT_JSON,
             f"a {type(value).__name__} cannot cross the tool boundary",
             detail="return what you wanted from it instead -- page.url, "
-                   "locator.inner_text(), read(page), a list of hrefs") from None
+                   "locator.inner_text(), a list of hrefs") from None
     return value
 
 

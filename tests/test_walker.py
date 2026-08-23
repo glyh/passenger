@@ -27,11 +27,32 @@ and a descendant query. A seam would let a test pass against a mock and fail
 against Chrome, which is the failure a seam exists to prevent, inverted.
 """
 import shutil
+from pathlib import Path
 
 import pytest
 
 from passenger.config import CHROME_BIN
-from passenger.extract import dom_text
+
+# The walker is no longer code this project runs -- ticket 046 retired `fetch`
+# and extraction with it, and `walker.js` moved to the skill directory as a
+# recipe an agent pastes into `script`. It is still this repo's file and still
+# this repo's to keep correct, so it is still tested here, in a real browser
+# against the same fixtures.
+#
+# Reading it and evaluating it *is* the production path now: there is no
+# `dom_text` wrapper left to enter through, and the only thing any caller can
+# do with this file is exactly what happens below. Ticket 001 refused a seam
+# into the JavaScript because a seam lets a test pass against a mock; this is
+# not that -- there is nothing between the file and the page.
+WALKER = (Path(__file__).resolve().parent.parent
+          / "skills" / "using-passenger" / "walker.js").read_text(encoding="utf-8")
+
+
+def dom_text(page, strip_sel=None, roots=None):
+    """Run the walker exactly as the skill tells an agent to run it."""
+    if strip_sel is None and roots is None:
+        return page.evaluate(WALKER)
+    return page.evaluate(WALKER, [strip_sel, roots])
 
 # Three cards of the size americanthinker's are (79-203 characters), so the
 # first one clears the 40-character guard exactly as the real page's did.
@@ -75,22 +96,22 @@ def browser():
 def page(browser):
     """A page whose `inner_text` is poisoned, so no test can pass on a fallback.
 
-    `dom_text` catches everything the evaluate can raise and degrades to
-    `page.inner_text("body")`, which for most fixtures still contains every
-    string a test looks for. Measured before this fixture existed: replacing
-    the walker's JavaScript with a syntax error left two of the three tests
-    then in this file passing, including the one ticket 028 was written for.
-    A test that cannot tell a working walker from a dead one is not a test.
+    There is no fallback left to reach -- `dom_text` degraded to
+    `page.inner_text("body")` when the evaluate raised, and that wrapper went
+    with ticket 046. The poison stays anyway, and cheaply: it is what proves no
+    test in this file is quietly asserting against `inner_text`, which for most
+    of these fixtures contains every string a test looks for.
 
-    The fallback itself is deliberate and stays -- ticket 012's wedged
-    renderer really does stop answering. What it must not do is stand in for
-    our own bugs, so here it is unreachable and a broken walker fails loudly.
+    Measured before this fixture existed: replacing the walker's JavaScript
+    with a syntax error left two of the three tests then in this file passing,
+    including the one ticket 028 was written for (ticket 034). A test that
+    cannot tell a working walker from a dead one is not a test.
     """
     opened = browser.new_page()
 
     def poisoned(*_args, **_kwargs):
         raise AssertionError(
-            "dom_text fell back to inner_text: the walker did not run")
+            "a test read inner_text: it is not testing the walker")
 
     opened.inner_text = poisoned
     yield opened
@@ -316,3 +337,64 @@ def test_display_none_and_visibility_hidden_go_but_opacity_stays(page):
     # Deliberate. See the docstring and ticket 035; opacity is not a hiding
     # mechanism this tool can distinguish from an unfinished animation.
     assert "Faded out but present" in text
+
+
+# --- the tidying, which used to be tidy() in extract.py --------------------
+#
+# It moved into the walker with ticket 047, and its tests came with it. They
+# were string-level before, because `tidy` was pure Python; here they have to
+# arrive through a page, which is the honest form -- the input `tidy` sees is
+# whatever the walk produced and nothing else.
+#
+# These three were also the coverage gap 047 measured on the way past. Across
+# all thirteen tests above, `tidy` only ever stripped leading and trailing
+# whitespace; on real pages it collapses hundreds of blank runs and space runs
+# per document. Nothing here reached that code until now.
+
+
+def test_runs_of_spaces_between_inline_nodes_are_collapsed(page):
+    """Two adjacent inline elements each contributing an edge space produce a
+    double space the walk itself cannot see: it squashes whitespace *within* a
+    text node, and these are two nodes. Measured on moonofalabama, 201 such
+    runs in one document."""
+    page.set_content("<body><main>" + FILLER
+                     + "<p><span>foo </span><span> bar</span></p></main></body>")
+    assert "foo bar" in dom_text(page)
+
+
+def test_a_run_of_empty_blocks_collapses_to_one_blank_line(page):
+    """Blocks holding nothing but whitespace, which is where real pages get
+    their blank runs -- an *empty* block produces none, because `nl()` will not
+    append a newline after a newline. A block with a space in it pushes that
+    space first, so the run arrives as lines that are blank only once stripped.
+    Measured on moonofalabama: 140 of them in one document."""
+    page.set_content("<body><main>" + FILLER
+                     + "<p>First para.</p><div> </div><div> </div><div> </div>"
+                     + "<p>Second para.</p></main></body>")
+    text = dom_text(page)
+    assert "First para.\n\nSecond para." in text
+    assert "\n\n\n" not in text
+
+
+def test_prose_mentioning_a_fence_does_not_open_one(page):
+    """Only a line that is exactly ``` toggles. A paragraph that merely
+    contains the characters is prose, and is tidied like prose."""
+    page.set_content("<body><main>" + FILLER
+                     + "<p><span>she wrote ``` </span><span> in a sentence</span></p>"
+                     + "</main></body>")
+    text = dom_text(page)
+    assert "she wrote ``` in a sentence" in text
+
+
+def test_an_unterminated_fence_does_not_swallow_the_rest(page):
+    """A page whose own text puts ``` alone on a line opens a fence the walk
+    never closes. Everything before it is still tidied; what follows passes
+    through verbatim, which is the deliberate trade -- a fence's contents are
+    the one thing whose whitespace is its meaning."""
+    page.set_content("<body><main>" + FILLER
+                     + "<p><span>before  </span><span> the fence</span></p>"
+                     + "<p>```</p>"
+                     + "<p><span>after  </span><span> it</span></p></main></body>")
+    text = dom_text(page)
+    assert "before the fence" in text
+    assert "after   it" in text or "after  it" in text

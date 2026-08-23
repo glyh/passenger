@@ -29,7 +29,7 @@ from pydantic import Field
 from . import (browser, handoff, lanes, notify, present, service,
                session as session_mod, targets)
 from .config import settings
-from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
+from .models import ScriptRequest, WaitFor
 
 server = MCPServer(
     name="passenger",
@@ -72,82 +72,40 @@ def _housekeep(lane: str | None = None) -> None:
 
 
 @server.tool()
-def fetch(
-    url: Annotated[str, Field(description="Page to fetch.")],
-    lane: Annotated[str, Field(description=(
-        "Your lane, from open_lane. Tabs opened here are yours: no other "
-        "caller sees them, and none can close them."))],
-    mode: Annotated[ExtractMode, Field(
-        description="Which extractor reads the page, and there is no default "
-                    "because the choice is yours to make: `article` removes "
-                    "boilerplate and is right for a document -- an article, a "
-                    "post, a docs page. `dom` keeps every visible line and is "
-                    "right for a listing, feed, profile or search result, "
-                    "where `article` discards the cards and returns the "
-                    "footer.")],
-    settle_ms: Annotated[int, Field(
-        description="Milliseconds to let client-side rendering finish.",
-        ge=0, le=30000)] = 1500,
-    wait_seconds: Annotated[int, Field(
-        description="Block for up to this long waiting for a human to solve a "
-                    "challenge. 0 (default) returns immediately instead.",
-        ge=0, le=900)] = 0,
-) -> service.FetchOutcome:
-    """Fetch a URL as markdown through the real browser session.
-
-    Returns either the page content, or a 'blocked' record naming what is in
-    the way and how a human can clear it.
-    """
-    _ensure_daemon()
-    request = FetchRequest(
-        url=url,
-        lane=lane,
-        extract_mode=mode,
-        wait_until=WaitUntil.DOM_CONTENT_LOADED,
-        settle_ms=settle_ms,
-        allow_handoff=wait_seconds > 0,
-        handoff_timeout_s=max(wait_seconds, 1),
-        reuse_tab=True,
-    )
-    return service.fetch(request)
-
-
-@server.tool()
 def script(
     source: Annotated[str, Field(description=(
-        "Python, run with `page` (a Playwright page) and `read(page)` (this "
-        "tool's markdown extraction) in scope. Use `return` to hand a value "
-        "back; it must be JSON, so return page.url or read(page), never a "
-        "locator. Example: page.fill('#q', 'x'); page.press('#q', 'Enter'); "
-        "page.wait_for_selector('.result'); return read(page)"))],
-    mode: Annotated[ExtractMode, Field(
-        description="How read(page) and the page report extract content. Same "
-                    "choice as on `fetch`: `article` for a document, `dom` "
-                    "for a listing or a feed.")],
+        "Python, run with `page` (a Playwright page) in scope. Use `return` "
+        "to hand a value back; it must be JSON, so return text or a list, "
+        "never a locator. To just read a page: "
+        "page.goto(url); return page.inner_text('body'). For markdown with "
+        "links and headings, paste the walker recipe from the "
+        "`using-passenger` skill."))],
     lane: Annotated[str, Field(description=(
         "Your lane, from open_lane. Tabs opened here are yours: no other "
         "caller sees them, and none can close them."))],
     tab: Annotated[str | None, Field(description=(
         "Which tab to run against, from a previous reply or from list_tabs. "
         "Omit for a fresh blank tab."))] = None,
-    read_page: Annotated[bool, Field(description=(
-        "Whether the reply carries the ending page as markdown. Turn it off "
-        "for steps whose content you do not need -- paging a listing, say."))]
-        = True,
     timeout_seconds: Annotated[int, Field(
         description="Per-call budget for each Playwright operation.",
         ge=1, le=600)] = 60,
 ) -> service.ScriptOutcome:
-    """Run Playwright code against a real tab, and read where it ends up.
+    """Open a page, drive it, and read it -- the only door onto the browser.
 
-    The way to reach content that sits behind an interaction, and the way to
-    read a page a human navigated to during a handoff. The tab stays open and
-    comes back in `tab`, so a sequence continues across calls.
+    Navigation, interaction and reading are all this call: `page.goto(url)`
+    then whatever you need. The reply carries what you returned, plus a
+    measurement of the tab you ended on -- its character count and pictures, or
+    a `blocked` record if a known vendor's wall is in the way.
+
+    This tool does not interpret pages. Extraction is yours to write, and the
+    `using-passenger` skill carries the recipes.
+
+    The tab stays open and comes back in `tab`, so a sequence continues across
+    calls.
     """
     _ensure_daemon()
     return service.run(ScriptRequest(
-        source=source, lane=lane, tab=tab, extract_mode=mode,
-        read_page=read_page, timeout_s=timeout_seconds))
+        source=source, lane=lane, tab=tab, timeout_s=timeout_seconds))
 
 
 @server.tool()
@@ -249,9 +207,16 @@ def show_browser(
         "Bring this tab to the front first, from a previous reply or from "
         "list_tabs, so the human lands on the page you mean."))] = None,
     wait_seconds: Annotated[int, Field(
-        description="Block until the human closes the viewer, up to this "
-                    "long. 0 (default) returns as soon as it is on screen.",
+        description="Block for up to this long. 0 (default) returns as soon "
+                    "as it is on screen.",
         ge=0, le=900)] = 0,
+    until: Annotated[WaitFor, Field(
+        description="What ends the wait. `closed` (default) waits for the "
+                    "human to close the viewer, which is a fact about the "
+                    "human. `unblocked` waits for the vendor's wall to stop "
+                    "matching on `tab`, which is a fact about the page -- "
+                    "stronger, but it needs a tab and only sees walls this "
+                    "tool can name.")] = WaitFor.CLOSED,
     notify_human: Annotated[bool, Field(
         description="Send a desktop notification or webhook. Set this when "
                     "the human is not watching this conversation -- running "
@@ -266,8 +231,14 @@ def show_browser(
     """Put the browser on screen so the user can log in or solve a challenge.
 
     Also how you ask for a human deliberately, not only in answer to a
-    `blocked` reply. Never inspects the page: the wait ends when the human
-    closes the viewer, and it says which.
+    `blocked` reply.
+
+    By default nothing here inspects the page -- the wait ends when the human
+    closes the viewer, and the reply says so. `until="unblocked"` is the other
+    reading: it polls the named tab until the wall stops matching. That was
+    `fetch(wait_seconds=...)` before ticket 046 retired it, and it is a
+    measurement rather than a guess only because the signature table is fixed.
+    Whichever you wait on, read the tab afterwards and judge for yourself.
     """
     _ensure_daemon()
     _housekeep(lane)
@@ -285,7 +256,15 @@ def show_browser(
     if wait_seconds == 0:
         lanes.touch(lane)
         return how
-    waited = handoff.wait_for_dismissal(presenter, wait_seconds)
+    if until is WaitFor.UNBLOCKED:
+        if tab is None:
+            lanes.touch(lane)
+            return f"{how} -- cannot wait on a wall with no tab named"
+        with browser.Session() as session:
+            waited = handoff.wait_until_unblocked(
+                session.page_for(lane, tab), wait_seconds)
+    else:
+        waited = handoff.wait_for_dismissal(presenter, wait_seconds)
     lanes.touch(lane)
     return f"{how} -- {waited}"
 

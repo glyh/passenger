@@ -15,20 +15,18 @@ class SignatureKind(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ExtractMode(str, Enum):
-    """Which extractor reads the page. There is no `auto`.
+class WaitFor(str, Enum):
+    """What ends a `show_browser` wait.
 
-    There was, and it measured both extractions and picked by their word
-    ratio. Ticket 011 established that the choice depends on the page's
-    *type* -- document, listing, profile -- which is not in the two blobs of
-    text a comparison is handed, so every signal it computed was a proxy for
-    something it could not measure. Ticket 021 removed it rather than tuning
-    it, and did not replace it with a default: the caller knows what it
-    pointed at, and a tool that guesses silently is worse than one that asks.
+    Two different facts, and the difference is the point (ticket 018). CLOSED
+    is the human saying they are done, which is the one completion signal this
+    tool does not have to infer. UNBLOCKED is the page saying the wall is gone,
+    which is stronger -- a human can close a viewer without solving anything --
+    but only reaches walls the fixed signature table can name.
     """
 
-    ARTICLE = "article"
-    DOM = "dom"
+    CLOSED = "closed"
+    UNBLOCKED = "unblocked"
 
 
 class WaitUntil(str, Enum):
@@ -131,36 +129,6 @@ class Blocker(BaseModel, frozen=True):
     probe: PageProbe
 
 
-class Extraction(BaseModel, frozen=True):
-    text: str
-    mode_used: ExtractMode
-
-    @property
-    def char_count(self) -> int:
-        """How big this is, for a caller sizing it against a context budget.
-
-        It was a word count until ticket 022, segmented by ICU so that Chinese
-        and Thai did not read as one word each (ticket 008). Both things that
-        *decided* with the number are gone -- `classify`'s word tier in 005,
-        `choose` with `auto` in 021 -- and a dictionary segmenter, this
-        project's only native dependency, is not worth carrying for a number
-        nobody rules on. `len(text.split())` was the one forbidden
-        replacement: that is 008's bug restored, and silent now that no
-        behaviour would visibly break.
-
-        Characters are script-independent and need nothing, and they track
-        tokens more closely than words do across scripts, which is the only
-        question the caller actually has.
-
-        Link targets are counted, unlike before: they are in the markdown the
-        caller receives and cost it context like everything else. `unlinked`
-        existed to keep a nav bar's hrefs from standing in for content when
-        `choose` was comparing two extractions; nothing compares now, and
-        measuring what the caller was not handed would be the lie.
-        """
-        return len(self.text)
-
-
 class Pictures(BaseModel, frozen=True):
     """What the page renders that is not text (ticket 017).
 
@@ -186,34 +154,16 @@ class Pictures(BaseModel, frozen=True):
     src: str = ""
 
 
-class FetchRequest(BaseModel, frozen=True):
-    url: str
-    # Which lane opens and owns the tab (ticket 040). Required, and not
-    # defaulted: a caller that is isolated by accident cannot tell which lane
-    # it is in, and an implicit lane keyed by process was rejected for exactly
-    # that -- it isolates without the caller ever asking.
-    lane: str
-    # Required, and deliberately: see ExtractMode.
-    extract_mode: ExtractMode
-    wait_until: WaitUntil = WaitUntil.DOM_CONTENT_LOADED
-    settle_ms: int = Field(default=1500, ge=0)
-    allow_handoff: bool = True
-    reuse_tab: bool = True
-    keep_tab: bool = False
-    # Close this lane's other tabs afterwards. It used to close every tab in
-    # the browser; under lanes it can only reach its own.
-    close_tabs: bool = False
-    as_json: bool = False
-    handoff_timeout_s: int = Field(default=300, ge=1)
-
-
 class ScriptRequest(BaseModel, frozen=True):
     """One call at the passthrough door (ticket 013).
 
-    Deliberately not a FetchRequest: a script decides its own navigation, so
-    the fields about *how to arrive* -- url, wait_until, settle_ms, handoff --
-    have nothing to say here. What survives is what to make of the page the
-    script leaves behind.
+    The only door there is, since ticket 046 retired `fetch`. A script decides
+    its own navigation, so nothing here says how to arrive; what is left is
+    which tab, whose lane, and how long any one Playwright call may take.
+
+    There is no `extract_mode` and no `read_page` because there is no
+    extraction. The reply carries what the ending page *measures* -- a
+    character count, the pictures, a vendor's wall -- and never what it means.
     """
 
     source: str
@@ -222,9 +172,6 @@ class ScriptRequest(BaseModel, frozen=True):
     # continues a sequence, or picks up the tab a human just navigated. It
     # must be a tab this lane owns; another lane's is refused as absent.
     tab: str | None = None
-    extract_mode: ExtractMode
-    # A sequence that pages a listing should not pay a full read per step.
-    read_page: bool = True
     timeout_s: int = Field(default=60, ge=1)
     as_json: bool = False
 

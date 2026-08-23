@@ -15,7 +15,27 @@
 //
 // There is no seam here for tests to reach into. `tests/test_walker.py` enters
 // through `dom_text`, which is the only call site that exists in production.
-([stripSel, roots]) => {
+(args) => {
+  const DEFAULT_STRIP =
+    'script, style, noscript, template, svg, nav, header, footer, aside, ' +
+    '[role=navigation], [role=banner], [role=contentinfo], ' +
+    '[aria-hidden=true], [hidden]';
+
+  // Candidate containers, most specific first. `body` is not among them: it
+  // matches on every page and holds everything, so as a candidate it could never
+  // lose. It is the fallback, and the walk names it as one.
+  const DEFAULT_ROOTS = ['main', '[role=main]', 'article', '#content', '#main'];
+  // Defaults live here now. They used to be `_STRIP` and `_ROOTS` in
+  // extract.py, passed in on every call, on the reasoning that they are the
+  // two things a reader looks for first and a test pinning the root heuristic
+  // should vary them without touching this file. Both still hold -- the
+  // argument is still accepted, and `tests/test_walker.py` still varies it --
+  // but there is no Python side to hold the defaults any more, and a recipe an
+  // agent pastes should be callable with no arguments at all.
+  // Destructured inside rather than in the parameter list, and guarded for
+  // null rather than undefined: `page.evaluate(source)` with no argument sends
+  // *null*, so a default parameter never fires and `[a, b] = null` throws.
+  const [stripSel = DEFAULT_STRIP, roots = DEFAULT_ROOTS] = args || [];
   const OPAQUE = new Set(['SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG','IFRAME','CANVAS','SELECT']);
   const HEADING = {H1:'# ', H2:'## ', H3:'### ', H4:'#### ', H5:'##### ', H6:'###### '};
   const BLOCK = new Set(['ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','BR','BUTTON','DD','DETAILS',

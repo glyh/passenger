@@ -14,26 +14,35 @@ from . import (browser, handoff, lanes, pictures, probe as probe_mod,
                script, targets)
 from .detect import classify
 from .errors import HandoffTimeout, ScriptError
-from .extract import extract
-from .models import (Blocker, ExtractMode, Extraction, FetchRequest,
+from .models import (Blocker,
                      Pictures, ScriptRequest, SignatureKind)
 
 
-class Fetched(BaseModel, frozen=True):
-    type: Literal["fetched"] = "fetched"
+class Measured(BaseModel, frozen=True):
+    """What a page measures, which is never what it means.
+
+    Was `Fetched`, and carried `markdown` and `mode_used` until ticket 046
+    retired extraction. What is left is what this side can honestly say about a
+    page it did not interpret: how much text the browser itself reports, and
+    what the page renders that text cannot carry.
+
+    `char_count` is `document.body.innerText`, not the length of an extraction.
+    That distinction is the whole of ticket 039, which closed undone on a
+    `char_count` of 0 for a page holding 2,647 characters -- a number that
+    measured the extractor while looking like it measured the page. There is no
+    extractor now, so there is nothing left to lie about.
+    """
+
+    type: Literal["measured"] = "measured"
     url: str
     title: str
-    mode_used: ExtractMode
     char_count: int
-    # What the page renders that the markdown cannot carry (ticket 017). Flat
-    # rather than nested, because these three sit alongside `char_count` as
-    # answers to one question -- how much of this page did I actually get --
-    # and a caller reading a reply should not have to open a sub-object to
-    # find out that the answer was in a photograph.
+    # What the page renders that text cannot carry (ticket 017). Flat rather
+    # than nested, because these three sit alongside `char_count` as answers to
+    # one question -- how much of this page is actually readable as text.
     largest_image: float = 0.0
     large_images: int = 0
     largest_image_src: str = ""
-    markdown: str
 
 
 class Blocked(BaseModel, frozen=True):
@@ -57,7 +66,7 @@ class Blocked(BaseModel, frozen=True):
     hint: str = ""
 
 
-FetchOutcome = Fetched | Blocked
+PageOutcome = Measured | Blocked
 
 
 class Ran(BaseModel, frozen=True):
@@ -66,7 +75,7 @@ class Ran(BaseModel, frozen=True):
     type: Literal["ran"] = "ran"
     tab: str
     returned: Any = None
-    page: FetchOutcome | None = None
+    page: PageOutcome | None = None
 
 
 class Failed(BaseModel, frozen=True):
@@ -83,65 +92,22 @@ class Failed(BaseModel, frozen=True):
     code: str
     error: str
     where: str = ""
-    page: FetchOutcome | None = None
+    page: PageOutcome | None = None
 
 
 ScriptOutcome = Ran | Failed
 
 
-def inspect(page: Any,
-            extract_mode: ExtractMode) -> tuple[Extraction, Blocker | None]:
-    """Read the page and decide whether it counts as content.
+def inspect(page: Any) -> Blocker | None:
+    """Is a known vendor's wall on this page?
 
-    The tail both doors share: `fetch` runs it once after its navigation, and
-    a script runs it on whatever page it ends on -- which is what makes a
-    challenge that appears at step four come back in the shape the caller
-    already handles, with no per-step probing.
+    The tail every read shares. It used to extract the page as well and hand
+    both back; extraction left with `fetch` (ticket 046) and what remains is
+    the one judgement this side is still allowed to make -- a match against a
+    fixed table of vendors' own markup, which is a measurement because a vendor
+    either serves that markup or does not (ticket 038).
     """
-    extraction = extract(page, extract_mode)
-    return extraction, classify(probe_mod.probe(page))
-
-
-def fetch(request: FetchRequest) -> FetchOutcome:
-    # Sweep *before* the check, not after. A lane that expired between calls
-    # passes `require` -- it is still a row -- and is then destroyed by the
-    # sweep underneath the call, so the first `adopt` hits a foreign key that
-    # no longer resolves and the caller gets a sqlite error instead of
-    # LANE_NOT_FOUND. Collect first, then ask, and the answer is honest.
-    lanes.sweep()
-    lanes.require(request.lane)
-    lanes.touch(request.lane)
-    with browser.Session() as session:
-        page = session.page(request.lane, reuse=request.reuse_tab)
-        page.goto(request.url, wait_until=request.wait_until.value, timeout=60000)
-        page.wait_for_timeout(request.settle_ms)
-
-        def extractor(target: Any) -> Extraction:
-            return extract(target, request.extract_mode)
-
-        extraction, blocker = inspect(page, request.extract_mode)
-
-        outcome: FetchOutcome
-        if blocker is None:
-            outcome = _fetched(page, extraction)
-        else:
-            outcome = _resolve(page, blocker, request, extractor,
-                               session.target_id(page))
-
-        # A blocked tab is never blanked, whatever `keep_tab` says. It is the
-        # one outcome whose tab the caller still needs: the wall is on it, the
-        # record now names it, and summoning a human to a tab this side had
-        # just navigated away from would hand them a blank page (ticket 018).
-        if (not request.keep_tab and outcome.type != "blocked"
-                and page.url != "about:blank"):
-            page.goto("about:blank")
-        if request.close_tabs:
-            session.close_others(request.lane, keep=page)
-        # On return as well as on entry: a fetch that waited out a handoff can
-        # outlast the lane's whole TTL, and expiring underneath itself would
-        # close the tab it is about to hand back.
-        lanes.touch(request.lane)
-        return outcome
+    return classify(probe_mod.probe(page))
 
 
 def run(request: ScriptRequest) -> ScriptOutcome:
@@ -166,19 +132,14 @@ def run(request: ScriptRequest) -> ScriptOutcome:
         page.set_default_timeout(request.timeout_s * 1000)
         tab = session.target_id(page)
 
-        def read(target: Any) -> str:
-            """The project's own extraction, bound into the script's scope."""
-            return extract(target, request.extract_mode).text
-
         try:
-            returned = script.execute(request.source, page, read)
+            returned = script.execute(request.source, page)
         except ScriptError as failure:
             outcome: ScriptOutcome = Failed(
                 tab=tab, code=failure.code.value, error=failure.message,
-                where=failure.detail or "", page=_look(page, request, tab))
+                where=failure.detail or "", page=_look(page, tab))
         else:
-            outcome = Ran(tab=tab, returned=returned,
-                          page=_look(page, request, tab))
+            outcome = Ran(tab=tab, returned=returned, page=_look(page, tab))
         # A script may have opened tabs of its own -- window.open, or a link
         # with target="_blank". Attributing them to the lane that caused them
         # is what keeps them from becoming invisible and uncollectable.
@@ -189,59 +150,45 @@ def run(request: ScriptRequest) -> ScriptOutcome:
         return outcome
 
 
-def _look(page: Any, request: ScriptRequest, tab: str) -> FetchOutcome | None:
-    """What the tab holds now, in the shape `fetch` returns -- if asked."""
-    if not request.read_page:
-        return None
-    extraction, blocker = inspect(page, request.extract_mode)
+def _look(page: Any, tab: str) -> PageOutcome:
+    """What the tab holds now: a wall, or a measurement of the page.
+
+    Always taken, where it used to be skippable with `read_page=False`. That
+    switch existed to spare a caller the cost of a full markdown extraction it
+    did not want; a measurement is a character count and a picture geometry,
+    and nobody needs to opt out of those.
+    """
+    blocker = inspect(page)
     if blocker is None:
-        return _fetched(page, extraction)
+        return _measured(page)
     return _blocked(blocker, tab,
                     "show_browser with this tab and a wait, or `passenger "
                     "show`; solve it, then call again with this same tab -- it "
                     "is still open, and still there")
 
 
-def _fetched(page: Any, extraction: Extraction) -> Fetched:
+def _measured(page: Any) -> Measured:
     """Every successful read passes through here, which is why the pictures
     are measured here rather than in `inspect`.
 
-    `fetch`, a script's ending page, and the page a human unblocked by hand
-    all build their result on this line; measuring one level up would have
-    left the handoff path silently unmeasured.
+    A script's ending page and the page a human unblocked by hand both build
+    their result on this line; measuring one level up would have left the
+    handoff path silently unmeasured.
     """
     try:
         title = page.title()
     except Exception:
         title = ""
+    try:
+        chars = len(page.inner_text("body"))
+    except Exception:
+        # A renderer that will not answer is not a page of zero characters,
+        # and saying so was ticket 039's complaint about the old count.
+        chars = 0
     seen: Pictures = pictures.measure(page)
-    return Fetched(url=page.url, title=title, mode_used=extraction.mode_used,
-                   char_count=extraction.char_count,
-                   largest_image=seen.largest, large_images=seen.count,
-                   largest_image_src=seen.src, markdown=extraction.text)
-
-
-def _resolve(page: Any, blocker: Blocker, request: FetchRequest,
-             extractor: handoff.Extractor, tab: str) -> FetchOutcome:
-    """Either wait for a human or report the block.
-
-    Reached only on a signature match now. That is what makes presenting the
-    window the right response rather than an intrusion: something specific and
-    positive said a human is required, instead of a word count saying the page
-    was short (ticket 010).
-    """
-    if request.allow_handoff:
-        try:
-            extraction = handoff.wait_for_human(
-                page, blocker, extractor, request.handoff_timeout_s)
-            return _fetched(page, extraction)
-        except HandoffTimeout as timeout:
-            return _blocked(blocker, tab,
-                            f"nobody solved it within {timeout.seconds}s")
-    return _blocked(blocker, tab,
-                    "show_browser with this tab and a wait, or `passenger "
-                    "show`; solve it, then fetch again -- the profile keeps "
-                    "the result")
+    return Measured(url=page.url, title=title, char_count=chars,
+                    largest_image=seen.largest, large_images=seen.count,
+                    largest_image_src=seen.src)
 
 
 def _blocked(blocker: Blocker, tab: str, hint: str) -> Blocked:

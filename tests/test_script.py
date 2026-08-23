@@ -6,7 +6,7 @@ from passenger.script import execute
 
 
 def _run(source: str, page: object = None):
-    return execute(source, page, lambda target: "read")
+    return execute(source, page)
 
 
 def test_a_script_returns_a_value():
@@ -14,8 +14,16 @@ def test_a_script_returns_a_value():
     assert _run("return 1 + 1") == 2
 
 
-def test_the_bound_names_are_page_and_read():
-    assert _run("return read(page)", page="a page") == "read"
+def test_page_is_the_only_bound_name():
+    """`read` was bound beside it until ticket 046 retired extraction. A
+    script that still calls it gets an ordinary NameError, reported at the
+    caller's own line like any other mistake in their source."""
+    assert _run("return page", page="a page") == "a page"
+
+    with pytest.raises(ScriptError) as gone:
+        _run("return read(page)", page="a page")
+    assert gone.value.code is ErrorCode.SCRIPT_RAISED
+    assert "read" in gone.value.message
 
 
 def test_a_handle_is_refused_by_name():

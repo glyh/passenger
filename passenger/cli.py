@@ -16,7 +16,7 @@ from . import (browser, lanes, launch, present, service,
 from .config import settings
 from .detect import BUILTIN
 from .errors import ErrorCode, PassengerError
-from .models import ExtractMode, FetchRequest, ScriptRequest, WaitUntil
+from .models import ScriptRequest, WaitUntil
 
 app = cyclopts.App(
     name="passenger",
@@ -26,125 +26,38 @@ app = cyclopts.App(
 
 
 @app.command
-def fetch(
-    url: str,
-    *,
-    mode: Annotated[ExtractMode, cyclopts.Parameter(name=["--mode", "--extract"])],
-    lane: str = lanes.CLI,
-    wait: WaitUntil = WaitUntil.DOM_CONTENT_LOADED,
-    settle: int = 1500,
-    handoff_enabled: Annotated[bool, cyclopts.Parameter(name=["--handoff"])] = True,
-    new_tab: bool = False,
-    keep_tab: bool = False,
-    close_tabs: bool = False,
-    json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
-) -> None:
-    """Fetch a URL and print its content.
-
-    Reads the page as it loads: whatever it defers until you scroll or click
-    is not in the output, and the page's own stated count is often the only
-    sign. Use `script` to reach the rest.
-
-    What is in a picture is not in the output either, and says nothing at all
-    -- a page whose answer lives in a photograph reads as a short page rather
-    than a truncated one. With --json, `largest_image` is the biggest thing
-    the page renders that is not text, as a share of the window; read it
-    against `char_count`, and reach the picture with `largest_image_src`.
-
-    Parameters
-    ----------
-    url
-        Page to fetch.
-    lane
-        Which lane owns the tab. Defaults to the reserved `cli` lane, which is
-        what makes `fetch` and then `script --tab` work across two commands
-        typed thirty seconds apart -- a minted id would have to be copied by
-        hand, and a lane per invocation could not see the previous one's tab.
-    mode
-        Required. article removes boilerplate, and is right for a document --
-        an article, a post, a docs page. dom keeps every visible line, and is
-        right for a listing, a feed, a profile or a search result, where
-        article throws the cards away and returns the footer.
-    settle
-        Milliseconds to let client-side rendering finish.
-    handoff_enabled
-        With --no-handoff, exit on a blocker instead of asking for help.
-    close_tabs
-        Close this lane's other tabs afterwards, clearing tabs orphaned by
-        earlier runs in it.
-    json_out
-        Emit a JSON record instead of bare markdown.
-    """
-    request = FetchRequest(
-        url=url,
-        lane=lane,
-        extract_mode=mode,
-        wait_until=wait,
-        settle_ms=settle,
-        allow_handoff=handoff_enabled,
-        reuse_tab=not new_tab,
-        keep_tab=keep_tab,
-        close_tabs=close_tabs,
-        as_json=json_out,
-        handoff_timeout_s=settings.handoff_timeout_s,
-    )
-    _render(service.fetch(request), json_out)
-
-
-def _render(outcome: service.FetchOutcome, as_json: bool) -> None:
-    """The CLI's reading of an outcome: blocked is a failure worth exiting on."""
-    match outcome:
-        case service.Fetched():
-            if as_json:
-                json.dump(outcome.model_dump(mode="json"), sys.stdout, indent=2)
-                print()
-            else:
-                print(outcome.markdown)
-        case service.Blocked():
-            json.dump(outcome.model_dump(mode="json"), sys.stderr, indent=2)
-            print(file=sys.stderr)
-            raise SystemExit(2)
-        case _ as unreachable:
-            assert_never(unreachable)
-
-
-@app.command
 def script(
     file: str = "-",
     *,
-    mode: ExtractMode,
     lane: str = lanes.CLI,
     tab: str | None = None,
-    read_page: bool = True,
     timeout: int = 60,
     json_out: Annotated[bool, cyclopts.Parameter(name=["--json"])] = False,
 ) -> None:
     """Run a Playwright script against a tab, and print where it ends up.
 
-    The same door the MCP server offers, for driving a page by hand: reaching
-    content behind a search box, or reading the tab a human just navigated to.
+    The only door onto a page, at either surface, since ticket 046 retired
+    `fetch`: navigate with `page.goto(url)`, drive whatever needs driving, and
+    return what you want. This tool does not interpret pages -- the recipes for
+    reading one live in the `using-passenger` skill, next to `walker.js`.
 
     Parameters
     ----------
     file
         Script to run. Defaults to stdin, so it reads from a heredoc.
-    mode
-        Required, as on `fetch`: article for a document, dom for a listing.
     lane
         Which lane owns the tab. Defaults to the reserved `cli` lane.
     tab
         Tab id to run against, from `tabs`. Must be a tab this lane owns;
         another lane's is refused exactly as a closed one is. Omitted means a
         fresh blank tab.
-    read_page
-        With --no-read-page, skip extracting the ending page.
     timeout
         Seconds each Playwright operation inside the script may take.
     """
     source = sys.stdin.read() if file == "-" else Path(file).read_text()
     outcome = service.run(ScriptRequest(
-        source=source, lane=lane, tab=tab, extract_mode=mode,
-        read_page=read_page, timeout_s=timeout, as_json=json_out))
+        source=source, lane=lane, tab=tab, timeout_s=timeout,
+        as_json=json_out))
     _render_script(outcome, json_out)
 
 
@@ -152,14 +65,24 @@ def _render_script(outcome: service.ScriptOutcome, as_json: bool) -> None:
     """A script that failed exits non-zero; where it failed goes to stderr."""
     match outcome:
         case service.Ran():
-            if as_json or outcome.page is None:
+            if as_json:
                 json.dump(outcome.model_dump(mode="json"), sys.stdout, indent=2)
                 print()
-            else:
-                print(f"   tab: {outcome.tab}", file=sys.stderr)
-                if outcome.returned is not None:
-                    print(f"   returned: {outcome.returned!r}", file=sys.stderr)
-                _render(outcome.page, as_json=False)
+                return
+            print(f"   tab: {outcome.tab}", file=sys.stderr)
+            if outcome.returned is not None:
+                print(outcome.returned if isinstance(outcome.returned, str)
+                      else repr(outcome.returned))
+            # A wall is still a failure worth exiting on, even when the script
+            # itself ran: the caller asked for a page and got a challenge.
+            if isinstance(outcome.page, service.Blocked):
+                json.dump(outcome.page.model_dump(mode="json"), sys.stderr,
+                          indent=2)
+                print(file=sys.stderr)
+                raise SystemExit(2)
+            if outcome.page is not None:
+                print(f"   {outcome.page.char_count} chars on "
+                      f"{outcome.page.url}", file=sys.stderr)
         case service.Failed():
             print(f"   tab: {outcome.tab}", file=sys.stderr)
             print(f"[{outcome.code}] {outcome.error}", file=sys.stderr)

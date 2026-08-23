@@ -6,55 +6,39 @@ persistent profile is both more robust and the defensible version of this.
 """
 import sys
 import time
-from typing import Any, Callable
+from typing import Any
 
 from . import probe as probe_mod
 from . import notify, present
 from .config import HANDOFF_TIMEOUT_S
 from .detect import classify
 from .errors import HandoffTimeout, WindowError
-from .models import Blocker, Extraction
 
 _POLL_INTERVAL_S = 2
 
-Extractor = Callable[[Any], Extraction]
 
+def wait_until_unblocked(page: Any, timeout_s: int = HANDOFF_TIMEOUT_S) -> str:
+    """Poll until the vendor's signature stops matching, and say what ended it.
 
-def wait_for_human(page: Any, blocker: Blocker, extractor: Extractor,
-                   timeout_s: int = HANDOFF_TIMEOUT_S) -> Extraction:
-    """Summon the window, ask, and poll until the block clears.
+    The other half of asking for a human. `wait_for_dismissal` waits on the
+    human saying they are done; this waits on the *page* saying the wall is
+    gone, which is a different fact and a stronger one -- a human can close the
+    viewer without having solved anything.
 
-    Raises HandoffTimeout rather than returning None -- a caller that forgets
-    to check would otherwise print an empty document as if it were content.
+    This is a measurement, not a judgement, and only because the signature
+    table is fixed (ticket 038): a vendor either serves that markup or does
+    not. It used to live inside `fetch`, re-extracting the page on every tick
+    to hand the content back in the same call. `fetch` is gone (ticket 046) and
+    so is the extraction -- what is polled now is the signature alone, and the
+    caller reads the page itself afterwards.
     """
-    name = blocker.signature.name
-    message = f"[{name}] needs you: {blocker.probe.url}"
-
-    presenter = present.select()
-    was_hidden = not presenter.presented()
-    try:
-        how = presenter.present()
-    except WindowError as exc:
-        how = f"{exc.message} -- {exc.detail}"
-    bring_to_front(page)
-    notify.select().notify("Agent browser needs you", f"{message}\n{how}")
-    print(f"   {how}", file=sys.stderr)
-    print(f"   waiting up to {timeout_s}s...", file=sys.stderr)
-
-    try:
-        deadline = time.time() + timeout_s
-        while time.time() < deadline:
-            time.sleep(_POLL_INTERVAL_S)
-            resolved = _recheck(page, extractor)
-            if resolved is not None:
-                print(f"   resolved ({resolved.char_count} characters)\n",
-                      file=sys.stderr)
-                return resolved
-        print("   timed out waiting for you\n", file=sys.stderr)
-        raise HandoffTimeout(name, timeout_s)
-    finally:
-        if was_hidden:
-            presenter.dismiss()
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        time.sleep(_POLL_INTERVAL_S)
+        if _clear(page):
+            waited = int(timeout_s - (deadline - time.time()))
+            return f"wall cleared after {waited}s"
+    return f"still blocked after {timeout_s}s"
 
 
 def wait_for_dismissal(presenter: present.Presenter, timeout_s: int) -> str:
@@ -84,15 +68,12 @@ def wait_for_dismissal(presenter: present.Presenter, timeout_s: int) -> str:
     return f"still open after {timeout_s}s"
 
 
-def _recheck(page: Any, extractor: Extractor) -> Extraction | None:
-    """One poll. None means the signature still matches (or mid-navigation)."""
+def _clear(page: Any) -> bool:
+    """One poll. False means the signature still matches, or mid-navigation."""
     try:
-        extraction = extractor(page)
-        if classify(probe_mod.probe(page)) is None:
-            return extraction
+        return classify(probe_mod.probe(page)) is None
     except Exception:
-        return None  # navigating; try again next tick
-    return None
+        return False  # navigating; try again next tick
 
 
 def bring_to_front(page: Any) -> None:
@@ -102,5 +83,4 @@ def bring_to_front(page: Any) -> None:
         pass
 
 
-__all__ = ["wait_for_human", "wait_for_dismissal", "bring_to_front",
-           "Extractor"]
+__all__ = ["wait_until_unblocked", "wait_for_dismissal", "bring_to_front"]
