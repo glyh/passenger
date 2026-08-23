@@ -6,7 +6,7 @@ labels: [wayfinder:map]
 
 ## Notes
 
-**Domain.** `agent-browser` fetches pages through a real, logged-in
+**Domain.** `passenger` fetches pages through a real, logged-in
 Chrome that sites cannot distinguish from an ordinary browser. Chrome
 runs inside its own `cage` compositor; `wayvnc` serves that compositor,
 and a viewer is spawned on demand when a human has to take over -- solve
@@ -44,7 +44,7 @@ remembers](tickets/019-the-tool-does-not-learn.md).
 **The tool measures; the skill judges.** The tool reports what it *measured* --
 a fraction of the viewport, a character count, a vendor's own markup -- and
 never rules on what a page *means*. Recognition patterns and heuristics live
-in the `using-agent-browser` skill, where a caller reads them, rather than in a table
+in the `using-passenger` skill, where a caller reads them, rather than in a table
 this side matches. Four mechanisms have now been deleted for crossing that line
 (a yield floor, a `min_words` tier, a learned signature registry, a wall hint);
 `BUILTIN` stays, because a vendor either serves that markup or does not. See [A
@@ -287,7 +287,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   `inner_text` now, so the fallback is unreachable in a test and the same
   experiment fails all thirteen; the fallback itself stays, because 012's
   wedged renderer really does stop answering. The walker moved to
-  `ab/walker.js` — 224 lines of `extract.py` down to 115, closures given
+  `passenger/walker.js` — 224 lines of `extract.py` down to 115, closures given
   names, no seam and no JavaScript runner — verified byte-identical against
   ten fixtures. Read once at import, which also made `pythonImportsCheck`
   catch the file missing from the wheel, as it promptly did.
@@ -321,7 +321,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 - [Six skills restate the server
   instructions](tickets/032-skills-restate-the-instructions.md)
-  — one `using-agent-browser` skill shipped from this repo holds the operating
+  — one `using-passenger` skill shipped from this repo holds the operating
   knowledge, and the docstrings are cut to the call contract rather than
   mirrored. The defensive reason for the copying turned out not to exist: two
   probes found no context where a docstring arrives but the server
@@ -347,7 +347,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 - [One skill for this server, and docstrings cut to the
   contract](tickets/036-one-skill-for-this-server.md)
-  — `skills/using-agent-browser/SKILL.md` ships from this repo and is
+  — `skills/using-passenger/SKILL.md` ships from this repo and is
   symlinked into the agent's skill directory; `fetch` lost four paragraphs,
   `show_browser` three, and the `instructions` block went from 1,400
   characters to a pointer. Field descriptions and the CLI are untouched. One
@@ -361,7 +361,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   side](tickets/037-vault-skills-cite-the-skill.md)
   — done in `~/Documents/Notes`. The six scraping skills lost every copy of the
   `blocked` / `show_browser` / `close_tabs` paragraph and now name
-  `using-agent-browser`, keeping only what is theirs: Xiaohongshu's wall
+  `using-passenger`, keeping only what is theirs: Xiaohongshu's wall
   arriving as 「登录后查看搜索结果」, 58.com's self-made captcha showing up as a
   `title` that is not the target city, aqicn's global page under a different
   `<title>`. The vault's `CLAUDE.md` stays as bootstrap, because it is the only
@@ -372,6 +372,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   backticks rather than by wikilink, since a skill outside the vault has no
   path there and an unresolvable link is the dangling pointer this ticket
   deleted.
+
+- [Rename agent-browser to passenger](tickets/033-rename-to-passenger.md)
+  — done, in two commits: everything user-facing, then `ab/` → `passenger/`
+  and `AgentBrowserError` → `PassengerError`. `AGENT_BROWSER_*` became
+  `PASSENGER_*` with no alias, and the state dir went to
+  `~/.local/share/passenger` with no migration code — the old profile is kept
+  by a hand-made symlink, so nothing in the tree names the old path. The MCP
+  registration has to be re-run: it pointed at `ab.mcp_server`, so an
+  unchanged one does not start at all.
 
 ## Fog
 
@@ -392,7 +401,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   notifying an explicit choice, which is right, but `notify.select()` fans out
   to stderr, `notify-send` and a webhook — and on the MCP door stderr is the
   server's log, which nobody reads, while `notify-send` needs a desktop. So a
-  container with no `AGENT_BROWSER_WEBHOOK` set can be told to summon a human
+  container with no `PASSENGER_WEBHOOK` set can be told to summon a human
   and reach nobody, then block for the full wait. Whether the tool should say
   so when asked to notify with nothing that can, or whether that is the
   deployment's problem, is unexamined.
@@ -443,7 +452,7 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   profile directory, and the session record are all single-valued. If
   concurrent sessions are ever wanted, that assumption is load-bearing
   in more places than it looks.
-- **A long-running MCP server can hold stale code.** Editing `ab/` does
+- **A long-running MCP server can hold stale code.** Editing `passenger/` does
   not affect an already-running server, which is confusing precisely
   when someone is mid-debugging. Perhaps a version report in
   `browser_status`; perhaps nothing. One branch is closed: nothing gets made

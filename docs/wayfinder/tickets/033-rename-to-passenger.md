@@ -2,7 +2,7 @@
 id: 033
 title: Rename agent-browser to passenger
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -75,3 +75,57 @@ state dir on first start with the fallback kept for a while, take
 `PASSENGER_*` while accepting `AGENT_BROWSER_*`, and rename `ab/` in a
 second commit of its own so the mechanical churn does not hide the real
 change.
+
+## Answer
+
+Renamed, in two commits. `passenger` and `passenger-mcp` are the console
+scripts, `passenger` is the MCP server and the cyclopts app, `WM_CLASS` and
+the viewer's `--class` and the viewer page's title are `passenger` and
+`passenger-viewer`, and `skills/using-agent-browser` is now
+`skills/using-passenger`, with the vault symlink repointed at it. The flake
+moved with them: description, `pname`, `mainProgram`, both apps, the checks
+derivation and the dev-shell banner. Closed tickets keep the old name, and
+so do the two lines of the map that narrate a command and a variable that
+no longer exist.
+
+On the five open questions:
+
+1. **The state dir is not migrated, and the repo no longer mentions the old
+   path at all.** `~/.local/share/passenger` is simply the default now. The
+   1.5G logged-in Chrome profile is kept by a symlink made by hand outside
+   the tree — `ln -s agent-browser ~/.local/share/passenger` — which is safe
+   with the daemon up precisely because nothing is copied and no process is
+   asked to let go of anything. Verified against the live daemon: `status`
+   reports the profile under the new path and every logged-in tab is still
+   there. The move-on-first-start option in the question was refused for
+   what it would have left behind: migration code is read by everyone
+   forever to protect a case that happens once, on one machine, and it can
+   only run safely with the daemon down, which is a precondition the tool
+   would have had to police.
+
+2. **`PASSENGER_*` with no alias.** Accepting `AGENT_BROWSER_*` as a
+   deprecated spelling is a few lines, and those few lines are permanent:
+   the variables are read in exactly one place, and the flake is the only
+   thing that sets them, so the shim would outlive the confusion it exists
+   to prevent by years.
+
+3. **`ab/` is now `passenger/`,** in a commit of its own, along with
+   `AgentBrowserError` → `PassengerError`. Every import, both entry points,
+   the wheel's package list, `pythonImportsCheck`, the two
+   `resources.files("passenger")` lookups that read `pictures.js` and
+   `walker.js` out of the package, and the `-m` module the noVNC helper
+   respawns itself as. `mypy --strict` clean, 54 tests pass.
+
+4. **The MCP registration is re-run by hand.**
+   `mcp__agent-browser__fetch` is `mcp__passenger__fetch`, which no mechanism
+   makes seamless. Note that the registered command was
+   `python -m ab.mcp_server`, so an unchanged registration does not merely
+   keep the old tool names — it fails to start. This ticket is where that is
+   written down: the README does not mention the old name anywhere, because a
+   README describes what the tool is, not what it was, and this rename is the
+   record of the change.
+
+5. **The checkout stays at `/home/lyh/agent-browser`.** Moving it invalidates
+   the MCP registration's two absolute paths and the vault skill symlink in
+   the same moment, for a directory name no agent and no tool reads. Left as
+   a `mv` and a note for whenever the registration is being edited anyway.

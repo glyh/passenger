@@ -22,16 +22,6 @@ Register it with Claude Code for every project:
     claude mcp add passenger --scope user -- \
       nix run /path/to/passenger#mcp
 
-This tool was called `agent-browser` until ticket 033. The rename changes the
-tool names an agent sees -- `mcp__agent-browser__fetch` became
-`mcp__passenger__fetch` -- so an existing registration has to be removed and
-added again under the new name, and any agent memory that spells the old tool
-names is stale. The `PASSENGER_*` variables were `AGENT_BROWSER_*`, and the
-state dir moved with them: a machine that has the old
-`~/.local/share/agent-browser` keeps its logged-in Chrome profile by
-symlinking `~/.local/share/passenger` at it, which is safe with the daemon up
-because nothing is copied.
-
 The flake builds a real derivation, so the wrapper already carries cage and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
 resolves only if they happen to be installed system-wide, and a machine
