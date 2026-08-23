@@ -134,11 +134,25 @@ touched*, gives no runtime line number until you use
 lines on this side too. The async rewrite of the browser half remains
 **unmeasured**.
 
-**So all three are in, and none of them says no.** What is left is not a
-measurement. The packaging motive was removed by 022, the remaining costs are
-the extraction port and the async rewrite, and the one identified regression is
-the schema-visible bounds. Whether that is worth a hobby project's evenings is
-the developer's call, and it is the only thing between this ticket and closed.
+**The async rewrite is measured too, and it was the smallest surprise here.**
+`targets.py` entire and `browser.Session` with 012's recovery were ported,
+compiled, and run against a wedged Chrome: same failure, same message, same
+detail line as the Python. A transliteration with four exceptions -- the context
+manager becomes an `OpenAsync` factory plus `IAsyncDisposable`, `raise ... from`
+needs the inner exception passed by hand, the hand-rolled websocket deadline
+collapses into one `CancellationTokenSource` and reads *better* than the
+original, and `Target` maps onto a record with `[JsonPropertyName]`. Still
+untried: `service.py`, and async virality reaching the CLI's entry points.
+
+Porting it also found a bug in the original, filed as [a tab waiting on a server
+that never answers](042-attach-hangs-on-pending-navigation.md) -- not C#'s
+doing, but rebuilding a mechanism is what made its assumption visible.
+
+**So all four are in, and none of them says no.** What is left is not a
+measurement. The packaging motive was removed by 022, the remaining cost is
+overwhelmingly the extraction port, and the one identified regression is the
+schema-visible bounds. Whether that is worth a hobby project's evenings is the
+developer's call, and it is the only thing between this ticket and closed.
 
 The three as originally written follow, unedited.
 

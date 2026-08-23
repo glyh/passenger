@@ -1,9 +1,10 @@
 # Port measurements: patchright-dotnet and the MCP C# SDK
 
 Asset for [Whether this moves to C#](../tickets/023-rewriting-into-csharp.md).
-All three measurements. 1 and 2 are desk research, run first so that either
-could kill the port cheaply; neither did. 3 needed C# actually running against a
-page, and was run after them.
+The ticket's three measurements, plus a fourth that measurement 3 left owed --
+the async rewrite of the browser half. 1 and 2 are desk research, run first so
+that either could kill the port cheaply; neither did. 3 and 4 needed C# actually
+running against a Chrome.
 
 Measured 2026-08-24 against patchright-dotnet at v1.62.1 and
 modelcontextprotocol/csharp-sdk at v2.2.0.
@@ -197,6 +198,66 @@ snippets and a fifty-line harness are not `browser.py`, `service.py` and
 `script.py` going async. Playwright .NET having no sync API remains a real cost,
 and this measurement did not touch it.
 
+## 4. The async rewrite, which measurement 3 left owed
+
+`script` fluency said nothing about the browser half, and the ticket's claim
+there is specific: Playwright .NET has no sync API, so `browser.py`,
+`service.py` and `script.py` are "an async rewrite rather than a
+transliteration". Measured by porting the hardest of them for real -- `targets.py`
+entire (151 lines) and `browser.Session` with 012's attach recovery -- and
+compiling and running it against a Chrome.
+
+**It is a transliteration, with four named exceptions.** Structure, control
+flow, comments and error messages all carried over line for line. What actually
+changed:
+
+1. **`with Session()` cannot survive.** A constructor cannot `await`, so the
+   context manager becomes a static `OpenAsync` factory plus `IAsyncDisposable`,
+   and callers write `await using`. Mechanical, and it happens once.
+2. **`raise X from Y` needs saying.** Python chains the cause by default;
+   C# drops it unless the inner exception is passed explicitly. Worth noting
+   only because the compiler caught it -- `warning CS0168: the variable 'again'
+   is declared but never used` was the tell, which is the strictness argument
+   working as advertised.
+3. **The websocket deadline got *simpler*.** `targets._call` hand-rolls a
+   budget: `end = time.time() + deadline`, recompute `remaining` each loop, pass
+   it to `recv`. In C# one `CancellationTokenSource(deadline)` covers the send,
+   every receive, and the parse, and expiry arrives as one
+   `OperationCanceledException`. This is the piece of the port that reads better
+   than the original.
+4. **`Target.model_validate` maps cleanly.** `[JsonPropertyName]` for the
+   `webSocketDebuggerUrl` alias, and System.Text.Json drops unknown fields by
+   default, which is what the Python docstring promises. The `is_page` property
+   is a one-line expression member. No loss -- but this model carries no bounds,
+   and the six that do are the regression already recorded under measurement 2.
+
+**Parity was then checked against behaviour, not against the source.** A tab was
+deliberately wedged (a socket that accepts and never answers, one tab navigated
+to it) and both implementations attached to the same browser:
+
+    Python   ATTACH-FAILED after 30.8s -- "could not attach within 15s, twice",
+             detail "no tab was stuck mid-navigation, so this is something else"
+    C#       ATTACH-FAILED after 61.0s -- same message, same detail
+             (61s not 30s only because the port's timeout constant is 30, not 15)
+
+Identical, down to the detail line. On the hardest shell in the codebase, the
+async port behaves the same as the original.
+
+**The port also found a bug in the original**, which is the part worth keeping:
+`unstick` reported nothing stuck while that tab was hanging every attach, and
+closing the tab dropped the attach to 0.4s. 012's probe tests renderer liveness,
+and a tab parked on response headers is alive. Filed as [a tab waiting on a
+server that never answers](../tickets/042-attach-hangs-on-pending-navigation.md).
+Nothing about that is C#'s doing -- but rebuilding a mechanism is how its
+assumption became visible, which is an argument for the port that no feature
+comparison would have produced.
+
+**What is still unmeasured:** `service.py`, and the fact that going async is
+viral. Every caller of an async function becomes async, and the CLI's entry
+points are the end of that chain. On the MCP side it costs nothing, since that
+server is async already; on the CLI side it means `cyclopts` commands become
+`async Task`, which is supported but was not tried here.
+
 ## Where this leaves the go/no-go
 
 **Three measurements, no blocker.** The one that was meant to be most dangerous
@@ -211,7 +272,10 @@ buildable in the other.
 - The extraction port -- trafilatura at ~5,500 reachable lines, or whatever
   [029](../tickets/029-one-extractor-instead-of-two.md) shrinks it to. Still the
   bulk of the work, and untouched by anything measured here.
-- The async rewrite of the browser half, unmeasured.
+- The async rewrite of the browser half -- **measured, and smaller than
+  billed**: a transliteration with four named exceptions, one of which reads
+  better in C# than in Python. `service.py` and the CLI's async virality are
+  still untried.
 - **One functional regression, newly identified**: six bounded parameters would
   keep their enforcement and lose their schema visibility.
 - A single-maintainer dependency, mitigated by its being 1,180 legible lines.
