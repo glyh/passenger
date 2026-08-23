@@ -203,3 +203,46 @@ Re-point this ticket at the question the measurement actually raises:
 whether a repaired root heuristic changes the answer for the pages where
 `dom` failed structurally. On present evidence it changes one of the two, and
 the other is the answer.
+
+## Built
+
+Recommendation 3 only -- the markup work, which was to land whether or not
+`article` survived, and which did. Commit 09e1819.
+
+`_DOM_JS` emits `#`..`######` for `H1`-`H6`, `- ` for `LI` with two spaces per
+level of list nesting, and a fence around `PRE`. `tidy` passes fenced blocks
+through verbatim.
+
+Two things the measurement above found against the then-uncommitted walker are
+fixed:
+
+- **Orphan markers.** A marker is now deferred until the first text actually
+  lands, rather than written when the element opens. `docs.python.org` went
+  from 8 bare dashes and 0 usable bullets to 8 bullets and no orphans;
+  `react.dev`'s 23 inline ones are unchanged. Headings had the same latent
+  fault, for a heading whose text is wrapped in a div, and it goes with it.
+  An unflushed marker is dropped at its block's close, so an empty item cannot
+  label the next block's text.
+- **The `tidy` fence exemption** is in, with the reasoning the measurement
+  reached independently: `    print(x)` flattened to `print(x)` is not the
+  sample.
+
+Re-measured after the fix, against the two pages [009](009-defuddle-as-a-mode.md)
+named: 34 fenced blocks to trafilatura's 8 on asyncio-task, 10 to its 1 on
+react.dev/state -- the counts the measurement recorded, now with the bullets
+usable.
+
+Tested where it is testable. `tidy` is pure and gets two tests under
+[001](001-testing-the-shells.md)'s rule, both naming failures that happened:
+indentation stripped inside a fence, and blank lines collapsed inside one. The
+walker is JavaScript and no test can reach it without starting the real stack,
+which 001 rules out, so it was measured against live pages instead.
+
+Still not emitted, and out of the scope this ticket set: **tables**. The
+question above lists them among the four things `dom` lacks, but the change it
+prescribes is the other three, and the recommendation keeps `article` -- which
+does emit them. Also unfixed and unfixable from here: react.dev's sandpack
+editors are divs, not `PRE`, so neither extractor fences them.
+
+Nothing here touches the root heuristic. That is
+[028](028-the-root-heuristic-picks-a-decoy.md).
