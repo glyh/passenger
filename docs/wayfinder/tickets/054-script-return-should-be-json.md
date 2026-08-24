@@ -3,7 +3,7 @@ id: 054
 title: script's return value should be JSON, not another wrapping layer
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
