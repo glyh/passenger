@@ -4,17 +4,27 @@ Generic web access through a real, logged-in Chrome that sites can't
 distinguish from your daily driver — with a human handoff when a site puts up a
 challenge the agent shouldn't (and shouldn't try to) solve.
 
-    passenger serve                      # start the hidden Chrome daemon
-    passenger script <file>              # run a Playwright script against a tab
-    echo 'await Page.GotoAsync(url);
-          return await Page.InnerTextAsync("body");' | passenger script
-    passenger open <url>                 # park a URL in a tab, no window
-    passenger open <url> --show          # ...and show it, to log in by hand
-    passenger tabs                       # this lane's tabs and their ids
-    passenger tabs --lane orphan         # ...tabs no lane claims
-    passenger close-tabs                 # close this lane's tabs
-    passenger close-tabs <id> <id>       # ...or just these
-    passenger show | hide | stop | status
+It is an MCP server and nothing else. Register it with Claude Code for every
+project:
+
+    claude mcp add passenger --scope user -- \
+      nix run /path/to/passenger
+
+Then ask for a page. The first call starts the Chrome daemon itself; when a
+site puts up a login or a captcha, `showBrowser` puts the window in front of
+you, you solve it by hand, and the profile keeps the result.
+
+**There is exactly one thing you ever type**, and only when Chrome has wedged
+badly enough that the tools cannot reach it:
+
+    Passenger.Mcp stop [--force]
+
+It restarts Chrome at the cost of the warm logged-in session, which is why no
+agent can call it and why it refuses while a lane still holds tabs or has the
+window on screen. Everything else this used to offer at a terminal -- `script`,
+`tabs`, `open`, `close-tabs`, `show`, `hide`, `serve`, `status` -- was a second
+copy of a tool, and nobody had ever run any of it. See
+`docs/wayfinder/tickets/057-delete-the-cli.md`.
 
 **There is no `fetch`.** There was, with an `article` mode and a `dom` mode,
 and ticket 046 retired both: extraction is a judgement about what a page means,
@@ -23,19 +33,9 @@ the only door onto a page — it navigates, drives and hands back what you
 return. The recipes for reading one, including the DOM walk that used to be
 `dom` mode, live in `skills/using-passenger/`.
 
-Every tab command takes `--lane` and defaults to the reserved `cli` lane,
-which is what lets `open` and then `script --tab <id>` work across two
-commands typed thirty seconds apart. `--lane orphan` reaches the tabs no lane
-claims -- what a page opened by itself, or a human opened during a handoff.
-
 ## As an MCP server
 
-    Passenger.Mcp        # stdio
-
-Register it with Claude Code for every project:
-
-    claude mcp add passenger --scope user -- \
-      nix run /path/to/passenger#mcp
+    Passenger.Mcp        # stdio, and the only thing a client launches
 
 The flake builds a real derivation, so the wrapper already carries cage and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
@@ -51,27 +51,24 @@ Tools: `openLane`, `setTtl`, `script`, `listTabs`, `closeTabs`,
 `closeAllTabs`, `destroyLane`, `showBrowser`, `hideBrowser`,
 `browserStatus`.
 
-Four things differ from the CLI, all deliberate:
+Four choices worth knowing, all deliberate:
 
 - **An agent opens a lane first.** One Chrome is shared by every agent on the
   machine -- two sessions are two processes, and subagents of one session share
   a single process, so nothing in the transport tells the likely colliders
   apart. A lane owns the tabs opened in it: nobody else can see, list or close
-  them. It collects itself after 30 minutes of quiet, closing its tabs. On the
-  CLI the caller is a human who can be trusted with a shared default; over MCP
-  the parameter is required, because a caller isolated by accident cannot tell
-  which lane it is in.
+  them. It collects itself after 30 minutes of quiet, closing its tabs. The
+  parameter is required rather than defaulted, because a caller isolated by
+  accident cannot tell which lane it is in.
 - **`script` does not wait for a human.** A tool call that hangs for
   five minutes while someone hunts for a captcha is a bad citizen, so a blocked
   page comes straight back as `type="blocked"` with what is in the way and how
   to clear it. The agent tells the user, the user solves it, the agent calls
   again -- the profile kept the result. `waitSeconds` opts into blocking.
-- **The daemon starts on demand.** A human runs `serve` first; an agent should
-  not have to know that.
-- **`showBrowser` exists at all.** The CLI has nothing like it on purpose:
-  there, the caller is already the human. Over MCP the caller is not, so
-  summoning one is a tool. It waits until they *close the viewer*, which is
-  the only "done" signal this side can observe without ruling on the page.
+- **The daemon starts on demand.** Nothing has to be started first, by anyone.
+- **`showBrowser` exists at all.** The caller is not the human, so summoning one
+  is a tool. It waits until they *close the viewer*, which is the only "done"
+  signal this side can observe without ruling on the page.
 
 **Operating knowledge for the agent lives in `skills/using-passenger`,**
 not in the tool docstrings, which carry the call contract and stop there. That
@@ -105,8 +102,9 @@ lives in the shell.
             src/Passenger/Present.cs    putting the hidden browser in front of a human
             src/Passenger/Config.cs     the PASSENGER_* env boundary
             src/Passenger/Script.cs     compiling and running a caller's script with Roslyn
-            src/Passenger.Cli/Program.cs   System.CommandLine; the only place a failure becomes terminal output
-            src/Passenger.Mcp/Program.cs   the MCP frontend over the same service layer
+            src/Passenger.Mcp/Program.cs   the entry point: viewer re-exec, `stop`, then the server
+            src/Passenger.Mcp/Tools.cs     the ten tools, and the whole surface there is
+            src/Passenger.Mcp/Stop.cs      the one verb a human types
 
     skill   skills/using-passenger/SKILL.md      how an agent operates this
             skills/using-passenger/markdown.js     the DOM-to-markdown recipe
@@ -166,8 +164,9 @@ run.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,
 DataDome, PerimeterX, login walls. Cheap, exact, and the only thing that can
-mark a page blocked. `passenger status` prints the table; it is fixed at
-build time and is the same on every machine.
+mark a page blocked. The `script` description and the `using-passenger` skill
+both list them; the table is fixed at build time and is the same on every
+machine.
 
 There was a second tier: anything extracting to under `--min-words` was
 treated as blocked, screenshotted, and turned into a proposed signature. It is
@@ -262,8 +261,7 @@ own compositor sidesteps that whole class of breakage.
 ## Install
 
     nix develop            # dev shell: cage, wayvnc, noVNC, the dotnet SDK
-    nix run .              # run the CLI directly
-    nix run .#mcp          # run the MCP server
+    nix run .              # run the MCP server (there is no other app)
 
 The flake pins everything except the browser and the .NET SDK itself --
 `deps.json` locks every NuGet package by hash (regenerate it with

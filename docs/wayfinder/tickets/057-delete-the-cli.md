@@ -2,7 +2,7 @@
 id: 057
 title: Delete the CLI door
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -182,3 +182,49 @@ reflects over both doors, subtracts the parameter lists and fails unless every
 difference is declared in one file with its reason. It would have made a missing
 parameter impossible to add silently, which is 026's actual stated goal, for
 about forty lines and no indirection. It needs two doors.
+
+## Done
+
+`src/Passenger.Cli` is gone -- eight verbs, the error-to-exit-code table, and
+the System.CommandLine dependency, which left the repo rather than moving.
+`deps.json` was regenerated, so its one `System.CommandLine` entry went too. The
+flake publishes a single executable and a single app; `apps.mcp` was removed
+rather than aliased, so a registration saying `nix run /path/to/passenger#mcp`
+must lose the `#mcp`.
+
+`stop` landed as planned, in `src/Passenger.Mcp/Stop.cs`, handled beside
+`Webserve.ServeIfAsked` before the host is built. Unrecognised argv prints usage
+to stderr and exits 2; `stop` and `stop --force` are the only accepted forms.
+`Lanes.Occupied()` is the new query, with three tests against the `FakeChrome`
+seam the lane suite already had.
+
+**One thing the plan had wrong.** It said to refuse on `ScreenClaims()` and
+`Occupied()`, noting approvingly that `Occupied()` returns empty when Chrome
+does not answer so a wedged browser is never blocked by a check it cannot
+complete. `ScreenClaims()` has no such property -- it is sqlite alone, and a
+Chrome that died leaves its claim rows behind until the next start drops the
+tables. Refusing on those would have wedged the one command that clears a wedge,
+which is the exact failure this ticket kept saying it was avoiding. Found by
+trying to exercise the refusal with no daemon running. Both halves are now gated
+on `Browser.IsUp()`: only a running browser has anything to lose.
+
+`launch` moved into `browserStatus`; `recognises` was deleted, and
+`README.md:169` now points at the skill and the `script` description that
+already carry the table.
+
+The remedies were rewritten. `DaemonNotRunning` lost its suggestion and says
+"chrome is not answering on {CdpUrl}"; `NoPresenter` says the daemon starts on
+demand and points at `browserStatus`; 042's message points at `browserStatus`
+and asks the agent to ask the human to run `Passenger.Mcp stop`. `Service.cs`'s
+blocked-page hint dropped its `passenger show` half.
+
+**And the finding that outgrew its bullet.** `PassengerException` kept `Detail`
+out of `Message`, and nothing in `Tools.cs` catches, so the SDK reported
+`Message` alone. Every remedy above -- and 042's list of which lanes are stuck
+and on what URLs, the one this ticket was most careful to preserve -- had never
+reached an agent at all. The fix is not the catch block the plan proposed but
+one line in the constructor: `Message` carries both halves now, so every door
+gets it and no tool has to remember to. `PlainMessage` and `Detail` stay as
+properties because `Service` renders a failed script from them separately.
+
+89 green, and `nix build` produces one binary.

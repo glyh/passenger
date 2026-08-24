@@ -1,8 +1,14 @@
 // Structural domain errors.
 //
-// Core modules raise these; only the CLI boundary decides what a failure looks
-// like on a terminal. Codes are stable so callers can branch on them without
-// matching English.
+// Core modules raise these. Codes are stable so callers can branch on them
+// without matching English.
+//
+// There used to be a CLI boundary that decided what a failure looked like on a
+// terminal, and it was the only reader of `Detail`. Ticket 057 deleted it and
+// found what that had been hiding: nothing in `Tools.cs` catches, so the SDK
+// reported `Message` alone, and every remedy written into a `Detail` -- 042's
+// list of which lanes are stuck and on what URLs, most carefully -- had never
+// once reached an agent. `Message` carries both now.
 
 namespace Passenger;
 
@@ -65,14 +71,23 @@ public class PassengerException : Exception
 {
     public ErrorCode Code { get; }
 
-    /// <summary>The message without the code prefix, for a frontend to render.</summary>
+    /// <summary>
+    /// The message without the code prefix or the detail, for a caller rendering
+    /// the parts separately -- which `Service` does on a failed script.
+    /// </summary>
     public string PlainMessage { get; }
 
+    /// <summary>
+    /// What to do about it, when there is something. Part of <see cref="Message"/>
+    /// as well: an exception that escapes to the MCP SDK is reported by its
+    /// message and nothing else, and this half is usually the useful one.
+    /// </summary>
     public string? Detail { get; }
 
     public PassengerException(ErrorCode code, string message, string? detail = null,
                               Exception? inner = null)
-        : base($"[{code.Value()}] {message}", inner)
+        : base($"[{code.Value()}] {message}"
+               + (detail is null ? "" : $" -- {detail}"), inner)
     {
         Code = code;
         PlainMessage = message;

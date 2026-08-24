@@ -681,6 +681,21 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   which is the ticket's own goal for forty lines. It needed two doors. See
   [Delete the CLI door](tickets/057-delete-the-cli.md).
 
+- [Delete the CLI door](tickets/057-delete-the-cli.md) — done. `src/Passenger.Cli`
+  and System.CommandLine are gone; `stop` survives alone as a verb on
+  `Passenger.Mcp`, handled beside the viewer re-exec before the host is built,
+  refusing while a lane holds the screen or owns live tabs unless `--force`. One
+  binary, one app: `apps.mcp` was removed rather than aliased, so a registration
+  saying `#mcp` must lose it. The reserved `cli` lane went with the terminal it
+  was for. Two things the plan had wrong, both found by running it: refusing on
+  `ScreenClaims()` alone would have wedged the one command that clears a wedge,
+  since claim rows outlive a dead Chrome — both halves are gated on
+  `Browser.IsUp()` now. And `PassengerException` kept `Detail` out of `Message`
+  while `Tools.cs` caught nothing, so **every remedy string this project has
+  written, 042's stuck-lane list included, had never once reached an agent**. One
+  line in the constructor, not the catch block the ticket proposed. Closes
+  [026](tickets/026-one-description-two-doors.md). 89 green.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

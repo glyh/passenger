@@ -215,9 +215,8 @@ public static class Service
         return blocker is null
             ? null
             : ToBlocked(blocker, tab,
-                "showBrowser with this tab and a wait, or `passenger show`; "
-                + "solve it, then call again with this same tab -- it is still "
-                + "open, and still there");
+                "showBrowser with this tab and a wait; solve it, then call again "
+                + "with this same tab -- it is still open, and still there");
     }
 
     private static Blocked ToBlocked(Blocker blocker, string tab, string hint) => new()

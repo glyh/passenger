@@ -107,6 +107,41 @@ public class LanesTests : IDisposable
         Assert.Empty(Lanes.ScreenClaims());
     }
 
+    // --- what `stop` refuses on (057) --------------------------------------
+
+    [Fact]
+    public void OccupiedCountsLiveTabsPerLaneAndSkipsOrphan()
+    {
+        string mine = Lanes.OpenLane();
+        Lanes.Adopt("T1", mine);
+        Lanes.Adopt("T2", mine);
+        // Chrome is launched with about:blank and it lands here, so counting
+        // `orphan` would mean a refusal that never lifts.
+        Lanes.Adopt("T3", Lanes.Orphan);
+        Assert.Equal([(mine, 2)], Lanes.Occupied());
+    }
+
+    [Fact]
+    public void OccupiedIgnoresRowsForTabsChromeNoLongerHolds()
+    {
+        string lane = Lanes.OpenLane();
+        Lanes.Adopt("T1", lane);
+        chrome.Ids.Remove("T1");
+        // A row is not work. The sweep that would drop it may not have run.
+        Assert.Empty(Lanes.Occupied());
+    }
+
+    [Fact]
+    public void OccupiedIsEmptyWhenChromeDoesNotAnswer()
+    {
+        string lane = Lanes.OpenLane();
+        Lanes.Adopt("T1", lane);
+        chrome.Wedged = true;
+        // The wedged browser is the case `stop` exists for: a check that cannot
+        // complete must not be what stands in its way.
+        Assert.Empty(Lanes.Occupied());
+    }
+
     [Fact]
     public void TheReservedLaneIsEmptiedRatherThanRemoved()
     {
@@ -286,7 +321,11 @@ public class LanesTests : IDisposable
 
         public List<string> Closed { get; } = [];
 
-        public IReadOnlyList<string> LiveTabs() => Ids;
+        /// <summary>A browser that no longer answers, which several rules turn on.</summary>
+        public bool Wedged { get; set; }
+
+        public IReadOnlyList<string> LiveTabs() =>
+            Wedged ? throw new HttpRequestException("no daemon") : Ids;
 
         public bool Close(string tab)
         {

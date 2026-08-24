@@ -56,8 +56,15 @@ internal static class Stop
 
         bool force = args.Length == 2;
         Lanes.Sweep();
-        IReadOnlyList<string> claims = Lanes.ScreenClaims();
-        IReadOnlyList<(string Lane, int Tabs)> occupied = Lanes.Occupied();
+
+        // Only a running browser has anything to lose, and only it can be asked.
+        // `Occupied` reaches Chrome and returns empty when it cannot, but
+        // `ScreenClaims` is sqlite alone: a Chrome that died leaves its claim rows
+        // behind until the next start drops the tables, and refusing on those would
+        // wedge the one command that clears a wedge.
+        bool up = Browser.IsUp();
+        IReadOnlyList<string> claims = up ? Lanes.ScreenClaims() : [];
+        IReadOnlyList<(string Lane, int Tabs)> occupied = up ? Lanes.Occupied() : [];
 
         if (!force && (claims.Count > 0 || occupied.Count > 0))
         {

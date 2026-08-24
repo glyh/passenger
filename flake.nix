@@ -117,21 +117,17 @@
             ]);
         };
 
-        # The three projects, published together into one directory
-        # (buildDotnetModule's default `dotnetInstallPath` for every
-        # `projectFile` entry) so the CLI and the MCP server share one copy of
-        # the Playwright driver rather than two.
+        # One published binary, since ticket 057 deleted the CLI. `projectFile`
+        # stays a list because the test project is built beside it, not because
+        # there is a second entry point any more.
         passenger = pkgs.buildDotnetModule {
           pname = "passenger";
           version = "0.1.0";
           src = source;
 
-          projectFile = [
-            "src/Passenger.Cli/Passenger.Cli.csproj"
-            "src/Passenger.Mcp/Passenger.Mcp.csproj"
-          ];
+          projectFile = [ "src/Passenger.Mcp/Passenger.Mcp.csproj" ];
           testProjectFile = "tests/Passenger.Tests/Passenger.Tests.csproj";
-          executables = [ "Passenger.Cli" "Passenger.Mcp" ];
+          executables = [ "Passenger.Mcp" ];
 
           # Where the forked ModelContextProtocol packages come from: nupkgs
           # in a build input, not nuget.org, so they are absent from deps.json.
@@ -168,7 +164,7 @@
             done
           '';
 
-          meta.mainProgram = "Passenger.Cli";
+          meta.mainProgram = "Passenger.Mcp";
         };
       in
       {
@@ -189,7 +185,7 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: dotnet run --project src/Passenger.Cli -- status"
+              echo "run: dotnet run --project src/Passenger.Mcp -- stop"
             } >&2
           '';
         };
@@ -200,17 +196,14 @@
         # mcp-sdk-deps.json when the fork moves.
         packages.mcp-sdk = mcpSdk;
 
-        # The MCP server is the second entry point, and the one that gets
-        # wired into a client's config, so it deserves a name of its own
-        # rather than an argv suffix.
-        apps.mcp = {
-          type = "app";
-          program = "${self.packages.${system}.default}/bin/Passenger.Mcp";
-        };
-
+        # One binary, one app, one name. `apps.mcp` was the address a client's
+        # config named while `apps.default` pointed at the CLI; with the CLI gone
+        # there is nothing for the two to distinguish, and keeping `mcp` as an
+        # alias would be a second name for the only thing there is. A registration
+        # that still says `#mcp` needs its line changed to plain `nix run`.
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/Passenger.Cli";
+          program = "${self.packages.${system}.default}/bin/Passenger.Mcp";
         };
       });
 }

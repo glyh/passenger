@@ -156,8 +156,10 @@ public static class Present
             // rectangle that looks exactly like a broken stack.
             if (live is null)
             {
-                throw new WindowException(ErrorCode.NoPresenter, "no live browser session",
-                                          "start it with: passenger serve");
+                throw new WindowException(
+                    ErrorCode.NoPresenter, "no live browser session",
+                    "the daemon starts on demand, so this is one that failed or "
+                    + "died; `browserStatus` says which");
             }
 
             if (!Webserve.Ensure(Config.Settings.NovncPort))

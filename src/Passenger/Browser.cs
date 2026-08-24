@@ -294,8 +294,12 @@ public sealed class Session : IAsyncDisposable
     {
         if (!Passenger.Browser.IsUp())
         {
-            throw new DaemonException(ErrorCode.DaemonNotRunning, "browser not running",
-                                      "start it with: passenger serve");
+            // No remedy, because there is no command that is one. The daemon starts
+            // on demand at every tool, so reaching this means the start failed or
+            // Chrome died mid-call -- ticket 057, which deleted the `serve` this
+            // line used to name.
+            throw new DaemonException(ErrorCode.DaemonNotRunning,
+                                      $"chrome is not answering on {Config.CdpUrl}");
         }
 
         var session = new Session();
@@ -370,9 +374,10 @@ public sealed class Session : IAsyncDisposable
                           + string.Join(", ", stuck.Select(p => p.Url))
                         : "every tab answered its renderer probe and every "
                           + "one of them holds a document, so neither wedge "
-                          + "this knows how to free is present; `passenger "
-                          + "status` says what is open, and `passenger stop` "
-                          + "restarts chrome at the cost of the warm session",
+                          + "this knows how to free is present; `browserStatus` "
+                          + "says what is open, and asking the human to run "
+                          + "`Passenger.Mcp stop` restarts chrome at the cost "
+                          + "of the warm session",
                     again);
             }
         }

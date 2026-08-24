@@ -385,6 +385,12 @@ public static class Tools
         return new Dictionary<string, string>
         {
             ["daemon"] = up ? "up" : "down",
+            // How the window is being hidden, which decides whether it can be. The
+            // CLI's `status` reported this and nothing else did; ticket 057 moved
+            // it here rather than losing it, because a machine that resolved no
+            // nested backend starts Chrome *visible* and this is the only line
+            // that says so before somebody notices a browser on their desktop.
+            ["launch"] = Launch.Select().Name.Value(),
             ["presenter"] = presenter.Name.Value(),
             ["onScreen"] = presenter.Presented().ToString(),
             ["profile"] = Config.Settings.ProfileDir,
