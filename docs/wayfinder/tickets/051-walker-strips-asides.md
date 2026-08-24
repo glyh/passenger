@@ -3,7 +3,7 @@ id: 051
 title: The walker strips aside, and aside carries footnotes
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
