@@ -18,6 +18,16 @@
   </PropertyGroup>
 
   <!--
+    The forked ModelContextProtocol packages are not on nuget.org. Inside the
+    nix build they arrive as a build input and restore finds them without
+    help; a `dotnet` run by hand needs to be told where they are, and the dev
+    shell sets this to the nupkg directory the flake built.
+  -->
+  <PropertyGroup Condition="'$(MCP_SDK_NUGET_SOURCE)' != ''">
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(MCP_SDK_NUGET_SOURCE)</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <!--
     Linux, and not as an accident of where it was written. cage and wayvnc are
     Wayland, /proc is how a session's liveness is read, and kill(2) with an
     explicit signal is how it is torn down. Declaring it means the platform

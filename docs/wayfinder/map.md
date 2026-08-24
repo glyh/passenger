@@ -593,6 +593,26 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   `walker.js`, not to the walker, which runs in the page and has no filesystem.
   No code changed at either door.
 
+- [The wire escapes non-ASCII to `\u`, six bytes where UTF-8 spends
+  three](tickets/056-utf8-escape-regression.md) — closed twice. First without a
+  code change: the escaping happens in the JSON-RPC envelope, which
+  `ModelContextProtocol` 2.2.0 writes through a frozen `DefaultOptions` no
+  caller can reach, and reflection at the `readonly static` behind it throws.
+  Then reopened the same day on its own stated condition — the SDK grew the
+  hook, in a fork
+  ([glyh/csharp-sdk@utf8-wire-encoding](https://github.com/glyh/csharp-sdk/tree/utf8-wire-encoding)),
+  adding `McpServerOptions.JsonSerializerOptions` that the stdio transport
+  reads. `Program.cs` sets `UnsafeRelaxedJsonEscaping` and the wire now carries
+  literal `腾冲`, zero `\u` sequences, verified by raw JSON-RPC probe against
+  the built server. The dependency reaches the build as nupkgs the flake packs
+  from a pinned source input and hands to restore as a local source, versioned
+  `2.2.0-utf8wire.1` so it cannot be mistaken for the published 2.2.0; the two
+  traps in that route — a hand-run `dotnet` has no offline source, and nixpkgs
+  rewrites packed nupkgs down to a metadata-only stub — are written up in the
+  ticket. Accepted knowingly: the relaxed encoder passes U+2028/U+2029 through,
+  which is 052's hazard from a different direction, and the sentence about it
+  in the `using-passenger` skill is not yet written.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

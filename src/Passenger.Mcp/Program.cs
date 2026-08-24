@@ -8,8 +8,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using Passenger;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 
 // Before anything else: the detached re-exec that serves the viewer page.
 // Either frontend can be the one that ends up serving it.
@@ -55,6 +58,17 @@ builder.Services
             + "does and does not catch, recognising a wall it cannot name, why a "
             + "read is only the first screen, and why reading beats driving -- is "
             + "the `using-passenger` skill. Load it before the first call.";
+
+        // What goes on the wire, character by character. The SDK's default
+        // encoder leaves only BasicLatin alone and escapes everything else to
+        // \uXXXX -- six bytes for a CJK character that UTF-8 writes in three,
+        // on every `script` reply read straight into a caller's context.
+        // Ticket 056 measured that and found no way to reach the envelope's
+        // encoder; this property is the fork's answer to it.
+        options.JsonSerializerOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
     })
     .WithStdioServerTransport()
     .WithToolsFromAssembly();

@@ -4,9 +4,19 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+
+    # The MCP C# SDK, forked. Upstream's stdio transport writes the JSON-RPC
+    # envelope through a frozen JsonSerializerOptions whose encoder escapes
+    # every non-ASCII character (ticket 056, csharp-sdk#795); the fork adds the
+    # hook that lets a server choose the encoder. Pinned as a source input, not
+    # a flake, and built into nupkgs below.
+    mcp-csharp-sdk = {
+      url = "github:glyh/csharp-sdk/utf8-wire-encoding";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, mcp-csharp-sdk }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -51,6 +61,52 @@
 
         dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
 
+        # The forked SDK, packed as nupkgs rather than referenced as projects:
+        # passenger keeps a PackageReference, and this derivation is what that
+        # reference resolves against. `mcpSdkVersion` is the version those
+        # packages carry, and Passenger.Mcp.csproj must ask for exactly it.
+        mcpSdkVersion = "2.2.0-utf8wire.1";
+
+        mcpSdk = pkgs.buildDotnetModule {
+          pname = "ModelContextProtocol";
+          version = mcpSdkVersion;
+          src = mcp-csharp-sdk;
+
+          projectFile = [
+            "src/ModelContextProtocol.Core/ModelContextProtocol.Core.csproj"
+            "src/ModelContextProtocol/ModelContextProtocol.csproj"
+          ];
+
+          inherit dotnet-sdk;
+          nugetDeps = ./mcp-sdk-deps.json;
+
+          # Libraries, not an application: nothing to publish or wrap, and the
+          # nupkgs are the whole output.
+          dontPublish = true;
+          packNupkg = true;
+          executables = [ ];
+
+          # Without this the fixup hooks rewrite each packed nupkg down to its
+          # .nuspec, on the assumption that the only consumer is a nix build
+          # -- which gets the real contents from a fallback packages folder
+          # the hooks fill in separately. A `dotnet restore` run by hand has
+          # no such folder, and a nuspec-only package restores to a project
+          # that cannot see a single type in it. Keep the contents.
+          createInstallableNugetSource = true;
+
+          # buildDotnetModule derives -p:Version from the derivation's version
+          # by keeping only its numeric components, which would drop the
+          # prerelease tag that keeps these packages distinguishable from
+          # nuget.org's 2.2.0. Pack flags come last on the command line, so
+          # this is the version that lands in the nupkg.
+          dotnetPackFlags = [
+            "-p:Version=${mcpSdkVersion}"
+            # The baseline package this validates against is not in the
+            # offline source, and the fork's changes are additive anyway.
+            "-p:EnablePackageValidation=false"
+          ];
+        };
+
         # .git and the local build detritus are not inputs; without this filter
         # every write to any of them would invalidate the build.
         source = pkgs.lib.cleanSourceWith {
@@ -76,6 +132,10 @@
           ];
           testProjectFile = "tests/Passenger.Tests/Passenger.Tests.csproj";
           executables = [ "Passenger.Cli" "Passenger.Mcp" ];
+
+          # Where the forked ModelContextProtocol packages come from: nupkgs
+          # in a build input, not nuget.org, so they are absent from deps.json.
+          projectReferences = [ mcpSdk ];
 
           inherit dotnet-sdk;
           nugetDeps = ./deps.json;
@@ -114,6 +174,10 @@
       {
         devShells.default = pkgs.mkShell {
           packages = runtimeDeps ++ [ dotnet-sdk ];
+          # `dotnet build` outside the sandbox restores from nuget.org, which
+          # has never heard of the forked packages. Directory.Build.props adds
+          # this to the restore sources when it is set.
+          MCP_SDK_NUGET_SOURCE = "${mcpSdk}/share/nuget/source";
           # Everything the hook prints goes to stderr. `nix develop --command`
           # forwards hook output to stdout, which would corrupt any program
           # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
@@ -131,6 +195,10 @@
         };
 
         packages.default = passenger;
+
+        # Exposed so `nix run .#mcp-sdk.passthru.fetch-deps` can regenerate
+        # mcp-sdk-deps.json when the fork moves.
+        packages.mcp-sdk = mcpSdk;
 
         # The MCP server is the second entry point, and the one that gets
         # wired into a client's config, so it deserves a name of its own
