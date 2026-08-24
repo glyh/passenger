@@ -2,7 +2,7 @@
 //
 // The one measurement in this project the caller could not have made for itself.
 // Everything else a read reports is derived from the text it hands over --
-// `char_count` is the length of it, and ticket 016 closed unbuilt precisely
+// `charCount` is the length of it, and ticket 016 closed unbuilt precisely
 // because the markers saying content was withheld were already in that text. A
 // photograph is not in it, was never in it, and no amount of reading the result
 // reveals that the price list was in the picture.
@@ -11,7 +11,7 @@
 // verdict: ticket 005 removed a tier that blocked a page for having fewer words
 // than a threshold, and ticket 021 removed a mode that picked an extractor by
 // comparing two word counts. Both were this side ruling on a number it hands
-// over anyway. The caller has `largest`, `count`, `char_count` and the text, and
+// over anyway. The caller has `largest`, `count`, `charCount` and the text, and
 // is better placed than a threshold here to say whether 0.38 on a
 // 1,989-character page means the answer is in the photograph.
 

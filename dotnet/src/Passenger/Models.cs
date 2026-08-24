@@ -16,7 +16,7 @@ namespace Passenger;
 public enum SignatureKind { Challenge, Login, Unknown }
 
 /// <summary>
-/// What ends a `show_browser` wait.
+/// What ends a `showBrowser` wait.
 ///
 /// Two different facts, and the difference is the point (ticket 018). Closed
 /// is the human saying they are done, which is the one completion signal this
@@ -24,7 +24,15 @@ public enum SignatureKind { Challenge, Login, Unknown }
 /// which is stronger -- a human can close a viewer without solving anything --
 /// but only reaches walls the fixed signature table can name.
 /// </summary>
-public enum WaitFor { Closed, Unblocked }
+[JsonConverter(typeof(JsonStringEnumConverter<WaitFor>))]
+public enum WaitFor
+{
+    [JsonStringEnumMemberName("closed")]
+    Closed,
+
+    [JsonStringEnumMemberName("unblocked")]
+    Unblocked,
+}
 
 /// <summary>
 /// How a tab is holding the attach open, when it is.
@@ -287,7 +295,7 @@ public sealed record Pictures
 /// its own navigation, so nothing here says how to arrive; what is left is
 /// which tab, whose lane, and how long any one Playwright call may take.
 ///
-/// There is no `extract_mode` and no `read_page` because there is no
+/// There is no extraction mode and no read-page switch because there is no
 /// extraction. The reply carries what the ending page *measures* -- a
 /// character count, the pictures, a vendor's wall -- and never what it means.
 /// </summary>

@@ -203,7 +203,7 @@ public static class Lanes
     /// Restart the lane's clock.
     ///
     /// Called on entry *and* on return of every call naming the lane, because a
-    /// `script` with a 600s budget or a `show_browser` with a 900s wait must not
+    /// `script` with a 600s budget or a `showBrowser` with a 900s wait must not
     /// expire underneath itself.
     /// </summary>
     public static void Touch(string lane)
@@ -282,7 +282,7 @@ public static class Lanes
         if (lane is Cli or Orphan)
         {
             // Reserved lanes are emptied, never removed: the next call would
-            // recreate them anyway, and `destroy_lane('orphan')` reading as
+            // recreate them anyway, and `destroyLane('orphan')` reading as
             // success while the lane came straight back is a lie.
             Execute(connection, "DELETE FROM tabs WHERE lane = $lane", ("$lane", lane));
             return;
@@ -314,11 +314,11 @@ public static class Lanes
     // Lanes divide tabs. They do not divide the compositor, the VNC server or the
     // viewer window, and `hide_browser()` used to take no arguments and dismiss the
     // presenter globally -- so lane A summoning a human for a captcha and lane B
-    // calling `hide_browser` thirty seconds later took the window away mid-solve.
+    // calling `hideBrowser` thirty seconds later took the window away mid-solve.
     // That is one lane interrupting another, which is the thing lanes are for.
     //
     // So the screen is refcounted: a claim per lane, and the viewer comes down when
-    // the last one goes. It turns `hide_browser` from a global verb into "I am done
+    // the last one goes. It turns `hideBrowser` from a global verb into "I am done
     // with it", which is what the caller means by it anyway.
 
     public static void ClaimScreen(string lane)
@@ -359,7 +359,7 @@ public static class Lanes
     /// Make the table agree with what Chrome actually holds.
     ///
     /// Two directions. Rows for tabs that are gone are dropped -- they are dead
-    /// weight, and a stale row would make `list_tabs` promise a tab that closed.
+    /// weight, and a stale row would make `listTabs` promise a tab that closed.
     /// And targets with no row are attributed: to the lane of whichever tab opened
     /// them when Chrome says one did, otherwise to `orphan`.
     ///

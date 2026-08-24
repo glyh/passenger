@@ -28,11 +28,16 @@ public enum ErrorCode
 public static class ErrorCodeNames
 {
     /// <summary>
-    /// The wire spelling, which is the Python side's `ErrorCode` value verbatim.
+    /// The wire spelling of a code.
     ///
-    /// Written out rather than derived from the enum name, because these strings
-    /// cross the tool boundary: an agent that branched on `SCRIPT_RAISED` must
-    /// keep working, and a rename here would silently change a caller's contract.
+    /// The one place this port does not use camelCase, and deliberately: an error
+    /// code is a constant a caller matches on, not a field name, and
+    /// SCREAMING_SNAKE is what that convention looks like everywhere it appears --
+    /// including in the Python these were taken from, so an agent that learned to
+    /// branch on `SCRIPT_RAISED` keeps working.
+    ///
+    /// Written out rather than derived from the enum name so a rename here cannot
+    /// silently change a caller's contract.
     /// </summary>
     public static string Value(this ErrorCode code) => code switch
     {
@@ -137,7 +142,7 @@ public sealed class TabNotFoundException(string tab, string lane, IReadOnlyList<
 /// </summary>
 public sealed class LaneNotFoundException(string lane)
     : PassengerException(ErrorCode.LaneNotFound, $"no lane {lane}",
-                         "it expired, or never existed; open one with open_lane")
+                         "it expired, or never existed; open one with openLane")
 {
     public string Lane { get; } = lane;
 }

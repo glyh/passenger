@@ -72,7 +72,7 @@ public static class Browser
         string? reaped = Sessions.ReapStale();
         // Every row in the lane registry names a CDP target id from the browser
         // that just went away, and Chrome never hands those ids out again. Kept,
-        // they would make `list_tabs` promise tabs that cannot exist.
+        // they would make `listTabs` promise tabs that cannot exist.
         Lanes.Reset();
 
         Directory.CreateDirectory(Config.ProfileDir);
