@@ -493,6 +493,24 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   two seams C# needs that Python did not, both at a process boundary. Left: the
   flake does not build it, and 049 — the skill still teaches the Python door.
 
+- [The skill teaches a door that no longer exists](tickets/049-skill-for-the-csharp-door.md)
+  — two skills, and the tool list is the discriminator: the C# door's verbs are
+  camelCase and the Python door's are snake_case, so an agent can tell before
+  the first call. Both now open with **Which door you are at** pointing at the
+  other. One skill carrying both spellings would double every recipe (026's
+  drift); two doubles every non-code paragraph instead, which is the same drift
+  moved rather than removed, and bounded by the overlap. Measured what the
+  ticket asked rather than assuming it: a Roslyn compile is **flat** at ~40ms —
+  an 11 KB source carrying the whole walker compiles as fast as a one-liner —
+  so it cancels out of the skill's cost ordering, which stands. The 684ms first
+  compile is what `Script.Warm()` exists for. walker.js is copied byte-identical
+  and must stay so; it runs in the page, so neither language has a claim on it
+  (030 holding as predicted). Porting it by *running* every recipe rather than
+  translating found a live bug the green suite had missed: `IAPIResponse` was
+  not in `Crossable`'s hand-written list of eight handles, so returning one
+  serialised the driver's headers and timings as if they were the answer. A
+  handle is now anything implementing a `Microsoft.Playwright` interface.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

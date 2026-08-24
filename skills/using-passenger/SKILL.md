@@ -10,7 +10,9 @@ description: |
   recognising a login wall or captcha the tool cannot name and handing the page
   to a human, why a read is only the first screen, why reading beats driving,
   and what the tool will not remember for you. Use it before the first call in
-  a session, and whenever a read comes back thinner than the page looked.
+  a session, and whenever a read comes back thinner than the page looked. If
+  the server's verbs are camelCase (`openLane`), you are at the C# door -- load
+  `using-passenger-csharp` instead.
 ---
 
 # Using passenger
@@ -23,6 +25,16 @@ its content with JavaScript.
 This skill is the operating knowledge: the things that are true before any
 particular call, and the recipes for reading a page. What each argument means
 is in the tool schemas and is not repeated here.
+
+## Which door you are at
+
+Two builds of this server exist while the C# port and the Python original run
+side by side, and they take **different script languages**. The tool list tells
+you which one you have, with no round trip needed:
+
+- `open_lane`, `show_browser`, `list_tabs` — **this door**. Scripts are Python.
+- `openLane`, `showBrowser`, `listTabs` — the C# door. Load
+  `using-passenger-csharp` instead; every recipe below will fail there.
 
 ## Open a lane first
 
