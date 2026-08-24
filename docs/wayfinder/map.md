@@ -574,6 +574,19 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   handling on, so a `JsonElement` returned straight back carries a phantom
   `$id`.
 
+- [script's return value should be JSON, not another wrapping
+  layer](tickets/054-script-return-should-be-json.md) — the envelope stays.
+  `returned` keeps its slot and its name, and option 1's field-fusing was not
+  what the complaint was about: checked against real replies, the thing that
+  actually costs is a *string* payload, which has no fields to fuse. A page read
+  arrives JSON-escaped onto one line with the whole page in the caller's
+  context. The remedy was already in the skill under another heading — the
+  server runs on the caller's own filesystem — so the recipe writes the markdown
+  out and returns the path. Measured on PEP 8: 45,389 characters in a ~250-byte
+  reply, 1,061 real lines on disk. The write belongs to the C# around
+  `walker.js`, not to the walker, which runs in the page and has no filesystem.
+  No code changed at either door.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

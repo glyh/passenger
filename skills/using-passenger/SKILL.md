@@ -125,6 +125,22 @@ script:
     var walker = await File.ReadAllTextAsync("/path/to/skills/using-passenger/walker.js");
     return await Page.EvaluateAsync<string>(walker);
 
+**For a whole page, write it out instead of returning it.** A tool reply is
+JSON, so a returned string arrives quoted and escaped -- every newline as `\n`,
+on one line, and the whole page in your context whether you wanted all of it or
+not. The filesystem is shared, so hand it to yourself as a file and read what
+you need:
+
+    var walker = await File.ReadAllTextAsync("/path/to/skills/using-passenger/walker.js");
+    var markdown = await Page.EvaluateAsync<string>(walker);
+    var path = "/tmp/pep8.md";              // yours to name; nothing here picks one
+    await File.WriteAllTextAsync(path, markdown);
+    return new Dictionary<string, object> { ["path"] = path, ["chars"] = markdown.Length };
+
+Now the markdown is text on disk, and `chars` is there to read against what you
+expected. Return the string directly for a short read; write it out for a long
+one.
+
 Use the actual path -- the one this file was read from, since `walker.js` is
 its sibling. Reading beats pasting for a reason sharper than convenience: one
 of the walker's regexes carries a pair of backslash-`u` escapes for two

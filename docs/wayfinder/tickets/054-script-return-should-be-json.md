@@ -2,7 +2,7 @@
 id: 054
 title: script's return value should be JSON, not another wrapping layer
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -50,3 +50,67 @@ Whatever is chosen, `Ran`'s doc comment and the `script` tool's
 `[Description]` in `Tools.cs` should say plainly what shape a script's return
 value ends up in, since right now the description promises JSON but not
 where in the result it lands.
+
+## Answer
+
+*Closed undone, 2026-08-24. The shape is what it should be; nothing was built.*
+
+Settled by looking at real replies through the MCP door rather than reasoning
+about the record. Two calls, one returning an object and one returning the
+markdown a page read produces:
+
+    {"type":"ran","tab":"DB3D…","returned":{"title":"Example Domain","count":3},
+     "page":{…}}
+
+    {"type":"ran","tab":"12AD…",
+     "returned":"# Example Domain\nThis domain is for use in documentation…",
+     "page":{…}}
+
+That is the shape the ticket describes, and on inspection it is the wanted one.
+Option 3 stands as written: `returned` is a clearly named slot for whatever the
+script said, and it is worth the one hop.
+
+What the second reply shows is the sharper version of the complaint, and it is
+not the one the ticket names. A page read arrives JSON-escaped onto a single
+line, `\n` for every break, and the whole page lands in the caller's context
+whether it wanted all of it or not. **Fusing named fields would not have touched
+that**: a string has no fields to fuse, and reading a page is the case that
+hurts.
+
+That has a remedy, and it costs nothing at either door, because the answer was
+already in the skill under a different heading -- *the server runs on your
+machine, in your filesystem*. The recipe writes the markdown out and returns
+where it put it:
+
+    var markdown = await Page.EvaluateAsync<string>(walker);
+    var path = "/tmp/pep8.md";              // the caller's to name
+    await File.WriteAllTextAsync(path, markdown);
+    return new Dictionary<string, object> { ["path"] = path, ["chars"] = markdown.Length };
+
+Measured on `https://peps.python.org/pep-0008/` through the MCP door: 45,389
+characters delivered in a reply of about 250 bytes, and on disk as 1,061 real
+lines rather than one escaped one. `chars` rides along so the caller still has a
+number to read against expectation.
+
+Note where the change had to go. `walker.js` runs *inside the page*, which has
+no filesystem, so it cannot write the file itself -- the write belongs to the
+C# around it, and this is a change to the recipe in `SKILL.md` rather than to
+any code at either door. Shipped there.
+
+So `returned` keeps its slot and its name, and the escaping stops being the
+common case rather than being argued about.
+
+### A correction to the Question
+
+It names `lookAt` as one of the tools returning its own shape directly. There is
+no such tool. The ten are `script`, `openLane`, `setTtl`, `listTabs`,
+`closeTabs`, `closeAllTabs`, `destroyLane`, `showBrowser`, `hideBrowser` and
+`browserStatus`. The point it was making holds for the nine that are real.
+
+### What 055 changed underneath it
+
+[055](055-envelope-goes-the-caller-measures.md) landed while this was open and
+deleted the `measured` variant, so the envelope beside `returned` is now `type`,
+`tab` and a `page` that is a wall or `unchecked`. That shrinks option 1's
+collision surface to three names, and it shrinks the amount there is to reach
+past -- both of which make leaving it alone easier, not harder.
