@@ -5,9 +5,9 @@ distinguish from your daily driver — with a human handoff when a site puts up 
 challenge the agent shouldn't (and shouldn't try to) solve.
 
     passenger serve                      # start the hidden Chrome daemon
-    passenger script <file>              # run Playwright against a tab
-    echo "page.goto('$URL')
-          return page.inner_text('body')" | passenger script
+    passenger script <file>              # run a Playwright script against a tab
+    echo 'await Page.GotoAsync(url);
+          return await Page.InnerTextAsync("body");' | passenger script
     passenger open <url>                 # park a URL in a tab, no window
     passenger open <url> --show          # ...and show it, to log in by hand
     passenger tabs                       # this lane's tabs and their ids
@@ -30,7 +30,7 @@ claims -- what a page opened by itself, or a human opened during a handoff.
 
 ## As an MCP server
 
-    passenger-mcp        # stdio
+    Passenger.Mcp        # stdio
 
 Register it with Claude Code for every project:
 
@@ -47,9 +47,9 @@ the shellHook to **stdout**, which corrupts any stdio protocol. This flake's
 hook prints to stderr for that reason. `nix run` does not run the hook at all,
 which is why the registration above is the simpler of the two.
 
-Tools: `open_lane`, `set_ttl`, `script`, `list_tabs`, `close_tabs`,
-`close_all_tabs`, `destroy_lane`, `show_browser`, `hide_browser`,
-`browser_status`.
+Tools: `openLane`, `setTtl`, `script`, `listTabs`, `closeTabs`,
+`closeAllTabs`, `destroyLane`, `showBrowser`, `hideBrowser`,
+`browserStatus`.
 
 Four things differ from the CLI, all deliberate:
 
@@ -65,10 +65,10 @@ Four things differ from the CLI, all deliberate:
   five minutes while someone hunts for a captcha is a bad citizen, so a blocked
   page comes straight back as `type="blocked"` with what is in the way and how
   to clear it. The agent tells the user, the user solves it, the agent calls
-  again -- the profile kept the result. `wait_seconds` opts into blocking.
+  again -- the profile kept the result. `waitSeconds` opts into blocking.
 - **The daemon starts on demand.** A human runs `serve` first; an agent should
   not have to know that.
-- **`show_browser` exists at all.** The CLI has nothing like it on purpose:
+- **`showBrowser` exists at all.** The CLI has nothing like it on purpose:
   there, the caller is already the human. Over MCP the caller is not, so
   summoning one is a tool. It waits until they *close the viewer*, which is
   the only "done" signal this side can observe without ruling on the page.
@@ -91,35 +91,39 @@ Functional core, imperative shell. The core is pure and testable without a
 browser; everything that touches Chrome, the disk, the clock, or a subprocess
 lives in the shell.
 
-    core    models.py    every boundary shape, as frozen pydantic models
-            detect.py    blocked-or-not, given a measurement
-            errors.py    ErrorCode + structural errors
+    core    src/Passenger/Models.cs     every boundary shape, as frozen records
+            src/Passenger/Detect.cs     blocked-or-not, given a measurement
+            src/Passenger/Errors.cs     ErrorCode + structural errors
 
-    shell   service.py   the one script orchestration, shared by both frontends
-            browser.py   Chrome daemon lifecycle, CDP attach
-            lanes.py     which lane owns which tab, and when its time is up
-            targets.py   Chrome's targets over CDP, going around patchright
-            probe.py     measuring a live page into a PageProbe
-            handoff.py   summon, notify, poll for a human
-            launch.py    hide/show backends (Protocol)
-            present.py   putting the hidden browser in front of a human
-            config.py    the PASSENGER_* env boundary
-            cli.py       cyclopts; the only place a failure becomes terminal output
-            mcp_server.py  the MCP frontend over the same service layer
+    shell   src/Passenger/Service.cs    the one script orchestration, shared by both frontends
+            src/Passenger/Browser.cs    Chrome daemon lifecycle, CDP attach
+            src/Passenger/Lanes.cs      which lane owns which tab, and when its time is up
+            src/Passenger/Targets.cs    Chrome's targets over CDP
+            src/Passenger/Probe.cs      measuring a live page into a PageProbe
+            src/Passenger/Handoff.cs    summon, notify, poll for a human
+            src/Passenger/Launch.cs     hide/show backends
+            src/Passenger/Present.cs    putting the hidden browser in front of a human
+            src/Passenger/Config.cs     the PASSENGER_* env boundary
+            src/Passenger/Script.cs     compiling and running a caller's script with Roslyn
+            src/Passenger.Cli/Program.cs   System.CommandLine; the only place a failure becomes terminal output
+            src/Passenger.Mcp/Program.cs   the MCP frontend over the same service layer
 
     skill   skills/using-passenger/SKILL.md      how an agent operates this
             skills/using-passenger/walker.js     the DOM-to-markdown recipe
 
-Detection is pure because the shell measures first: `probe.probe()` tests every
+Detection is pure because the shell measures first: `Probe.Run` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
-so `detect.classify()` is a function of that record alone.
+so `Detect.Classify` is a function of that record alone.
 
-    PageProbe(url=..., title='Just a moment...')
-      -> KnownBlocker(signature=cloudflare-interstitial)
+    PageProbe(Url: ..., Title: "Just a moment...")
+      -> KnownBlocker(Signature: "cloudflare-interstitial")
 
-Blockers are a discriminated union closed with `assert_never`, so adding a
-variant without handling it is a type error rather than a silent fallthrough.
-`mypy --strict` passes; run it with `mypy passenger` in `nix develop`.
+Blockers are a discriminated union: `Detect.Classify` returns one of a small
+sealed set of record types, and an unhandled case in a `switch` expression is a
+compiler error rather than a silent fallthrough.
+
+This started as a rewrite of an earlier implementation. `docs/wayfinder/tickets/023-rewriting-into-csharp.md`
+has the reasoning and the measurements.
 
 ## Design
 
@@ -256,17 +260,22 @@ own compositor sidesteps that whole class of breakage.
 
 ## Install
 
-    nix develop            # dev shell: cage, wayvnc, noVNC, python + deps
+    nix develop            # dev shell: cage, wayvnc, noVNC, the dotnet SDK
     nix run .              # run the CLI directly
     nix run .#mcp          # run the MCP server
 
-The flake pins everything except the browser, Python dependencies included --
-`nix/python-overlay.nix` carries the two that nixpkgs lacks or has too old,
-and `nix build` needs neither a network nor a compiler. Chrome deliberately comes from
-the host (`PASSENGER_CHROME`, default `google-chrome-stable`): pinning it
-would freeze its version, and the version string is one of the most visible
-fingerprint fields there is -- a browser months behind what real users run is a
-tell in itself, and stops getting security updates.
+The flake pins everything except the browser and the .NET SDK itself --
+`deps.json` locks every NuGet package by hash (regenerate it with
+`nix build .#default.passthru.fetch-deps`), and `nix build` needs no network
+once that lockfile is current. The one NuGet-side patch: Patchright bundles its
+own Node to drive Playwright's wire protocol, built against
+`/lib64/ld-linux-x86-64.so.2`, which does not exist in the store -- the package
+substitutes nixpkgs' own `node` for it post-build instead. Chrome deliberately
+comes from the host (`PASSENGER_CHROME`, default
+`google-chrome-stable`): pinning it would freeze its version, and the version
+string is one of the most visible fingerprint fields there is -- a browser
+months behind what real users run is a tell in itself, and stops getting
+security updates.
 
 Without nix, install the equivalents yourself: `cage wayvnc` plus a copy of
 noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
@@ -287,7 +296,7 @@ Nix isolates the dependency graph, which was the actual problem, and leaves the
 machine identity alone.
 
 Docker is still the right tool for a *headless server* deployment, where there
-is no host identity worth inheriting. `present.py` (web/noVNC) and `notify.py`
+is no host identity worth inheriting. `Present.cs` (web/noVNC) and `Notify.cs`
 (webhook) exist so that case works.
 
 Requires without nix: `cage wayvnc` and noVNC's static files. wayvnc serves the

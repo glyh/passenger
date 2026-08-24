@@ -511,6 +511,27 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   serialised the driver's headers and timings as if they were the answer. A
   handle is now anything implementing a `Microsoft.Playwright` interface.
 
+- [Delete the Python door](tickets/053-delete-the-python-door.md) — on direct
+  instruction, not on 023's own bar of a couple of weeks of daily use; that
+  measurement was never taken. `passenger/`, its suite, `pyproject.toml` and
+  every Python-only Nix derivation are gone, `skills/using-passenger-csharp`
+  took the deleted Python skill's old address, and `dotnet/src`, `dotnet/tests` and
+  the rest moved to the repository root — there is nothing left for `dotnet/`
+  to be a namespace *beside*. Closes
+  [050](tickets/050-csharp-door-names-the-python-skill.md) by construction: the
+  server's four strings already said `using-passenger`, and renaming the
+  surviving skill to that address makes them correct without touching them.
+  The walker recipe stopped pasting `walker.js` into a raw string literal and
+  reads it from disk instead, since the server runs on the caller's own
+  machine — which makes
+  [052](tickets/052-walker-escapes-do-not-survive-transport.md)'s hazard
+  unreachable at that call site without waiting on a fix to the file itself.
+  Building the flake's package for the first time (`buildDotnetModule`, a
+  locked `deps.json`, `Patchright`'s bundled Node symlinked to nixpkgs' own
+  node the same way the deleted `nix/patchright.nix` did for Python) discharged 023's
+  last owed item and, by running the suite somewhere `/bin` does not exist,
+  found `SessionTests.cs` assumed it anyway.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
@@ -636,18 +657,6 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   which is what separates it from the four heuristics that were deleted for
   ruling on meaning. What is missing is not a design but a second instance: one
   site is not a class, and the probe that would settle it was never run.
-
-- **The C# door tells its caller to read the Python skill.** 049 decided two
-  skills discriminated by verb casing, and both open with **Which door you are
-  at** pointing at the other. But the C# server's own instruction text -- read
-  *before* any skill is loaded -- names `using-passenger` in four places, so the
-  default path at that door is: trust the pointer, write Python, fail. The
-  **Which door** section is recovery after the wrong file is already in context.
-  This is the fog entry above -- an agent treats the document in front of it as
-  the whole procedure -- arriving in the one place 049 thought it had closed:
-  the proximate authority is now wrong on purpose-built routing.
-  See [The C# door sends its caller to the Python
-  skill](tickets/050-csharp-door-names-the-python-skill.md).
 
 - **A read can lose a page's reference apparatus inside the noise floor.** The
   walker strips `aside`, and docutils and Sphinx emit footnotes as

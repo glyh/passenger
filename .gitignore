@@ -1,10 +1,7 @@
-.venv/
-__pycache__/
-*.pyc
 .direnv/
 result
 
-# .NET build output (the C# port lives in dotnet/)
+# .NET build output
 [Bb]in/
 [Oo]bj/
 publish/

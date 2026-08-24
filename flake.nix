@@ -15,8 +15,8 @@
         # package itself carries websockify -- and so numpy -- for 471 MiB,
         # where the viewer needs 1.8 MB of JavaScript: wayvnc serves the
         # websocket itself (--websocket), and the page is served by this
-        # tool's own Python. Copying the tree into its own derivation is what
-        # keeps that closure out; plain files reference nothing.
+        # tool's own webserver. Copying the tree into its own derivation is
+        # what keeps that closure out; plain files reference nothing.
         novncStatic = pkgs.runCommand "novnc-static" { } ''
           cp -r ${pkgs.novnc}/share/webapps/novnc $out
         '';
@@ -25,7 +25,7 @@
         # would otherwise install with a system package manager.
         #
         # No VNC client: the viewer is a page in the host's own browser (see
-        # present.py). That is not only lighter than every native client that
+        # Present.cs). That is not only lighter than every native client that
         # would do, it is the only one that sizes itself correctly -- noVNC
         # asks for the framebuffer its window needs and keeps asking as the
         # window changes. The light native clients cannot be sized at all, and
@@ -49,22 +49,7 @@
           default google-chrome-stable) so it keeps its own update cadence.
         '';
 
-        # The interpreter, carrying this project's overlay. Two of the six
-        # Python dependencies are absent or too old in nixpkgs; nix/ says which
-        # and why. `self` is threaded through so anything built against this
-        # interpreter sees the overridden set rather than the stock one.
-        python = pkgs.python314.override {
-          self = python;
-          packageOverrides = import ./nix/python-overlay.nix;
-        };
-
-        pythonDeps = ps: with ps; [
-          cyclopts
-          mcp
-          patchright
-          pydantic
-          websockets
-        ];
+        dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
 
         # .git and the local build detritus are not inputs; without this filter
         # every write to any of them would invalidate the build.
@@ -72,16 +57,63 @@
           src = ./.;
           filter = path: type:
             !(builtins.elem (baseNameOf (toString path)) [
-              ".venv" ".direnv" ".git" ".mypy_cache" ".ruff_cache" "result"
+              ".direnv" ".git" "result"
             ]);
+        };
+
+        # The three projects, published together into one directory
+        # (buildDotnetModule's default `dotnetInstallPath` for every
+        # `projectFile` entry) so the CLI and the MCP server share one copy of
+        # the Playwright driver rather than two.
+        passenger = pkgs.buildDotnetModule {
+          pname = "passenger";
+          version = "0.1.0";
+          src = source;
+
+          projectFile = [
+            "src/Passenger.Cli/Passenger.Cli.csproj"
+            "src/Passenger.Mcp/Passenger.Mcp.csproj"
+          ];
+          testProjectFile = "tests/Passenger.Tests/Passenger.Tests.csproj";
+          executables = [ "Passenger.Cli" "Passenger.Mcp" ];
+
+          inherit dotnet-sdk;
+          nugetDeps = ./deps.json;
+
+          # None of the suite drives a real Chrome, so it needs no pinned
+          # browser the way a DOM-walker test would: it is unit tests over the
+          # pure core and over sockets/temp dirs the Sandbox fixture redirects
+          # first. Safe to run in the sandbox, and kept in the same derivation
+          # as the build rather than a separate `checks` output, because there
+          # is no browser dependency forcing them apart.
+          doCheck = true;
+
+          # Both entry points need the compositor on PATH and the viewer's
+          # JavaScript findable; neither can be discovered at runtime.
+          makeWrapperArgs = [
+            "--prefix" "PATH" ":" (pkgs.lib.makeBinPath runtimeDeps)
+            "--set-default" "PASSENGER_NOVNC" novncStatic
+          ];
+
+          # The Patchright NuGet package bundles its own Node -- the thing
+          # that actually drives Playwright's wire protocol -- as a
+          # platform-specific binary linked against
+          # /lib64/ld-linux-x86-64.so.2, which does not exist here.
+          # Substitute nixpkgs' own node for the bundled one rather than patch
+          # the ELF interpreter.
+          postFixup = ''
+            for node in $out/lib/passenger/.playwright/node/*/node; do
+              rm "$node"
+              ln -s ${pkgs.lib.getExe pkgs.nodejs} "$node"
+            done
+          '';
+
+          meta.mainProgram = "Passenger.Cli";
         };
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = runtimeDeps ++ [
-            (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
-            pkgs.mypy
-          ];
+          packages = runtimeDeps ++ [ dotnet-sdk ];
           # Everything the hook prints goes to stderr. `nix develop --command`
           # forwards hook output to stdout, which would corrupt any program
           # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
@@ -93,92 +125,24 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: python -m passenger.cli status"
+              echo "run: dotnet run --project src/Passenger.Cli -- status"
             } >&2
           '';
         };
 
-        # `nix flake check` runs the suite against the pinned interpreter, so
-        # "did I break it" is one command from a clean checkout -- there is no
-        # remote and no CI to hold that. Kept out of packages.default's
-        # checkPhase deliberately: these tests spawn processes and bind a
-        # loopback port, and an environment fault should read as a failing
-        # check rather than an unbuildable package.
-        checks.default = pkgs.runCommand "passenger-tests"
-          {
-            nativeBuildInputs = [
-              (python.withPackages (ps: pythonDeps ps ++ [ ps.pytest ]))
-              # The DOM walker is JavaScript over a live document, so the one
-              # test that covers it needs a browser (ticket 028). This is not
-              # the browser the tool fetches with -- that one is deliberately
-              # the host's, so its version keeps drifting with the vendor's
-              # releases. A browser that is only ever handed a fixture string
-              # has no fingerprint to keep current, and pinning it is what
-              # stops the test from quietly skipping in the one command that
-              # gates the repo.
-              pkgs.chromium
-            ];
-          }
-          ''
-            cd ${source}
-            export PASSENGER_CHROME=${pkgs.chromium}/bin/chromium
-            # HOME is unset in the sandbox, and Settings' state_dir defaults to
-            # a path under it. conftest.py overrides that anyway; this keeps
-            # import time from failing before conftest gets to run.
-            export HOME=$TMPDIR
-            # The source is a read-only store path; without this pytest
-            # warns twice about a cache directory it cannot create.
-            pytest -q -p no:cacheprovider
-            touch $out
-          '';
-
-        # A real derivation. The closure describes every dependency, so this
-        # builds and runs with no network and no compiler. It used to be a
-        # shell script that called `uv run`, which resolved the Python side at
-        # first use -- reproducible only in the sense that uv.lock was pinned,
-        # and unbuildable offline.
-        packages.default = python.pkgs.buildPythonApplication {
-          pname = "passenger";
-          version = "0.1.0";
-          pyproject = true;
-          src = source;
-
-          build-system = [ python.pkgs.hatchling ];
-          dependencies = pythonDeps python.pkgs;
-
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-
-          # The suite lives in `nix flake check`, not here -- it spawns
-          # processes and binds a port, and packaging should not fail on that.
-          # Import-checking both entry points still catches a missing
-          # dependency, which is what this stage is for.
-          doCheck = false;
-          pythonImportsCheck = [ "passenger.cli" "passenger.mcp_server" ];
-
-          # Both entry points need the compositor on PATH and the viewer's
-          # JavaScript findable; neither can be discovered at runtime.
-          postFixup = ''
-            for exe in $out/bin/*; do
-              wrapProgram "$exe" \
-                --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
-                --set-default PASSENGER_NOVNC ${novncStatic}
-            done
-          '';
-
-          meta.mainProgram = "passenger";
-        };
+        packages.default = passenger;
 
         # The MCP server is the second entry point, and the one that gets
         # wired into a client's config, so it deserves a name of its own
         # rather than an argv suffix.
         apps.mcp = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/passenger-mcp";
+          program = "${self.packages.${system}.default}/bin/Passenger.Mcp";
         };
 
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/passenger";
+          program = "${self.packages.${system}.default}/bin/Passenger.Cli";
         };
       });
 }

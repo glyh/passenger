@@ -163,7 +163,10 @@ public class SessionTests : IDisposable
 
     private int Running()
     {
-        Process child = Process.Start(new ProcessStartInfo("/bin/sleep")
+        // Not "/bin/sleep": that path is an FHS assumption a Nix build sandbox
+        // does not make. A bare name lets Process.Start resolve it off PATH,
+        // which coreutils occupies everywhere this runs.
+        Process child = Process.Start(new ProcessStartInfo("sleep")
         {
             ArgumentList = { "30" },
             UseShellExecute = false,
