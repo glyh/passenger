@@ -635,6 +635,29 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   trade. The skill now says that outright — *It is a recipe, not an API* — and
   its pasting paragraph stayed and changed its grounds: reading still beats
   pasting, for the general reason now.
+
+- [The walker strips `aside`, and `aside` carries
+  footnotes](tickets/051-walker-strips-asides.md) — fixed by a fourth option the
+  ticket did not list. Not 1 (narrow the strip list), not 2 (drop `aside`), not 3
+  (document the flag), but a separate opt-in pre-pass,
+  `skills/using-passenger/unstrip-asides.js`, run in the page before
+  `markdown.js`: it retags content-bearing asides as `section` so the strip list
+  stops matching them, and returns a count. Both of `aside`'s jobs are real —
+  the HTML standard names sidebars and advertising, docutils 0.18 emits
+  footnotes — so the strip list stays one global answer and the disagreement
+  moves to the call site, on the pages where it is true. Measured: PEP 8 45,389
+  → 46,122 characters, links 20 → 23, `## References` populated, and
+  **byte-identical to running `markdown.js` with `aside` removed from its strip
+  list**, so it gives up nothing against option 2 while leaving option 2's
+  furniture problem untaken. Nothing rescued and nothing changed on
+  theguardian.com's 22 asides, numpy's Sphinx pages, Wikipedia or the Python
+  docs; idempotent on a second run. The container half of the selector is
+  load-bearing rather than defensive: docutils 0.19 wraps groups of footnotes in
+  an outer role-less `aside` and the walk skips a subtree at the outermost one
+  it meets. The skill gained the third failure shape 051 asked for — it strips a
+  fixed list of furniture and something carrying content can be on it, invisibly
+  to the character count. Still no test: verified by running it, like everything
+  else about this file (043).
   Two things worth carrying forward: the first draft of the explanatory comment
   broke the file by spelling a bare U+2028 in prose, so the file's rule is that
   nothing in it may spell one, comments included; and the test-shaped property is

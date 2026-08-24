@@ -5,9 +5,10 @@ description: |
   its `openLane`, `script`, `showBrowser`, `listTabs` and `closeTabs` tools.
   Scripts are C# against an async Playwright. Covers opening a lane before the
   first call, the recipes for reading a page and for measuring its pictures
-  (`markdown.js` and `pictures.js`, both in this directory -- best-effort
-  recipes to read and adapt, not fixed APIs), what the `blocked`
-  verdict does and does not catch,
+  (`markdown.js`, `unstrip-asides.js` and `pictures.js`, all in this directory
+  -- best-effort recipes to read and adapt, not fixed APIs), what the `blocked`
+  verdict does and does not catch, why a Sphinx or docutils page loses its
+  footnotes and what to run first,
   recognising a login wall or captcha the tool cannot name and handing the
   page to a human, why a read is only the first screen, why reading beats
   driving, and what the tool will not remember for you. Use it before the
@@ -171,6 +172,32 @@ It is not magic and it is not always right. Two known shapes:
 - It picks its root from a short list of candidates (`main`, `article`,
   `#content`…). On a page whose furniture matches one of those thirty times
   over, it can start in the wrong place.
+- It strips a fixed list of furniture -- `nav`, `header`, `footer`, `aside` --
+  and **something carrying content can be on that list**. Unlike the other two,
+  this one does not show up in the character count. See below.
+
+**On Sphinx and docutils pages, run `unstrip-asides.js` first or lose the
+footnotes.** docutils emits footnotes and citations as `<aside class="footnote">`
+and wraps groups of them in an outer `aside`, so `markdown.js` discards the
+reference apparatus and keeps the prose that points at it. Measured on PEP 8:
+45,389 characters against the page's own 45,407 -- an eighteen-character
+shortfall for losing every footnote and the whole `## References` section, which
+is exactly the number you were told to read against expectation. `unstrip-asides.js`
+sits beside `markdown.js`, retags the content-bearing asides as `section` so the
+strip list stops matching them, and returns how many it rescued. It is a
+separate file because both of `aside`'s jobs are real -- on a news site it
+genuinely is a sidebar -- so this is yours to opt into on the pages where it is
+not:
+
+    var fix = await File.ReadAllTextAsync("/path/to/skills/using-passenger/unstrip-asides.js");
+    var js  = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
+    var rescued  = await Page.EvaluateAsync<int>(fix);      // 7 on PEP 8
+    var markdown = await Page.EvaluateAsync<string>(js);
+
+Run it on any page: it rescues nothing and changes nothing where there is
+nothing to rescue (0 on theguardian.com's 22 asides), and running it twice
+rescues 0 the second time. It mutates the live DOM, which is free on a tab you
+opened to read and worth knowing about on a tab a human is working in.
 
 **It is a recipe, not an API -- read it, and change it when it is wrong.** It is
 a single arrow-function expression in a file you already have on disk, deliberately
