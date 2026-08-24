@@ -540,6 +540,23 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   to guess are in the fog entry below, and only the first (a script shares the
   caller's filesystem) has since been written into the skill.
 
+- [Move the picture measurement to the caller](tickets/048-pictures-on-demand.md)
+  — yes, and the envelope goes whole: `Measured` is deleted, not trimmed, so a
+  `script` reply carries what the script returned and nothing else. 017's
+  finding is not refuted but *declined* — the tool tells a caller nothing it did
+  not ask for, and a page whose content is a photograph now reads as short to
+  anyone who did not think to measure it. `pictures.js` ships to the skill
+  beside `walker.js`, threshold and all, on `walker.js`'s own precedent for
+  defaults following the file. The CLI loses its `N chars on URL` line rather
+  than recomputing it, which is 046's symmetry trade taken again. Grilling the
+  rule for coherence found it would eat the wall probe too; that was taken all
+  the way and brought back, because `showBrowser(until="unblocked")` polls the
+  same fixed table and a copy of it in a skill is what 019 and 038 made it
+  single to prevent — so `blocked` stays default-on with a `checkWall` opt-out,
+  and `page` gains an `unchecked` variant so a negative nobody tested cannot
+  read like one that was (042). Built as
+  [055](tickets/055-envelope-goes-the-caller-measures.md).
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the
