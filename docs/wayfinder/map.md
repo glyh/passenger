@@ -42,8 +42,10 @@ is calling. See [The tool does not learn; the agent
 remembers](tickets/019-the-tool-does-not-learn.md).
 
 **The tool measures; the skill judges.** The tool reports what it *measured* --
-a fraction of the viewport, a character count, a vendor's own markup -- and
-never rules on what a page *means*. Recognition patterns and heuristics live
+which since ticket 048 is one thing, a vendor's own markup -- and never rules on
+what a page *means*. 048 went further than the rule required: a fraction of the
+viewport and a character count were both honest measurements and were deleted
+anyway, because nobody had asked for them. Recognition patterns and heuristics live
 in the `using-passenger` skill, where a caller reads them, rather than in a table
 this side matches. Four mechanisms have now been deleted for crossing that line
 (a yield floor, a `min_words` tier, a learned signature registry, a wall hint);
@@ -556,6 +558,21 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   and `page` gains an `unchecked` variant so a negative nobody tested cannot
   read like one that was (042). Built as
   [055](tickets/055-envelope-goes-the-caller-measures.md).
+
+- [Delete the Measured envelope, and ship pictures.js to the
+  skill](tickets/055-envelope-goes-the-caller-measures.md) — built, 86 green,
+  and verified against the running browser. `Measured`, `Pictures` and
+  `PicturesJs` are gone; a `script` reply carries what the script returned and
+  `page`, which is a wall or `unchecked`. `pictures.js` sits beside `walker.js`
+  in the skill with its threshold inside it. Running the recipes rather than
+  reading them found the thing reading them could not: `System.IO` was never in
+  `Script.cs`'s import list, so `File.ReadAllTextAsync` did not compile — which
+  means the read-the-walker-off-disk recipe 053 shipped, and the
+  `File.WriteAllBytesAsync` advice beside it, had never worked. Second time a
+  recipe has been found broken by running it after passing review by reading it
+  (049 was the first). Also found: Playwright deserialises with reference
+  handling on, so a `JsonElement` returned straight back carries a phantom
+  `$id`.
 
 ## Fog
 

@@ -150,17 +150,18 @@ page holding 2,647.
 Extraction is a judgement about what a page means. The agent knows what it
 asked for; this side does not.
 
-**What survived the deletion**, because it is measurement and not judgement:
-the `blocked` verdict (a fixed table of vendors' own markup -- a vendor either
-serves it or does not), the picture geometry, and `char_count` -- which is now
-the browser's own `innerText` length rather than an extractor's output. That
-last change fixed a standing bug for free: a `char_count` of 0 on a page
-holding 2,647 characters had been measuring the extractor while looking like it
-measured the page.
+**What survived the deletion** is one thing: the `blocked` verdict, a fixed
+table of vendors' own markup, where a vendor either serves it or does not. The
+picture geometry and `charCount` survived it by a year and then went too
+(ticket 048) -- not because they were judgement, but because they arrived
+whether or not anyone asked. A reply now carries what the script returned, and a
+wall if there is one. The wall check itself can be turned off with `checkWall`,
+and says `unchecked` when it is, so a page nobody looked at never reads like a
+page that came back clean.
 
-**The walker is still this repo's**, still tested in a real browser against its
-fixtures, and still the thing to reach for when you want markdown with resolved
-links, headings and fenced code. It just is not something this tool decides to
+**The walker is still this repo's** in the sense that it ships here, and so does
+`pictures.js` now -- both in `skills/using-passenger/`, both recipes the caller
+reads off disk and runs in the page. Neither is something this tool decides to
 run.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,

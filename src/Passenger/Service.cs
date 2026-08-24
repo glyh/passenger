@@ -12,54 +12,33 @@ using Microsoft.Playwright;
 namespace Passenger;
 
 /// <summary>
-/// What a page holds now: a wall, or a measurement of the page.
+/// What a page holds now: a wall, or the fact that nobody looked.
 ///
 /// A discriminated union, which C# does not have, so it is a base with a
 /// `type` discriminator -- exactly the shape pydantic serialised on the Python
 /// side, so the JSON a caller sees is unchanged.
+///
+/// It carried a third member, `Measured`, until ticket 048: a character count,
+/// a title, a url and the picture geometry, taken on every reply whether or not
+/// the caller wanted them. The measuring moved to the caller, which is where
+/// reading a page already went with ticket 047.
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
-[JsonDerivedType(typeof(Measured), "measured")]
 [JsonDerivedType(typeof(Blocked), "blocked")]
+[JsonDerivedType(typeof(Unchecked), "unchecked")]
 public abstract record PageOutcome;
 
 /// <summary>
-/// What a page measures, which is never what it means.
+/// Nobody looked, because the caller said not to (`checkWall: false`).
 ///
-/// Was `Fetched`, and carried `markdown` and `mode_used` until ticket 046
-/// retired extraction. What is left is what this side can honestly say about a
-/// page it did not interpret: how much text the browser itself reports, and
-/// what the page renders that text cannot carry.
-///
-/// `CharCount` is `document.body.innerText`, not the length of an extraction.
-/// That distinction is the whole of ticket 039, which closed undone on a
-/// count of 0 for a page holding 2,647 characters -- a number that
-/// measured the extractor while looking like it measured the page. There is no
-/// extractor now, so there is nothing left to lie about.
+/// A variant rather than a null `page`, for ticket 042's reason: a negative
+/// nobody tested must not arrive looking like one that was. With `Measured`
+/// deleted the slot would otherwise carry a wall or nothing, and *nothing*
+/// would mean both "checked, and clean" and "did not check" -- which is the
+/// shape 042 removed from the attach message, where a check that never ran
+/// read as a page that was fine.
 /// </summary>
-public sealed record Measured : PageOutcome
-{
-    [JsonPropertyName("url")]
-    public required string Url { get; init; }
-
-    [JsonPropertyName("title")]
-    public required string Title { get; init; }
-
-    [JsonPropertyName("charCount")]
-    public required int CharCount { get; init; }
-
-    // What the page renders that text cannot carry (ticket 017). Flat rather
-    // than nested, because these three sit alongside `charCount` as answers to
-    // one question -- how much of this page is actually readable as text.
-    [JsonPropertyName("largestImage")]
-    public double LargestImage { get; init; }
-
-    [JsonPropertyName("largeImages")]
-    public int LargeImages { get; init; }
-
-    [JsonPropertyName("largestImageSrc")]
-    public string LargestImageSrc { get; init; } = "";
-}
+public sealed record Unchecked : PageOutcome;
 
 /// <summary>
 /// A signature matched, so a human is genuinely required.
@@ -183,7 +162,7 @@ public static class Service
             {
                 Tab = tab,
                 Returned = returned,
-                Page = await LookAsync(page, tab),
+                Page = await LookAsync(page, tab, request.CheckWall),
             };
         }
         catch (ScriptException failure)
@@ -194,7 +173,7 @@ public static class Service
                 Code = failure.Code.Value(),
                 Error = failure.PlainMessage,
                 Where = failure.Detail ?? "",
-                Page = await LookAsync(page, tab),
+                Page = await LookAsync(page, tab, request.CheckWall),
             };
         }
 
@@ -213,66 +192,32 @@ public static class Service
     }
 
     /// <summary>
-    /// What the tab holds now: a wall, or a measurement of the page.
+    /// What the tab holds now: a wall, or nothing this side went looking for.
     ///
-    /// Always taken, where it used to be skippable with a `readPage` switch. That
-    /// switch existed to spare a caller the cost of a full markdown extraction it
-    /// did not want; a measurement is a character count and a picture geometry,
-    /// and nobody needs to opt out of those.
+    /// Taken unless the caller says otherwise, where ticket 047 had made it
+    /// unconditional. 047 deleted a `readPage` switch on the reasoning that
+    /// nobody needs to opt out of something cheap, and that was right about
+    /// what the reply carried *then* -- a character count and a picture
+    /// geometry, neither of which the caller could refuse. Ticket 048 deleted
+    /// those, which leaves the wall probe as the only work here nobody asked
+    /// for: two round trips, a title and a selector match, on every call. A
+    /// caller driving one page across many calls pays them every time, and
+    /// that caller is the one `checkWall` is for.
     /// </summary>
-    private static async Task<PageOutcome> LookAsync(IPage page, string tab)
+    private static async Task<PageOutcome?> LookAsync(IPage page, string tab, bool checkWall)
     {
+        if (!checkWall)
+        {
+            return new Unchecked();
+        }
+
         Blocker? blocker = await InspectAsync(page);
         return blocker is null
-            ? await MeasureAsync(page)
+            ? null
             : ToBlocked(blocker, tab,
                 "showBrowser with this tab and a wait, or `passenger show`; "
                 + "solve it, then call again with this same tab -- it is still "
                 + "open, and still there");
-    }
-
-    /// <summary>
-    /// Every successful read passes through here, which is why the pictures
-    /// are measured here rather than in <see cref="InspectAsync"/>.
-    ///
-    /// A script's ending page and the page a human unblocked by hand both build
-    /// their result on this line; measuring one level up would have left the
-    /// handoff path silently unmeasured.
-    /// </summary>
-    private static async Task<Measured> MeasureAsync(IPage page)
-    {
-        string title;
-        try
-        {
-            title = await page.TitleAsync();
-        }
-        catch (Exception)
-        {
-            title = "";
-        }
-
-        int chars;
-        try
-        {
-            chars = (await page.InnerTextAsync("body")).Length;
-        }
-        catch (Exception)
-        {
-            // A renderer that will not answer is not a page of zero characters,
-            // and saying so was ticket 039's complaint about the old count.
-            chars = 0;
-        }
-
-        Pictures seen = await PicturesJs.MeasureAsync(page);
-        return new Measured
-        {
-            Url = page.Url,
-            Title = title,
-            CharCount = chars,
-            LargestImage = seen.Largest,
-            LargeImages = seen.Count,
-            LargestImageSrc = seen.Src,
-        };
     }
 
     private static Blocked ToBlocked(Blocker blocker, string tab, string hint) => new()

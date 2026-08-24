@@ -1,19 +1,45 @@
-// Measuring the pictures on a page, which is the one thing this tool can see
-// and the caller structurally cannot.
+// Measuring the pictures on a page, which the text cannot carry.
 //
-// `fetch` hands over text. When a page's content lives in a photograph -- a
-// price list on a menu board, a 图文 note, an infographic -- the markdown is
-// not truncated and does not look wrong; it looks like a short page. Ticket
-// 015 found that a page deferring content usually *says so* in the text we
-// hand over, so the caller can notice for itself. A photograph says nothing.
+// When a page's content lives in a photograph -- a price list on a menu board,
+// a 图文 note, an infographic -- what you read back is not truncated and does
+// not look wrong. It looks like a short page. Ticket 015 found that a page
+// deferring content usually *says so* in the text you were handed, so you can
+// notice for yourself. A photograph says nothing.
 //
-// Same file convention as `walker.js`: one JavaScript expression, an arrow
-// function, called by `page.evaluate` with the argument array `pictures.py`
-// passes. The threshold stays on the Python side so a reader finds it there
-// and a test can vary it without touching this file. It stays JavaScript for
-// walker.js's reason as well -- geometry *is* layout, so this cannot be
-// computed off a snapshot, and it crosses to a C# port unchanged.
-([bigEnough]) => {
+// This used to run on the server, on every reply, and hand you the numbers
+// whether you wanted them or not. Ticket 048 moved it here: the tool reports
+// nothing it was not asked for, so measuring is yours the same way reading is.
+// Nothing will tell you a page was picture-borne. Run this when a page reads
+// shorter than it should.
+//
+// Same shape as walker.js: one arrow function, evaluated in the page. It stays
+// JavaScript for walker.js's reason -- geometry *is* layout, so it cannot be
+// computed off a snapshot.
+//
+// Returns { largest, count, src }: the biggest visible picture as a share of
+// the viewport, how many clear the threshold, and how to reach the biggest one
+// -- a URL where there is one, and a CSS selector where there is not, which
+// `Page.Locator(src).ScreenshotAsync()` takes (ticket 014).
+//
+// Roughly: 0.0 on a docs page, 0.10 on an illustrated article, 0.27 on a
+// comic, 0.38 on a three-photo note, 1.92 on apple.com's hero. A small picture
+// can still be the whole content -- an xkcd comic measures 0.06 -- which is
+// why this is a number and not a verdict.
+(args) => {
+  // The threshold lives here, the way walker.js holds DEFAULT_STRIP and
+  // DEFAULT_ROOTS: it used to be a constant on the C# side passed in on every
+  // call, which is where a reader looked for it when the C# side was the only
+  // caller. Now you are.
+  //
+  // Ten percent of the viewport, and measured rather than picked. At 5% the
+  // count contradicts the ratio on exactly the pages that matter -- a
+  // xiaohongshu explore listing of 30 thumbnails counts 30 while its largest
+  // picture is 0.06 of the viewport, and an illustrated wikipedia article
+  // counts 5 while its largest is 0.10. At 10% both of those count 0 and a
+  // three-photo note still counts 3, so the two numbers corroborate instead of
+  // arguing. Pass `[0.05]` if you want to see it argue.
+  const [bigEnough = 0.10] = args ?? [];
+
   // What a picture is, measured rather than assumed. All five tags were
   // chosen against pages where each one was the biggest box on the page:
   // IMG on a xiaohongshu 图文 note, VIDEO on a xiaohongshu video note, svg on
@@ -60,7 +86,7 @@
     // Visible by the same rule the text walk uses (ticket 035), so the two
     // agree about what is on the page. Position is deliberately not tested:
     // requiring a box to be on screen and topmost measures *above the fold*
-    // rather than *rendered*, and `fetch` never scrolls -- measured, it took
+    // rather than *rendered*, and nothing here scrolls -- measured, it took
     // apple.com from 30 large pictures to 1 and moonofalabama's photo to 0.
     if (area <= 0 || !el.checkVisibility({ visibilityProperty: true })) continue;
     if (area / viewport >= bigEnough) count += 1;

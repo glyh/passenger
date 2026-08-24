@@ -86,12 +86,13 @@ public static class Tools
 
         Navigation, interaction and reading are all this call: `await
         Page.GotoAsync(url)` then whatever you need. The reply carries what you
-        returned, plus a measurement of the tab you ended on -- its character
-        count and pictures, or a `blocked` record if a known vendor's wall is in
-        the way.
+        returned, and a `blocked` record if a known vendor's wall is on the tab
+        you ended on. Nothing else: no character count, no measurement of the
+        page. What you did not return, you did not ask for.
 
-        This tool does not interpret pages. Extraction is yours to write, and the
-        `using-passenger` skill carries the recipes.
+        This tool does not interpret pages, and does not measure them either.
+        Extraction is yours to write and so is measurement; the
+        `using-passenger` skill carries both recipes.
 
         The tab stays open and comes back in `tab`, so a sequence continues across
         calls.
@@ -119,7 +120,18 @@ public static class Tools
         string? tab = null,
         [Description("Per-call budget for each Playwright operation.")]
         [Range(1, 600)]
-        int timeoutSeconds = 60)
+        int timeoutSeconds = 60,
+        [Description("""
+            Test the ending page against the fixed table of vendors' walls
+            (Cloudflare, reCAPTCHA, hCaptcha, DataDome, Arkose, PerimeterX, a
+            login wall). On by default, because a wall makes what you returned
+            *wrong* rather than short -- a challenge page's content in the shape
+            of an answer. Turn it off when you are driving one page across many
+            calls and know there is no wall: it costs two round trips. `page`
+            then says `unchecked`, so a reply never implies a check that did not
+            happen.
+            """)]
+        bool checkWall = true)
     {
         await EnsureDaemonAsync();
         return await Service.RunAsync(new ScriptRequest
@@ -128,6 +140,7 @@ public static class Tools
             Lane = lane,
             Tab = tab,
             TimeoutS = timeoutSeconds,
+            CheckWall = checkWall,
         });
     }
 

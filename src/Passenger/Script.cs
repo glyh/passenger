@@ -56,7 +56,15 @@ public static class Script
     ///
     /// Playwright and the JSON types, because those are what a script is written
     /// against, plus the collection and Linq namespaces that any non-trivial
-    /// return value needs. Deliberately not the whole BCL surface by default:
+    /// return value needs. `System.IO` because the server runs on the caller's
+    /// own machine and the skill's recipes turn on that: the walker and the
+    /// picture measurement are both read off disk with `File.ReadAllTextAsync`,
+    /// and bytes that cannot cross back as JSON are written out with
+    /// `File.WriteAllBytesAsync`. Both were documented before this import
+    /// existed, so both failed with `SCRIPT_INVALID: The name 'File' does not
+    /// exist` -- found by running the recipe rather than reading it, which is
+    /// how ticket 049 found its bug too.
+    /// Deliberately not the whole BCL surface by default:
     /// what is missing can still be reached with a fully-qualified name, so this
     /// is a convenience list rather than a sandbox, and it is not pretending to
     /// be one -- a caller-supplied script runs in this process either way.
@@ -65,6 +73,7 @@ public static class Script
     [
         "System",
         "System.Collections.Generic",
+        "System.IO",
         "System.Linq",
         "System.Text.Json",
         "System.Threading.Tasks",

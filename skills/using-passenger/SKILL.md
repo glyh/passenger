@@ -4,8 +4,9 @@ description: |
   Use when reading or driving web pages through the passenger MCP server --
   its `openLane`, `script`, `showBrowser`, `listTabs` and `closeTabs` tools.
   Scripts are C# against an async Playwright. Covers opening a lane before the
-  first call, the recipes for reading a page (including `walker.js`, which is
-  in this directory), what the `blocked` verdict does and does not catch,
+  first call, the recipes for reading a page and for measuring its pictures
+  (`walker.js` and `pictures.js`, both in this directory), what the `blocked`
+  verdict does and does not catch,
   recognising a login wall or captcha the tool cannot name and handing the
   page to a human, why a read is only the first screen, why reading beats
   driving, and what the tool will not remember for you. Use it before the
@@ -160,16 +161,22 @@ to continue from where a failure left off.
 
 ## The tool measures; you judge
 
-Everything this server reports is something it *measured*: a character count, a
-fraction of the viewport, a vendor's own markup. It never rules on what a page
-means. That division is deliberate and load-bearing -- six mechanisms that
+The one thing this server reports about a page is something it *measured*: a
+vendor's own markup, matched against a fixed table. It never rules on what a
+page means. That division is deliberate and load-bearing -- six mechanisms that
 crossed it have been deleted from this codebase -- and it is why the reading
 above is yours to do.
 
-Every `script` reply carries a measurement of the tab you ended on:
-`charCount` (the browser's own `innerText` length, not an extraction's), the
-picture geometry, and the url and title. Read `charCount` against what you
-expected. Nothing on this side is waiting to tell you the page was thin.
+**A `script` reply carries what you returned, and nothing about the page except
+a wall.** It used to carry a measurement of the tab you ended on -- a character
+count, the picture geometry, the url and title -- and that is gone. Whatever you
+want to know about the page, return it: `Page.Url`, `await Page.TitleAsync()`,
+`(await Page.InnerTextAsync("body")).Length`. They cost you nothing extra,
+because your script is already there.
+
+The consequence is worth stating plainly, because nothing will state it for you:
+**a page that reads short will not tell you it was picture-borne**, and no field
+in the reply hints at it. See below.
 
 ## Walls, and the ones the tool cannot see
 
@@ -226,19 +233,36 @@ hand.
 ## Pictures are not in the text
 
 What lives in a photograph, a menu board, a chart or a comic was never text, so
-such a page reads as *short* rather than as *truncated*.
+such a page reads as *short* rather than as *truncated*. **Nothing in the reply
+will tell you this happened.** The reply carries what you returned; if you did
+not measure the pictures, nobody did.
 
-`largestImage` is the biggest non-text thing the page renders, as a share of
-the window. Roughly: `0.0` on a docs page, `0.10` on an illustrated article,
-`0.27` on a comic, `0.38` on a three-photo note, above `1.0` on a marketing
-hero. Read it against `charCount` -- **a large picture and little text is the
-case worth acting on** -- and reach the picture itself in the same script:
+`pictures.js` sits in this skill's directory beside `walker.js`, and reads the
+same way -- off disk, since the server runs on your machine:
 
-    // when it is a URL -- take the bytes, not the response
+    var pictures = await File.ReadAllTextAsync("/path/to/skills/using-passenger/pictures.js");
+    var seen = await Page.EvaluateAsync<JsonElement>(pictures);
+    var largest = seen.GetProperty("largest").GetDouble();
+    var src = seen.GetProperty("src").GetString();
+
+Take the fields out rather than returning `seen` itself: Playwright deserialises
+with reference handling on, so a `JsonElement` handed straight back carries a
+spurious `"$id": "1"` beside the real keys.
+
+It returns `{ largest, count, src }`: the biggest visible picture as a share of
+the window, how many clear a tenth of it, and how to reach the biggest one.
+Roughly: `0.0` on a docs page, `0.10` on an illustrated article, `0.27` on a
+comic, `0.38` on a three-photo note, above `1.0` on a marketing hero. **A large
+picture and little text is the case worth acting on** -- so measure the text in
+the same script and compare the two yourself.
+
+Then reach the picture:
+
+    // when `src` is a URL -- take the bytes, not the response
     var response = await Page.APIRequest.GetAsync(src);
     var bytes = await response.BodyAsync();
 
-    // when it is a CSS selector
+    // when `src` is a CSS selector, which it is for an inline svg or a canvas
     await Page.Locator(src).ScreenshotAsync(new() { Path = path });
 
 **Do not return the response itself.** `Page.APIRequest.GetAsync` hands back an
@@ -247,8 +271,18 @@ this skill was written it was worse than refused: it serialised the driver's
 headers and timings and handed them back looking like an answer. Ask it for
 `BodyAsync()` or `TextAsync()` and return that.
 
-A small picture can still be the whole content (an xkcd comic measures 0.06),
-which is why the number is handed to you rather than acted on.
+Three things this measurement gets honestly wrong, all of them quiet:
+
+- **`src` is not always the `<img src>` you saw.** It is `currentSrc` where
+  there is one, so a responsive image resolves to the variant *this window*
+  loaded -- on xkcd 2347 that is `dependency_2x.png`, not the
+  `dependency.png` in the markup. Usually what you want; occasionally not the
+  asset you meant to name.
+- **A protocol-relative URL needs a scheme.** xkcd serves
+  `//imgs.xkcd.com/...`, which `Page.APIRequest.GetAsync` will not take as-is.
+- **A small picture can still be the whole content.** An xkcd comic measures
+  0.06. This is a number, not a verdict, which is why you are the one holding
+  it.
 
 ## Prefer reading to driving
 

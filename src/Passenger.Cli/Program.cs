@@ -51,6 +51,13 @@ Option<int> scriptTimeout = new("--timeout")
     DefaultValueFactory = _ => 60,
 };
 Option<bool> scriptJson = new("--json") { Description = "Print the whole outcome as JSON." };
+Option<bool> scriptNoCheckWall = new("--no-check-wall")
+{
+    Description = "Skip the vendor wall check on the page the script ends on. "
+                  + "It costs two round trips, which is worth skipping only when "
+                  + "driving one page across many calls. The outcome then reports "
+                  + "`unchecked` rather than a clean page.",
+};
 Argument<string> scriptFile = new("file")
 {
     Description = "Script to run. Defaults to stdin, so it reads from a heredoc.",
@@ -61,11 +68,12 @@ Command script = new("script",
     "Run a Playwright script against a tab, and print where it ends up.\n\n"
     + "The only door onto a page, at either surface, since ticket 046 retired "
     + "`fetch`: navigate with `await Page.GotoAsync(url)`, drive whatever needs "
-    + "driving, and return what you want. This tool does not interpret pages -- "
-    + "the recipes for reading one live in the `using-passenger` skill, next to "
-    + "walker.js.")
+    + "driving, and return what you want. This tool does not interpret pages "
+    + "and does not measure them -- the recipes for reading one and for "
+    + "measuring its pictures both live in the `using-passenger` skill, next to "
+    + "walker.js and pictures.js.")
 {
-    scriptFile, scriptLane, scriptTab, scriptTimeout, scriptJson,
+    scriptFile, scriptLane, scriptTab, scriptTimeout, scriptJson, scriptNoCheckWall,
 };
 script.SetAction(async (parse, _) =>
 {
@@ -79,6 +87,7 @@ script.SetAction(async (parse, _) =>
         Lane = parse.GetValue(scriptLane)!,
         Tab = parse.GetValue(scriptTab),
         TimeoutS = parse.GetValue(scriptTimeout),
+        CheckWall = !parse.GetValue(scriptNoCheckWall),
         AsJson = parse.GetValue(scriptJson),
     });
     return RenderScript(outcome, parse.GetValue(scriptJson));
@@ -342,12 +351,6 @@ static int RenderScript(ScriptOutcome outcome, bool asJson)
                 Console.Error.WriteLine(JsonSerializer.Serialize<PageOutcome>(
                     wall, new JsonSerializerOptions { WriteIndented = true }));
                 return 2;
-            }
-
-            if (ran.Page is Measured measured)
-            {
-                Console.Error.WriteLine(
-                    $"   {measured.CharCount} chars on {measured.Url}");
             }
 
             return 0;

@@ -239,65 +239,18 @@ public sealed record Blocker
 }
 
 /// <summary>
-/// What the page renders that is not text (ticket 017).
-///
-/// Geometry rather than a count, because a bare count is noise on every page
-/// ever made. Measured across twelve pages, the largest visible picture as a
-/// share of the viewport separates a three-photo note (0.38) from a listing
-/// of thirty thumbnails (0.06), while both the count and the summed area call
-/// the listing the more picture-borne of the two -- it has thirty boxes and
-/// 1.72 viewports of them, against three and 1.16.
-///
-/// `Src` is how to reach that picture, not necessarily a URL: two of the five
-/// tags measured -- inline `svg` and `canvas` -- have no URL to give, so it
-/// falls back to a CSS selector, which `Page.Locator(sel).ScreenshotAsync()`
-/// takes (ticket 014). A `data:` placeholder parked by a lazy loader does the
-/// same.
-/// </summary>
-public sealed record Pictures
-{
-    /// <summary>
-    /// The largest visible picture's area, over the viewport's. Above 1.0 for
-    /// an element rendered larger than the window, which is ordinary on a
-    /// marketing page: apple.com's hero measures 1.92.
-    /// </summary>
-    [JsonPropertyName("largest")]
-    public double Largest { get; init; }
-
-    /// <summary>How many clear <see cref="PicturesJs.BigEnough"/> of the viewport.</summary>
-    [JsonPropertyName("count")]
-    public int Count { get; init; }
-
-    [JsonPropertyName("src")]
-    public string Src { get; init; } = "";
-
-    /// <summary>The bounds pydantic held with `Field(ge=0)`.</summary>
-    public Pictures Validated()
-    {
-        if (Largest < 0.0)
-        {
-            throw new ArgumentException("largest must be at or above 0");
-        }
-
-        if (Count < 0)
-        {
-            throw new ArgumentException("count must be at or above 0");
-        }
-
-        return this;
-    }
-}
-
-/// <summary>
 /// One call at the passthrough door (ticket 013).
 ///
 /// The only door there is, since ticket 046 retired `fetch`. A script decides
 /// its own navigation, so nothing here says how to arrive; what is left is
 /// which tab, whose lane, and how long any one Playwright call may take.
 ///
-/// There is no extraction mode and no read-page switch because there is no
-/// extraction. The reply carries what the ending page *measures* -- a
-/// character count, the pictures, a vendor's wall -- and never what it means.
+/// There is no extraction mode because there is no extraction, and no
+/// read-page switch because there is nothing left to read: ticket 048 deleted
+/// the measurement the reply used to carry. What comes back is what the script
+/// returned, and whether a vendor's wall is on the tab it ended on -- which is
+/// the one thing this side still judges, and the one thing `CheckWall` turns
+/// off.
 /// </summary>
 public sealed record ScriptRequest
 {
@@ -312,6 +265,18 @@ public sealed record ScriptRequest
     public string? Tab { get; init; }
 
     public int TimeoutS { get; init; } = 60;
+
+    /// <summary>
+    /// Whether to test the ending page against the vendor table (ticket 048).
+    ///
+    /// On, because a wall makes the script's own return value *wrong* rather
+    /// than incomplete -- a challenge page's content wearing the shape of an
+    /// answer -- and nothing in the reply would say so. Off for a caller
+    /// driving one page across many calls, which is the only caller that pays
+    /// the two round trips often enough to feel them. `page` then says
+    /// `unchecked` rather than falling silent.
+    /// </summary>
+    public bool CheckWall { get; init; } = true;
 
     public bool AsJson { get; init; }
 

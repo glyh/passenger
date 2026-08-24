@@ -11,6 +11,7 @@
 
 using System.Diagnostics;
 using System.Net;
+using System.Reflection;
 using System.Text;
 
 namespace Passenger;
@@ -24,7 +25,21 @@ public static class Webserve
     /// single-file publish still serves it, and that there is no path to get
     /// wrong when the tool is installed somewhere other than a source tree.
     /// </summary>
-    public static string Page => PicturesJs.ReadResource("Passenger.viewer.html");
+    public static string Page => ReadResource("Passenger.viewer.html");
+
+    /// <summary>
+    /// Lived on `PicturesJs` until ticket 048 deleted it, which left the viewer
+    /// page as the assembly's one embedded resource and this as its one reader.
+    /// </summary>
+    private static string ReadResource(string name)
+    {
+        using Stream? stream = Assembly.GetExecutingAssembly()
+            .GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException(
+                $"{name} is missing from the assembly");
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 
     private static readonly string[] NovncCandidates =
     [
