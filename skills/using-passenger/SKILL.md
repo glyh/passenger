@@ -2,18 +2,17 @@
 name: using-passenger
 description: |
   Use when reading or driving web pages through the passenger MCP server --
-  its `openLane`, `script`, `showBrowser`, `listTabs` and `closeTabs` tools.
-  Scripts are C# against an async Playwright. Covers opening a lane before the
-  first call, the recipes for reading a page and for measuring its pictures
-  (`markdown.js`, `unstrip-asides.js` and `pictures.js`, all in this directory
-  -- best-effort recipes to read and adapt, not fixed APIs), what the `blocked`
-  verdict does and does not catch, why a Sphinx or docutils page loses its
-  footnotes and what to run first,
-  recognising a login wall or captcha the tool cannot name and handing the
-  page to a human, why a read is only the first screen, why reading beats
-  driving, and what the tool will not remember for you. Use it before the
-  first call in a session, and whenever a read comes back thinner than the
-  page looked.
+  `openLane`, `script`, `showBrowser`, `listTabs`, `closeTabs`. Scripts are C#
+  against an async Playwright, and `script` is the only door onto a page: no
+  fetch, no extraction, nothing here interprets a page for you. Covers what to
+  do before the first call, reading a page cheaply and what the `markdown.js`,
+  `unstrip-asides.js` and `pictures.js` recipes in `scripts/` are for, what the
+  `blocked` verdict catches and what it never will, recognising a login wall or
+  captcha the tool cannot name and handing the page to a human, why a read is
+  only the first screen and why a picture-borne page reads short rather than
+  truncated, what driving spends that reading does not, and what the tool will
+  not remember for you. Read it before the first call in a session, and again
+  whenever a read comes back thinner than the page looked.
 ---
 
 # Using passenger
@@ -23,16 +22,27 @@ cannot distinguish from an ordinary browser. Reach for it over a plain HTTP
 fetch when a page needs a login, sits behind anti-bot protection, or renders
 its content with JavaScript.
 
-This skill is the operating knowledge: the things that are true before any
-particular call, and the recipes for reading a page. What each argument means
-is in the tool schemas and is not repeated here.
+**This file is the judgement**: what is true before any particular call, and
+what to notice once a page is in front of you. The mechanics live in four
+files under `references/`, and none of them are worth opening until you want
+one:
+
+| what you are doing | open |
+|---|---|
+| getting the text, the markdown, or the page's own JSON | `references/reading-a-page.md` |
+| a page whose content is photographs, menus or charts | `references/pictures.md` |
+| writing the C#: strings, `await`, types, what cannot cross back | `references/writing-scripts.md` |
+| tabs piling up, a wedged browser, a shared screen, `orphan` | `references/tabs-and-lanes.md` |
+
+The recipes those files run -- `markdown.js`, `unstrip-asides.js`,
+`pictures.js` -- are in `scripts/`. What each tool *argument* means is in the
+tool schemas, and is repeated nowhere here.
 
 **The server runs on your machine, in your filesystem.** A script's `File.*`
 calls land on the same disk your other tools see, in both directions: read a
-recipe like `markdown.js` from its real path instead of pasting it in (see
-below), and write bytes with `File.WriteAllBytesAsync` to a path you can then
-open yourself -- a screenshot or a downloaded image does not have to cross
-back as JSON.
+recipe off its real path instead of pasting it into a script, and write bytes
+with `File.WriteAllBytesAsync` to a path you can then open yourself. A
+screenshot or a downloaded image does not have to cross back as JSON.
 
 ## Open a lane first
 
@@ -54,12 +64,9 @@ something slow, say how long you are prepared to wait:
     showBrowser(lane, ttlMinutes: 120)    # or say it as you ask
 
 Say `destroyLane(lane)` when you are finished, rather than leaving tabs parked
-until the clock reaches them.
-
-A lane that ran out comes back as `LANE_NOT_FOUND` on the next call, and its
-tabs are already closed. Nothing is recoverable and retrying will not help:
-open a new lane and start again. The usual way to get there is a handoff the
-human took longer over than you allowed for, which is what `ttlMinutes` is for.
+until the clock reaches them. A lane that ran out comes back `LANE_NOT_FOUND`
+with its tabs already closed: nothing is recoverable, so open a new one and
+start again.
 
 ## One door, and it hands you the page
 
@@ -76,14 +83,18 @@ tab id from an earlier reply and you continue on it. Navigation, interaction
 and reading are all one call, so a page you know how to handle costs exactly
 one round trip.
 
-**Three things about writing C# here**, and they account for nearly every
-first-try failure:
+**Three things about the C# here**, and they account for nearly every first-try
+failure:
 
 - **`Page`, capitalised.** It is a member, so it follows C#'s convention like
   everything else you will call on it. `page` does not compile.
 - **Everything is awaited.** Playwright .NET has no synchronous API, so
   `Page.GotoAsync(url)` without `await` hands you a `Task`, not a page.
 - **`return` at the top level is fine.** No wrapper, no method, no class.
+
+The ones that bite after it compiles -- verbatim strings for JavaScript, a
+nested `await` that will not build, the type argument that is not optional, the
+live handles that cannot cross back -- are in `references/writing-scripts.md`.
 
 **This server does not interpret pages.** It used to: there was a `fetch` with
 an `article` mode and a `dom` mode, and choosing between them was the caller's
@@ -96,126 +107,25 @@ and get out of the way.
 
 Start with the cheapest thing that answers your question.
 
-**The text, and nothing else.**
+    return await Page.InnerTextAsync("body");                 // the text, and nothing else
+    return await Page.Locator("#results").InnerTextAsync();   // just the part you want
 
-    return await Page.InnerTextAsync("body");
+Those two answer most questions, and the second costs you the least context:
+you know what you are looking for, and the page does not. Two more are worth
+knowing by name, both in `references/reading-a-page.md`:
 
-Good for most things. Fast, no markup, no links. This is also the escape hatch
-for pages that defeat everything else -- 12306's ticket results render through
-their own templating and `InnerText` is the only thing that sees them.
+- **`Page.APIRequest`**, which often reaches the site's own JSON without
+  rendering the page at all -- a `__INITIAL_STATE__` blob, or a preload link in
+  the `<head>` -- and is the cheapest and most structured read there is when a
+  site has one. Look for it before writing selectors.
+- **`markdown.js`**, when structure is the thing you need: headings, lists,
+  fenced code, and every link resolved and inline.
 
-**Just the part you want.**
-
-    return await Page.Locator("#results").InnerTextAsync();
-
-    return await Page.EvalOnSelectorAllAsync<string[]>(
-        "a[href]", "els => els.map(e => e.textContent.trim() + ' -> ' + e.href)");
-
-Usually the right answer, and the one that costs you least context. You know
-what you are looking for; the page does not.
-
-**The type argument on `EvalOnSelectorAllAsync<T>` is required**, and forgetting
-it is the single most common way this call fails. There is an overload without
-it, so the compiler will not always save you: it returns `JsonElement`, which
-crosses the boundary as a shape you did not intend. Say the type you want.
-
-**Markdown, with headings, lists, fenced code and resolved links.** `markdown.js`
-sits in this skill's directory, and **the server runs on your machine, in your
-filesystem** -- so read it from disk rather than pasting its contents into the
-script:
-
-    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
-    return await Page.EvaluateAsync<string>(js);
-
-**For a whole page, write it out instead of returning it.** A tool reply is
-JSON, so a returned string arrives quoted and escaped -- every newline as `\n`,
-on one line, and the whole page in your context whether you wanted all of it or
-not. The filesystem is shared, so hand it to yourself as a file and read what
-you need:
-
-    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
-    var markdown = await Page.EvaluateAsync<string>(js);
-    var path = "/tmp/pep8.md";              // yours to name; nothing here picks one
-    await File.WriteAllTextAsync(path, markdown);
-    return new Dictionary<string, object> { ["path"] = path, ["chars"] = markdown.Length };
-
-Now the markdown is text on disk, and `chars` is there to read against what you
-expected. Return the string directly for a short read; write it out for a long
-one.
-
-Use the actual path -- the one this file was read from, since `markdown.js` is
-its sibling. Reading beats pasting for a reason sharper than convenience: a
-tool call is JSON, and every backslash in the file has to survive that. The
-regexes are full of them, and a transcription that doubles some and not others
-either fails to parse or -- worse -- decodes an escape into the character it
-names and hands the page something that is no longer JavaScript. The two
-Unicode line separators used to do exactly that, ending a regex literal early
-with `SyntaxError: Invalid regular expression: missing /`; they are built with
-`new RegExp` now, so that particular one is gone, but the class is not. A file
-read never crosses the boundary at all; the bytes on disk reach
-`Page.EvaluateAsync` unchanged.
-
-It walks the live DOM, keeps only what `checkVisibility()` says is visible,
-resolves every `href` against the document, emits `[label](url)` inline, fences
-`pre` blocks, and tidies the result. It takes an optional
-`[stripSelector, rootSelectors]` if you want to override where it starts or
-what it discards.
-
-It runs in the page rather than on the server, which is why the port left it
-untouched.
-
-It is not magic and it is not always right. Two known shapes:
-
-- It keeps **everything visible under the root it picks**, so on a post with a
-  comment thread you get the post and the comments. If you want the post alone,
-  say so in your own selector.
-- It picks its root from a short list of candidates (`main`, `article`,
-  `#content`…). On a page whose furniture matches one of those thirty times
-  over, it can start in the wrong place.
-- It strips a fixed list of furniture -- `nav`, `header`, `footer`, `aside` --
-  and **something carrying content can be on that list**. Unlike the other two,
-  this one does not show up in the character count. See below.
-
-**On Sphinx and docutils pages, run `unstrip-asides.js` first or lose the
-footnotes.** docutils emits footnotes and citations as `<aside class="footnote">`
-and wraps groups of them in an outer `aside`, so `markdown.js` discards the
-reference apparatus and keeps the prose that points at it. Measured on PEP 8:
-45,389 characters against the page's own 45,407 -- an eighteen-character
-shortfall for losing every footnote and the whole `## References` section, which
-is exactly the number you were told to read against expectation. `unstrip-asides.js`
-sits beside `markdown.js`, retags the content-bearing asides as `section` so the
-strip list stops matching them, and returns how many it rescued. It is a
-separate file because both of `aside`'s jobs are real -- on a news site it
-genuinely is a sidebar -- so this is yours to opt into on the pages where it is
-not:
-
-    var fix = await File.ReadAllTextAsync("/path/to/skills/using-passenger/unstrip-asides.js");
-    var js  = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
-    var rescued  = await Page.EvaluateAsync<int>(fix);      // 7 on PEP 8
-    var markdown = await Page.EvaluateAsync<string>(js);
-
-Run it on any page: it rescues nothing and changes nothing where there is
-nothing to rescue (0 on theguardian.com's 22 asides), and running it twice
-rescues 0 the second time. It mutates the live DOM, which is free on a tab you
-opened to read and worth knowing about on a tab a human is working in.
-
-**It is a recipe, not an API -- read it, and change it when it is wrong.** It is
-a single arrow-function expression in a file you already have on disk, deliberately
-literal so that it can be understood in one pass. Nothing here versions it or
-depends on its internals: no C# calls into it, the reply carries only what your
-script returned, and the two overrides it takes cover the common case rather
-than every case. So when the root heuristic picks a decoy, or the strip list
-discards something that was carrying the content, editing the source you just
-read and evaluating that is a normal thing to do -- either in the string you
-pass to `EvaluateAsync`, or by keeping your own copy for a site you come back
-to. That is best-effort by design; it is not a contract you are working around.
-
-**Do not restructure a script to avoid the compile.** Measured: after the
-server's first call, compiling a script costs a flat ~40ms whatever it says --
-an 11 KB source carrying the whole of `markdown.js` compiles in the same time
-as a one-line one. It is noise beside a single navigation, and batching unrelated
-work into one script to amortise it buys nothing while costing you the ability
-to continue from where a failure left off.
+**A short read comes back; a long one goes to disk.** A tool reply is JSON, so
+a returned page arrives quoted and escaped, on one line, and all of it is in
+your context whether you wanted it or not. Write it out with
+`File.WriteAllTextAsync` and return the path and the length instead -- the
+length being the thing you read against what you expected.
 
 ## The tool measures; you judge
 
@@ -227,14 +137,14 @@ above is yours to do.
 
 **A `script` reply carries what you returned, and nothing about the page except
 a wall.** It used to carry a measurement of the tab you ended on -- a character
-count, the picture geometry, the url and title -- and that is gone. Whatever you
-want to know about the page, return it: `Page.Url`, `await Page.TitleAsync()`,
-`(await Page.InnerTextAsync("body")).Length`. They cost you nothing extra,
-because your script is already there.
+count, the picture geometry, the url and title -- and that is gone. Whatever
+you want to know about the page, return it: `Page.Url`,
+`await Page.TitleAsync()`, `(await Page.InnerTextAsync("body")).Length`. They
+cost you nothing extra, because your script is already there.
 
-The consequence is worth stating plainly, because nothing will state it for you:
-**a page that reads short will not tell you it was picture-borne**, and no field
-in the reply hints at it. See below.
+The consequence is worth stating plainly, because nothing else will state it:
+**a page that reads short will not tell you it was picture-borne**, and no
+field in the reply hints at it.
 
 ## Walls, and the ones the tool cannot see
 
@@ -291,56 +201,15 @@ hand.
 ## Pictures are not in the text
 
 What lives in a photograph, a menu board, a chart or a comic was never text, so
-such a page reads as *short* rather than as *truncated*. **Nothing in the reply
-will tell you this happened.** The reply carries what you returned; if you did
-not measure the pictures, nobody did.
+such a page reads as *short* rather than as *truncated*, and no field in the
+reply distinguishes the two. If you did not measure the pictures, nobody did.
 
-`pictures.js` sits in this skill's directory beside `markdown.js`, and reads the
-same way -- off disk, since the server runs on your machine:
-
-    var pictures = await File.ReadAllTextAsync("/path/to/skills/using-passenger/pictures.js");
-    var seen = await Page.EvaluateAsync<JsonElement>(pictures);
-    var largest = seen.GetProperty("largest").GetDouble();
-    var src = seen.GetProperty("src").GetString();
-
-Take the fields out rather than returning `seen` itself: Playwright deserialises
-with reference handling on, so a `JsonElement` handed straight back carries a
-spurious `"$id": "1"` beside the real keys.
-
-It returns `{ largest, count, src }`: the biggest visible picture as a share of
-the window, how many clear a tenth of it, and how to reach the biggest one.
-Roughly: `0.0` on a docs page, `0.10` on an illustrated article, `0.27` on a
-comic, `0.38` on a three-photo note, above `1.0` on a marketing hero. **A large
-picture and little text is the case worth acting on** -- so measure the text in
-the same script and compare the two yourself.
-
-Then reach the picture:
-
-    // when `src` is a URL -- take the bytes, not the response
-    var response = await Page.APIRequest.GetAsync(src);
-    var bytes = await response.BodyAsync();
-
-    // when `src` is a CSS selector, which it is for an inline svg or a canvas
-    await Page.Locator(src).ScreenshotAsync(new() { Path = path });
-
-**Do not return the response itself.** `Page.APIRequest.GetAsync` hands back an
-`IAPIResponse`, which is a live handle -- returning it is refused, and until
-this skill was written it was worse than refused: it serialised the driver's
-headers and timings and handed them back looking like an answer. Ask it for
-`BodyAsync()` or `TextAsync()` and return that.
-
-Three things this measurement gets honestly wrong, all of them quiet:
-
-- **`src` is not always the `<img src>` you saw.** It is `currentSrc` where
-  there is one, so a responsive image resolves to the variant *this window*
-  loaded -- on xkcd 2347 that is `dependency_2x.png`, not the
-  `dependency.png` in the markup. Usually what you want; occasionally not the
-  asset you meant to name.
-- **A protocol-relative URL needs a scheme.** xkcd serves
-  `//imgs.xkcd.com/...`, which `Page.APIRequest.GetAsync` will not take as-is.
-- **A small picture can still be the whole content.** An xkcd comic measures
-  0.06. This is a number, not a verdict, which is why you are the one holding
-  it.
+`scripts/pictures.js` measures them -- the biggest visible picture as a share
+of the window, how many clear a tenth of it, and how to reach the biggest one
+-- and `references/pictures.md` says how to run it, how to read the number, and
+how to get the bytes onto your disk. **A large picture and little text is the
+case worth acting on**, so measure the text in the same script and compare the
+two yourself.
 
 ## Prefer reading to driving
 
@@ -348,68 +217,41 @@ Three things this measurement gets honestly wrong, all of them quiet:
 reading and driving are different kinds of act, not degrees of one.
 
 After a human has navigated -- during a handoff, or just in their own browser
--- `script` against that tab costs nothing and is invisible to the site.
-Synthetic clicks and fills are not: they have no cursor path and no keystroke
-timing, and that is exactly what behavioural anti-bot systems score. Driving
-spends the reputation of a session whose entire value is that it has never done
-anything unusual.
+-- `script` against that tab costs nothing and is invisible to the site. So
+does `Page.APIRequest` against a URL. Synthetic clicks and fills are not: they
+have no cursor path and no keystroke timing, and that is exactly what
+behavioural anti-bot systems score. Driving spends the reputation of a session
+whose entire value is that it has never done anything unusual.
 
-So: navigate by hand where you can, drive only where you must, and prefer one
+**That reputation is a budget, and it is not yours alone.** Sites meter per
+account, not per lane and not per session, so a brand-new lane on its first
+page of the day can be thrown out on its first click because something else
+spent the allowance hours earlier. And the throttle rarely announces itself:
+one expansion too many and the tab is navigated away, after which the selectors
+match nothing and the page reads exactly like an item nobody ever replied to.
+**An empty result after a burst of driving is a fact about you, not about the
+page.**
+
+So spend it last. Take everything reachable without clicking first, and put the
+one operation you know is expensive at the end of the task, where being cut off
+costs you that step instead of the whole run.
+
+And: navigate by hand where you can, drive only where you must, and prefer one
 `script` that ends where you need to be over five that walk there.
 
-## What cannot cross back
-
-A tool result is JSON, and nearly every Playwright call hands back a live
-handle that is not. Returning an `ILocator` or an `IElementHandle` is refused
-by name with `SCRIPT_RETURN_NOT_JSON` -- return what you wanted *from* it
-instead:
-
-    return Page.Url;                                  // not Page
-    return await Page.Locator("h1").InnerTextAsync(); // not the locator
-
-## Housekeeping
-
-Three verbs, and the differences between them are deliberate:
+## Close what you opened
 
     closeTabs(lane, [tab, ...])    the ones you name
     closeAllTabs(lane)             every tab in your lane; the lane survives
     destroyLane(lane)              the tabs, then the lane itself
 
-There is no "close everything" you can reach by leaving an argument out. That
-was the old shape and it is what closed other callers' tabs.
-
-**Tabs accumulate faster now than they used to.** A `script` with no `tab`
-opens a fresh one *every call*, so a batch of twenty pages driven one call each
-leaves twenty tabs. Pass the `tab` back from the previous reply when you are
-working through a list, and close what you are done with. The popups a page
-opens for itself accumulate too, and so does every tab that came back
-`blocked`, because that tab keeps its wall on purpose -- it is the one the
-human needs.
-
-Tabs left open cost memory in a browser meant to stay warm for weeks. The TTL
-is a backstop for the calls you never got to make, not the plan.
-
-**The screen is shared, and refcounted.** `showBrowser` claims it; the viewer
-stays up until every lane that claimed it has called `hideBrowser`. So your
-`hideBrowser` cannot take the window away from someone else's human -- and
-theirs cannot take it from yours.
-
-**`orphan` is a junk drawer anyone may open.** Tabs a page opened by itself
-join the lane that caused them, but a tab a *human* opened during a handoff has
-no opener for Chrome to trace, so it lands in `orphan` -- readable and closable
-by any caller, and never collected on a timer. `listTabs("orphan")` is how you
-look, and looking first is the whole etiquette: somebody may be halfway through
-a login in there.
-
-**What lanes do not isolate.** One profile means one Chrome and one attach, and
-attaching initialises every open tab. So a tab wedged mid-navigation in *any*
-lane slows or fails calls in every lane, and freeing it can stop a navigation
-another lane was making. Lanes partition ownership, not availability. When it
-happens the tool says which lanes it touched; it cannot prevent it.
-
-`browserStatus` reports `wedged:` for exactly this: `none`, or a count per
-kind. Read it when calls have gone slow for no reason you can see -- the tab
-doing it is usually not yours, and the count is the only thing that says so.
+A `script` with no `tab` opens a fresh one *every call*, so a batch of twenty
+pages driven one call each leaves twenty tabs in a browser meant to stay warm
+for weeks. Pass the `tab` back when you are working through a list, and close
+what you are done with; the TTL is a backstop for the calls you never got to
+make, not the plan. `references/tabs-and-lanes.md` has the rest: the shared
+screen, the `orphan` drawer a human's tabs land in, and why a tab wedged in
+someone else's lane still costs you.
 
 ## The tool remembers nothing about a site
 

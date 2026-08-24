@@ -106,8 +106,9 @@ lives in the shell.
             src/Passenger.Mcp/Tools.cs     the ten tools, and the whole surface there is
             src/Passenger.Mcp/Stop.cs      the one verb a human types
 
-    skill   skills/using-passenger/SKILL.md      how an agent operates this
-            skills/using-passenger/markdown.js     the DOM-to-markdown recipe
+    skill   skills/using-passenger/SKILL.md        how an agent operates this: the judgement
+            skills/using-passenger/references/     the mechanics, read on demand
+            skills/using-passenger/scripts/        markdown.js, unstrip-asides.js, pictures.js
 
 Detection is pure because the shell measures first: `Probe.Run` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
@@ -129,8 +130,8 @@ has the reasoning and the measurements.
 here.** Per-site scrapers rot because they fuse the two. This side owns
 transport: a warm real browser, a tab, a handoff when a human is needed, and a
 measurement of what it handed over. Extraction is the caller's, and lives in
-`skills/using-passenger/markdown.js` as a recipe rather than in this codebase as
-a mode.
+`skills/using-passenger/scripts/markdown.js` as a recipe rather than in this
+codebase as a mode.
 
 That was not the original design. There were two extractors -- `article`
 (trafilatura) and `dom` (a live-DOM walk) -- and the caller chose between them.
@@ -158,8 +159,8 @@ and says `unchecked` when it is, so a page nobody looked at never reads like a
 page that came back clean.
 
 **The DOM walk is still this repo's** in the sense that it ships here, and so does
-`pictures.js` now -- both in `skills/using-passenger/`, both recipes the caller
-reads off disk and runs in the page. Neither is something this tool decides to
+`pictures.js` now -- both in `skills/using-passenger/scripts/`, both recipes the
+caller reads off disk and runs in the page. Neither is something this tool decides to
 run.
 
 **Known signatures** — Cloudflare, Turnstile, reCAPTCHA, hCaptcha, Arkose,

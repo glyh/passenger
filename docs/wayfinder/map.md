@@ -68,8 +68,10 @@ lane still costs every lane, and freeing it can stop another lane's navigation
 would throw away the warm session, so it is measured and named rather than
 prevented.
 
-**`walker.js` is `markdown.js`.** Renamed 2026-08-24, in
-`skills/using-passenger/`. Everything closed below says `walker.js` and means
+**`walker.js` is `markdown.js`.** Renamed 2026-08-24; it now sits in
+`skills/using-passenger/scripts/`, beside `unstrip-asides.js` and `pictures.js`
+(the skill was split into `SKILL.md` + `references/` + `scripts/` on
+2026-08-25). Everything closed below says `walker.js` and means
 this file; history was left as it was written. The traversal is still a walk,
 and the code still calls it one -- what changed is the name a caller reads,
 which now says what the recipe produces rather than how.

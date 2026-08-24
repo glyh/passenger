@@ -104,8 +104,8 @@ public static class Tools
             locator. Playwright .NET is async, so every call is awaited, and every
             member is PascalCase. To just read a page:
             await Page.GotoAsync(url); return await Page.InnerTextAsync("body");
-            For markdown with links and headings, run markdown.js from the
-            `using-passenger` skill.
+            For markdown with links and headings, run scripts/markdown.js from
+            the `using-passenger` skill.
             """)]
         string source,
         [Description("""
