@@ -3,7 +3,7 @@ id: 052
 title: walker.js carries \u escapes that do not survive transcription
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
