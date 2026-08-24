@@ -196,22 +196,48 @@ public static class Script
     }
 
     /// <summary>
-    /// The Playwright handles a script must not return.
+    /// Is this a live Playwright handle, which cannot cross the boundary?
     ///
-    /// A list of interfaces rather than a pattern over an instance, so the rule
-    /// can be asserted without constructing one -- hand-implementing ILocator to
-    /// get a test subject would be a hundred members that break on every driver
-    /// update, to check a rule that is really about these eight types.
+    /// A rule rather than a list, and the list is what it replaced. Eight types
+    /// were named by hand -- ILocator, IElementHandle, IPage and so on -- and
+    /// `IAPIResponse` was not among them, so `return await
+    /// Page.APIRequest.GetAsync(url)` serialised the driver's own headers and
+    /// timings and handed them back as if they were the answer. No error, and
+    /// not the body the caller wanted. That is precisely the failure this check
+    /// exists to prevent, reintroduced by the list being short.
+    ///
+    /// Every handle in this API is an interface in the `Microsoft.Playwright`
+    /// namespace, and everything there that is *data* -- FilePayload,
+    /// SelectOptionValue, LocatorBoundingBoxResult -- is a class or a struct. So
+    /// the rule is "implements a Playwright interface", which covers the types
+    /// nobody thought of, including ones added by a future driver.
+    ///
+    /// Stated over a Type rather than an instance so it can be asserted without
+    /// constructing one: hand-implementing ILocator to get a test subject would
+    /// be a hundred members that break on every driver update.
     /// </summary>
-    private static readonly Type[] Handles =
-    [
-        typeof(ILocator), typeof(IElementHandle), typeof(IPage), typeof(IFrame),
-        typeof(IBrowser), typeof(IBrowserContext), typeof(IResponse), typeof(IRequest),
-    ];
+    public static bool IsHandle(Type type)
+    {
+        if (IsPlaywrightInterface(type))
+        {
+            return true;
+        }
 
-    /// <summary>Is this one of the live handles that cannot cross the boundary?</summary>
-    public static bool IsHandle(Type type) =>
-        Array.Exists(Handles, handle => handle.IsAssignableFrom(type));
+        foreach (Type implemented in type.GetInterfaces())
+        {
+            if (IsPlaywrightInterface(implemented))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPlaywrightInterface(Type type) =>
+        type.IsInterface
+        && type.Assembly == typeof(IPage).Assembly
+        && type.Namespace == typeof(IPage).Namespace;
 
     private static ScriptException NotJson(string typeName) =>
         new(ErrorCode.ScriptReturnNotJson,

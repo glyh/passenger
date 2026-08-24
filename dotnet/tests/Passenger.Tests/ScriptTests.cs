@@ -53,6 +53,33 @@ public class ScriptTests
     }
 
     [Fact]
+    public void ATypeNobodyListedIsStillAHandle()
+    {
+        // The bug the list had. `IAPIResponse` was not among the eight types
+        // named by hand, so `return await Page.APIRequest.GetAsync(url)`
+        // serialised the driver's own headers and timings and handed them back
+        // as if they were the answer -- no error, and not the body the caller
+        // asked for. Found by writing the C# skill's picture recipe (ticket 049)
+        // and running it, not by review.
+        Assert.True(Script.IsHandle(typeof(IAPIResponse)));
+        Assert.True(Script.IsHandle(typeof(IAPIRequestContext)));
+        Assert.True(Script.IsHandle(typeof(IJSHandle)));
+        Assert.True(Script.IsHandle(typeof(IFrameLocator)));
+        Assert.True(Script.IsHandle(typeof(IDownload)));
+    }
+
+    [Fact]
+    public void PlaywrightsOwnDataTypesStillCross()
+    {
+        // The other edge of the rule. Everything in that namespace which is
+        // *data* rather than a handle is a class or a struct, and a script that
+        // returns one is doing the right thing.
+        Assert.False(Script.IsHandle(typeof(FilePayload)));
+        Assert.False(Script.IsHandle(typeof(SelectOptionValue)));
+        Assert.False(Script.IsHandle(typeof(LocatorBoundingBoxResult)));
+    }
+
+    [Fact]
     public void AHandleIsRefusedByName()
     {
         // Ticket 013: nearly every Playwright call hands back an object that
