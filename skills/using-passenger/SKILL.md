@@ -251,6 +251,10 @@ lane slows or fails calls in every lane, and freeing it can stop a navigation
 another lane was making. Lanes partition ownership, not availability. When it
 happens the tool says which lanes it touched; it cannot prevent it.
 
+`browser_status` reports `wedged:` for exactly this: `none`, or a count per
+kind. Read it when calls have gone slow for no reason you can see -- the tab
+doing it is usually not yours, and the count is the only thing that says so.
+
 ## The tool remembers nothing about a site
 
 Your lane and its tabs are bookkeeping, and they are the only thing kept

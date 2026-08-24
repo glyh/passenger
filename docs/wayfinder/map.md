@@ -462,6 +462,20 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   `show_browser` gained `until="unblocked"`, the one thing `fetch` could do that
   nothing else reached.
 
+- [A tab waiting on a server that never answers hangs every attach](tickets/042-attach-hangs-on-pending-navigation.md)
+  — there are two wedges, wearing opposite symptoms, and 012 knew one. Its tab is
+  *silent*: it holds a document and answers nothing. This one is *uncommitted*:
+  it answers in under 10ms and holds no document at all. Measured: a tab that has
+  committed never hangs the attach however slowly the rest arrives, so only the
+  window before the first response byte matters; inside it a dead server and a
+  slow one are the same state and nothing separates them. The empty frame URL is
+  what separates a pre-commit tab from a healthy one — `about:blank` is a
+  document, `""` is the absence of one. `Page.stopLoading` answers `{}` on such a
+  tab and frees nothing; navigating it to `about:blank` frees it and keeps the
+  tab, costing nothing because there is no document to lose. The attach message
+  now says what was *checked* rather than asserting the negative, and `status`
+  carries `wedged:` on both doors — a count per wedge, following 040.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

@@ -29,6 +29,26 @@ class WaitFor(str, Enum):
     UNBLOCKED = "unblocked"
 
 
+class Wedge(str, Enum):
+    """How a tab is holding the attach open, when it is.
+
+    Two different failures wearing one symptom. SILENT is ticket 012's: the
+    renderer has stopped answering anything, and stopping its load frees it
+    with the document it already had intact. UNCOMMITTED is ticket 042's: the
+    renderer answers everything instantly and holds no document at all,
+    because the navigation that created it is still waiting on a server that
+    has not sent headers.
+
+    Measured, and the reason they cannot share a remedy: `Page.stopLoading` on
+    an UNCOMMITTED tab is answered, clears the pending URL, and leaves the
+    attach hanging exactly as before. Navigating it to about:blank frees it --
+    and costs nothing, since a tab with no document has nothing to lose.
+    """
+
+    SILENT = "silent"
+    UNCOMMITTED = "uncommitted"
+
+
 class WaitUntil(str, Enum):
     LOAD = "load"
     DOM_CONTENT_LOADED = "domcontentloaded"

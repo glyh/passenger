@@ -243,6 +243,10 @@ def status() -> None:
         # a lane nobody is watching are at least visible as a total.
         open_tabs, orphaned = lanes.counts()
         print(f"tabs:      {open_tabs} open, {orphaned} orphan")
+        # And of those, the ones that answer for nobody. A tab wedged in any
+        # lane fails calls in every lane, so this is the line worth reading
+        # when the tool has stopped answering (ticket 042).
+        print(f"wedged:    {targets.stuck_summary()}")
 
 
 _EXIT_CODES = {

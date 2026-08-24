@@ -313,6 +313,11 @@ def browser_status() -> dict[str, str]:
         # scoped to the caller. A count, deliberately: ids and owners would be
         # a listing, and a lane's tabs are nobody else's business.
         "tabs": f"{open_tabs} open, {orphaned} orphan",
+        # The one thing a tab count cannot show: a tab that is holding every
+        # attach open counts the same as a working one (ticket 042). Asked of
+        # every tab, so it costs a websocket round trip each -- `status` is a
+        # diagnostic, and a healthy tab answers in under 10ms.
+        "wedged": targets.stuck_summary() if browser.is_up() else "unknown",
         "screen_claims": str(len(lanes.screen_claims())),
     }
 

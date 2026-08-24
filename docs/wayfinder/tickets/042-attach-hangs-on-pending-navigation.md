@@ -2,7 +2,7 @@
 id: 042
 title: A tab waiting on a server that never answers hangs every attach
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -67,3 +67,58 @@ To decide:
 4. **Whether a pending navigation should be visible in `status`.** `status`
    reports a tab count (040). A tab that has been navigating for four minutes is
    the thing a human would want named, and it is already in `/json/list` reach.
+
+## Answer
+
+There are two wedges, not one, and they wear opposite symptoms. 012's tab is
+*silent*: it holds a document and its renderer answers nothing. 042's is
+*uncommitted*: it answers everything in under 10ms and holds no document at
+all, because the navigation that created it is still waiting on headers. Both
+hang `connect_over_cdp` equally hard. `targets.unstick` now knows both, and
+frees each with its own remedy.
+
+Measurements: [Two ways a tab holds the attach open](../assets/042-two-wedges-findings.md).
+
+**1. Whether the probe can tell this apart from a slow page at all.** Yes, and
+the question turned out to be smaller than it looked. A tab that has *committed*
+never hangs the attach, however slowly the rest of it arrives -- a page dribbling
+its body forever attaches in 0.2s. Only the window between "navigation started"
+and "first response byte" hangs it, and inside that window a dead server and a
+slow one are the same state, so nothing tries to separate them. The signal that
+does separate a pre-commit tab from every healthy one is the frame's URL: the
+empty string, which is Chrome for "no document here", and which `about:blank`
+is not. `targets.verdict` reads exactly that, and it is pure and tested.
+
+This does mean a tab on a merely slow host can be stopped. It is affordable
+because `unstick` runs only after an attach has already timed out: the same
+navigation has been failing every call in every lane for the whole timeout, and
+re-navigating is cheap where a bricked tool is not. It is the same trade 012
+made, on a tab with strictly less to lose.
+
+**2. Whether the attach should care.** Left where 012 left it. Nothing here
+needs it any more: both wedges are now detected and freed through the browser
+endpoint, which is what `targets.py` exists for. An attach that does not
+initialise every open page is still the structural fix, still unreachable
+without patching patchright's `connect_over_cdp`, and still gated on one
+profile meaning one Chrome.
+
+**3. What the message should say when the probe finds nothing.** Done, and it
+was the cheap half as predicted. It now says what was *checked* -- "every tab
+answered its renderer probe and every one of them holds a document, so neither
+wedge this knows how to free is present" -- and names `passenger status` before
+`passenger stop`, with the cost of `stop` said out loud: it restarts Chrome and
+the warm logged-in session goes with it.
+
+**4. Whether a pending navigation should be visible in `status`.** Yes, on both
+doors: `wedged: none`, or `1 uncommitted`, or `1 silent`. A count per wedge and
+no more, following 040 -- which tab, in whose lane, would be a listing, and a
+lane's tabs are nobody else's business. It costs one websocket round trip per
+tab on a call that is already a diagnostic, and a healthy tab answers in under
+10ms; the deadline there is 1.0s rather than the rescue path's 3.0s, because
+nothing is freed on the strength of the answer. A tab merely mid-navigation is
+counted as `uncommitted`, which is honest: it *is* navigating, and this reports
+that rather than ruling on whether it is stuck.
+
+78 → 83 tests, mypy strict clean. The five new ones are pure: `verdict()` reads
+one recorded `Page.getFrameTree` answer and names the wedge, so the distinction
+this ticket turns on is asserted without a browser.

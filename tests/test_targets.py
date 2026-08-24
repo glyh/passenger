@@ -1,5 +1,6 @@
 """Parsing Chrome's target list. Pure: a recorded payload, no browser."""
-from passenger.targets import parse
+from passenger.models import Wedge
+from passenger.targets import parse, verdict
 
 # Recorded from the live endpoint while a tab sat stuck mid-navigation
 # (ticket 012). Note the stuck tab: its title is still the document it had
@@ -38,3 +39,55 @@ def test_a_stuck_tab_looks_ordinary_from_the_outside():
     asks the renderer instead of reading fields."""
     stuck, healthy = parse(LISTING)[:2]
     assert stuck.title and healthy.title
+
+
+# --- What one `Page.getFrameTree` answer says about a tab (ticket 042).
+#
+# Recorded from the live endpoint against a socket that accepts and then
+# answers nothing. Two tabs pointed at it, and they answer *differently*: the
+# one that already had a document goes silent, the one created at the URL
+# answers at once and says it has no document.
+
+SILENT = None  # the renderer never answered at all
+
+UNCOMMITTED = {"id": 1, "result": {"frameTree": {"frame": {
+    "id": "9D5703E5", "loaderId": "A1", "url": "",
+    "securityOrigin": "://", "mimeType": ""}}}}
+
+HEALTHY = {"id": 1, "result": {"frameTree": {"frame": {
+    "id": "9D5703E5", "loaderId": "A1", "url": "https://example.com/",
+    "securityOrigin": "https://example.com", "mimeType": "text/html"}}}}
+
+BLANK = {"id": 1, "result": {"frameTree": {"frame": {
+    "id": "9D5703E5", "loaderId": "A1", "url": "about:blank",
+    "securityOrigin": "://", "mimeType": "text/html"}}}}
+
+REFUSED = {"id": 1, "error": {"code": -32000, "message": "Not attached"}}
+
+
+def test_a_renderer_that_never_answers_is_the_wedge_012_knew():
+    assert verdict(SILENT) is Wedge.SILENT
+
+
+def test_a_tab_with_no_document_is_wedged_even_though_it_answered():
+    """Ticket 042: the tab reads as healthy by every other measure -- it
+    answers in under 10ms -- and it hangs the attach as hard as a silent one.
+    The empty frame URL is the whole difference."""
+    assert verdict(UNCOMMITTED) is Wedge.UNCOMMITTED
+
+
+def test_about_blank_is_a_document_and_not_a_wedge():
+    """The distinction the empty string turns on: `about:blank` is a page that
+    committed, and a tab sitting on one is the most ordinary thing here."""
+    assert verdict(BLANK) is None
+
+
+def test_a_loaded_page_is_left_alone():
+    assert verdict(HEALTHY) is None
+
+
+def test_an_error_reply_is_not_read_as_a_wedge():
+    """It is still an answer, so the renderer is alive; it is just not one a
+    frame can be read out of. The remedies stop navigations, so a reply nobody
+    planned for is a bad reason to fire one."""
+    assert verdict(REFUSED) is None

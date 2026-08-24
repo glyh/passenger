@@ -202,6 +202,9 @@ class Session:
         It goes to the browser process directly instead (see targets.py), and
         stops the pending navigation rather than closing the tab -- whatever
         document that tab already had is usually the one a human was reading.
+
+        Two shapes of tab do this, and they need different remedies; targets.py
+        holds the difference. Both are freed here, and neither is closed.
         """
         try:
             return self._connect()
@@ -230,10 +233,20 @@ class Session:
                     ErrorCode.ATTACH_TIMEOUT,
                     f"could not attach to chrome within {ATTACH_TIMEOUT_S}s, "
                     "twice",
+                    # Says what was *checked*, not what is therefore true.
+                    # The old line asserted the negative -- "so this is
+                    # something else" -- on the strength of a probe that knew
+                    # about one of the two wedges, and sent callers to
+                    # `passenger stop`, which throws away the warm logged-in
+                    # session this whole tool exists to keep (ticket 042).
                     detail=(f"stuck in {_lanes_of(stuck)}: "
                             + ", ".join(page.url for page in stuck) if stuck else
-                            "no tab was stuck mid-navigation, so this is "
-                            "something else; try: passenger stop")) from again
+                            "every tab answered its renderer probe and every "
+                            "one of them holds a document, so neither wedge "
+                            "this knows how to free is present; `passenger "
+                            "status` says what is open, and `passenger stop` "
+                            "restarts chrome at the cost of the warm session"
+                            )) from again
 
     def _restart_driver(self) -> None:
         try:
