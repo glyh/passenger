@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .direnv/
 result
+
+# .NET build output (the C# port lives in dotnet/)
+[Bb]in/
+[Oo]bj/

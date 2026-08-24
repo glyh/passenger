@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="5.9.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Patchright" Version="1.62.1" />
+  </ItemGroup>
+
+
+  <!--
+    Read once at load, for walker.js's reasons in full (ticket 034): reading per
+    call would make which code ran unanswerable. An embedded resource is the
+    stronger form of what the Python side got from importlib.resources: the
+    file is inside the assembly, so it cannot be missing from a build at all,
+    where a pictures.js absent from the wheel only failed pythonImportsCheck.
+
+    walker.js is deliberately NOT here, and not because it was forgotten. It is
+    a recipe the CALLER runs (ticket 046): an agent pastes it into a script and
+    evaluates it in the page, so it ships in the skill, where the caller reads
+    about it. pictures.js is the opposite side of that line. The tool runs it
+    itself on every read and reports the three numbers in the Measured
+    envelope, asked for or not, because ticket 017 established that a
+    photograph is the one thing a caller cannot recover from the text it was
+    handed. Shipping it to the skill would invite a second, caller-side copy of
+    a measurement that is already in every reply.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets/pictures.js" LogicalName="Passenger.pictures.js" />
+    <EmbeddedResource Include="Assets/web/viewer.html" LogicalName="Passenger.viewer.html" />
+  </ItemGroup>
+
+</Project>

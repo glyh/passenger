@@ -1,0 +1,97 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>passenger</title>
+<!--
+  The page a human takes the hidden browser over in.
+
+  Deliberately not noVNC's own vnc.html: that page is a VNC client, with a
+  control bar, a settings panel and a connect dialog wrapped around the
+  screen. What is wanted here is the browser itself and nothing else, in a
+  window that looks like any other window on the desktop -- so this is the
+  screen alone, edge to edge, and the host browser is started in app mode so
+  there is no tab strip or address bar around it either.
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1c1e; }
+  /* The screen is the window. noVNC sizes the canvas inside it, and asks the
+     server for a framebuffer to match, so there is never a border to hide. */
+  #screen { width: 100vw; height: 100vh; }
+  #screen canvas { display: block; }
+  #status { position: fixed; inset: 0; display: grid; place-items: center;
+            font: 14px system-ui, sans-serif; color: #8e8e93;
+            /* Never in the way of a click, shown or not. `display: grid`
+               above beats the `hidden` attribute's `display: none` from the
+               UA stylesheet, so hiding it takes an explicit rule -- without
+               one this overlay stays on top of the screen, invisibly, and
+               swallows every click meant for the browser underneath. */
+            pointer-events: none; }
+  #status[hidden] { display: none; }
+</style>
+
+<div id="status">connecting…</div>
+<div id="screen"></div>
+
+<script type="module">
+  import RFB from './novnc/core/rfb.js';
+
+  const screen = document.getElementById('screen');
+  const status = document.getElementById('status');
+  const endpoint = new URLSearchParams(location.search).get('ws');
+  const ratio = () => window.devicePixelRatio || 1;
+
+  function connect() {
+    const rfb = new RFB(screen, `ws://${endpoint}/`, {});
+
+    // noVNC knows nothing about HiDPI. Left alone it asks for a framebuffer
+    // the size of the window in *CSS* pixels and then paints one framebuffer
+    // pixel per CSS pixel, so on a scaled screen every pixel of the remote
+    // browser arrives upscaled -- precisely when someone is being asked to
+    // read a captcha. So the size is asked for in device pixels...
+    rfb._screenSize = function () {
+      const rect = this._screen.getBoundingClientRect();
+      return { w: Math.floor(rect.width * ratio()),
+               h: Math.floor(rect.height * ratio()) };
+    };
+    // ...while the canvas is laid out in CSS pixels, which leaves the display
+    // scaled by 1/ratio: one framebuffer pixel on exactly one device pixel.
+    // Going through noVNC's own autoscale rather than a CSS transform is what
+    // keeps the pointer honest -- it divides coordinates by the scale it knows
+    // about, and a scale it did not know about would land every click in the
+    // wrong place.
+    rfb._updateScale = function () {
+      const rect = this._screen.getBoundingClientRect();
+      this._display.autoscale(rect.width, rect.height);
+    };
+
+    rfb.scaleViewport = true;   // makes the override above the authority
+    rfb.resizeSession = true;   // the window drives the framebuffer size
+    rfb.showDotCursor = false;  // wayvnc draws the real one into the frame
+    rfb.background = '#1c1c1e';
+
+    rfb.addEventListener('connect', () => { status.hidden = true; });
+    rfb.addEventListener('disconnect', () => {
+      // The session outlives the window: cage and Chrome keep running while
+      // nobody is looking, so a dropped connection is worth retrying rather
+      // than reporting as the end of anything.
+      status.hidden = false;
+      status.textContent = 'reconnecting…';
+      setTimeout(connect, 1000);
+    });
+
+    // A window dragged between screens of different density changes ratio
+    // without changing its CSS size, which is the one resize noVNC cannot
+    // notice on its own -- its check short-circuits on the unchanged size.
+    let density = ratio();
+    window.addEventListener('resize', () => {
+      if (density === ratio()) return;
+      density = ratio();
+      rfb._expectedClientWidth = -1;
+    });
+  }
+
+  if (endpoint) {
+    connect();
+  } else {
+    status.textContent = 'no VNC endpoint given';
+  }
+</script>

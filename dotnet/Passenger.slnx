@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Passenger.Cli/Passenger.Cli.csproj" />
+    <Project Path="src/Passenger.Mcp/Passenger.Mcp.csproj" />
+    <Project Path="src/Passenger/Passenger.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Passenger.Tests/Passenger.Tests.csproj" />
+  </Folder>
+</Solution>
