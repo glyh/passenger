@@ -617,6 +617,26 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   which is 052's hazard from a different direction, and the sentence about it
   in the `using-passenger` skill is not yet written.
 
+- [`markdown.js` carries backslash-u escapes that do not survive
+  transcription](tickets/052-walker-escapes-do-not-survive-transport.md) — fixed
+  at the source, which is all that was left of the ticket after 053. The two
+  regex literals in `tidy()` are now `new RegExp` over strings whose backslashes
+  are doubled, so a JSON decode gives back the escape rather than the U+2028 it
+  names and no literal ends early. Byte-identical output on four real pages,
+  PEP 8 among them at the same 45,389 characters 051 recorded. The file is still
+  not paste-safe and this never claimed to make it so: seven other backslashes
+  remain, and a strict transcriber is rejected at the first `/\s+/` on line 113,
+  before it ever reaches what was fixed. The difference is that those fail loudly
+  at the boundary while the backslash-u pair failed silently, handing the page
+  something that still looked like JavaScript. The skill's paragraph stayed and
+  changed its grounds — reading still beats pasting, for the general reason now.
+  Two things worth carrying forward: the first draft of the explanatory comment
+  broke the file by spelling a bare U+2028 in prose, so the file's rule is that
+  nothing in it may spell one, comments included; and the test-shaped property is
+  *not* "survives a JSON round trip" — that is the identity function — but "no
+  backslash escape whose JSON reading differs from its JavaScript one", which is
+  an assertion over bytes and needs no browser.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

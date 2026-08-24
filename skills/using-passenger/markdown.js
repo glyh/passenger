@@ -199,7 +199,17 @@
     let pendingBlank = false, inFence = false;
     // Python's splitlines() breaks on more than \n -- \r, \v, \f and the
     // unicode separators -- and a `pre` can carry any of them out of the page.
-    for (const line of raw.split(/\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/)) {
+    // Built with `new RegExp` over strings whose backslashes are doubled,
+    // rather than as regex literals. A doubled backslash survives being pasted
+    // through a JSON boundary: the decoder gives back the escape rather than
+    // the character it names, and the regex engine reads the escape. A regex
+    // literal does not survive it, because U+2028 and U+2029 are JavaScript
+    // line terminators and a decoded one ends the literal early -- which is
+    // exactly the SyntaxError an agent that pasted this file used to get.
+    // Nothing here may spell a bare backslash-u escape, comments included.
+    const breaks = new RegExp('\\r\\n|[\\n\\r\\v\\f\\x1c\\x1d\\x1e\\x85\\u2028\\u2029]');
+    const spaces = new RegExp('[ \\t\\u00a0]+', 'g');
+    for (const line of raw.split(breaks)) {
       if (line.trim() === '```') {
         if (!inFence && pendingBlank && kept.length) kept.push('');
         pendingBlank = false;
@@ -208,7 +218,7 @@
         continue;
       }
       if (inFence) { kept.push(line.replace(/\s+$/, '')); continue; }
-      const text = line.replace(/[ \t\u00a0]+/g, ' ').trim();
+      const text = line.replace(spaces, ' ').trim();
       if (!text) { pendingBlank = true; continue; }
       if (pendingBlank && kept.length) kept.push('');
       pendingBlank = false;

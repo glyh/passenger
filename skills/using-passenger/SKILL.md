@@ -142,13 +142,16 @@ expected. Return the string directly for a short read; write it out for a long
 one.
 
 Use the actual path -- the one this file was read from, since `markdown.js` is
-its sibling. Reading beats pasting for a reason sharper than convenience: one
-of its regexes carries a pair of backslash-`u` escapes for two
-Unicode line separators, and a tool call is JSON, which decodes those to the
-literal characters they name -- both are JavaScript line terminators, so a
-*pasted* copy ends a regex literal early and fails with `SyntaxError: Invalid
-regular expression: missing /`. A file read never crosses that boundary; the
-bytes on disk reach `Page.EvaluateAsync` unchanged.
+its sibling. Reading beats pasting for a reason sharper than convenience: a
+tool call is JSON, and every backslash in the file has to survive that. The
+regexes are full of them, and a transcription that doubles some and not others
+either fails to parse or -- worse -- decodes an escape into the character it
+names and hands the page something that is no longer JavaScript. The two
+Unicode line separators used to do exactly that, ending a regex literal early
+with `SyntaxError: Invalid regular expression: missing /`; they are built with
+`new RegExp` now, so that particular one is gone, but the class is not. A file
+read never crosses the boundary at all; the bytes on disk reach
+`Page.EvaluateAsync` unchanged.
 
 It walks the live DOM, keeps only what `checkVisibility()` says is visible,
 resolves every `href` against the document, emits `[label](url)` inline, fences

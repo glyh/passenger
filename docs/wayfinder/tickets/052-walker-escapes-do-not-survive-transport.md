@@ -2,7 +2,7 @@
 id: 052
 title: walker.js carries \u escapes that do not survive transcription
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -161,3 +161,78 @@ whether the walker gets tests again.
 `skills/using-passenger/markdown.js`. Every `walker.js` above means that
 file; the line numbers are unchanged apart from its header comment, which
 was rewritten in the same commit. The traversal is still called a walk.
+
+## Answer
+
+*Closed 2026-08-24.* Option 1, and only option 1 -- the two regex literals in
+`tidy()` are now built with `new RegExp` over strings whose backslashes are
+doubled:
+
+    const breaks = new RegExp('\\r\\n|[\\n\\r\\v\\f\\x1c\\x1d\\x1e\\x85\\u2028\\u2029]');
+    const spaces = new RegExp('[ \\t\\u00a0]+', 'g');
+
+A doubled backslash is inert across a JSON boundary in both directions: pass the
+bytes through untouched and the string holds a backslash escape the regex engine
+reads; JSON-decode them and `\\u2028` becomes `\u2028` as *text*, which the regex
+engine reads the same way. Neither path ever produces the character, so neither
+ends a literal early. Verified equal to the originals by `.source`, `.flags`,
+and by running both files against four real pages through the shipped recipe --
+PEP 8 at 45,389 chars, zh.wikipedia at 60,244, Hacker News at 16,329,
+`docs.python.org/3/library/re.html` at 65,979, byte-identical output on every
+one. The PEP 8 number is the same one [051](051-walker-strips-asides.md)
+recorded, which is the cross-check that this changed nothing.
+
+The comment above them says why, and says the rule the file now has to keep:
+**nothing in it may spell a bare backslash-u escape, comments included.** That
+sentence is there because the first draft of the comment broke the file --
+explaining the hazard by writing a bare `\u2028` in prose reintroduced it, since a
+decoded U+2028 terminates a `//` comment and turns the rest of the line into
+code. Caught by the check below before it was committed.
+
+### The skill paragraph changed rather than went away
+
+The ticket predicted the fix would make the skill's paragraph "unnecessary
+rather than merely correct". It does not, and the paragraph is still there with
+different grounds. Reading still beats pasting; the reason is now the general
+one rather than a specific reproduction.
+
+### What this does not fix, measured
+
+**The file is still not safe to paste, and this ticket only ever aimed at the
+silent half of that.** Every backslash in it is a transcription hazard, not just
+the `\u` ones. There are seven more, all pre-existing:
+
+    107, 173, 217:      '\n' in a string literal
+    113, 117, 124, 210: /\s+/ and /\s+$/
+    200:                a comment spelling \n, \r, \v, \f
+
+`\n` is a valid JSON escape that decodes to a real newline, which inside a
+single-quoted string literal is a `SyntaxError`. `\s` is not a valid JSON escape
+at all, so a strict parser rejects the whole call. Measured with a simulated
+hostile paste -- escape what JSON requires, leave existing backslashes alone --
+and `JSON.parse` rejects the file at position 6002, the first `\s` on line 113,
+both before and after this change. So a strict transcriber never reached the
+regexes that were fixed here.
+
+The distinction that makes this closeable: the two `\u` escapes were the only
+ones that fail *quietly*, producing a file that still looks like JavaScript and
+is not. The rest fail loudly, at the boundary, before anything runs. A lenient
+decoder -- one that resolves `\uXXXX` and leaves invalid escapes alone, which is
+the realistic model of a transcriber -- broke the old file and leaves the new one
+parsing. That was the defect, and it is gone.
+
+Making the file paste-safe outright means having no backslashes in it at all:
+`String.fromCharCode(10)` for the newlines, `new RegExp` for the `\s` classes,
+and rewording line 200's comment. That is a bigger and uglier change to a file
+the skill tells nobody to paste, and it should be its own ticket if anyone wants
+it.
+
+The test-shaped version still has nowhere to live. Note that the property is not
+"survives a JSON round trip" as the ticket above guessed -- `JSON.parse(
+JSON.stringify(s))` is the identity and always passes. The assertable property
+is narrower: **the file contains no backslash escape whose JSON reading differs
+from its JavaScript one.** That is a one-line assertion over the file's bytes and
+needs no browser, so it does not have to wait for
+[043](043-tidy-hides-walker-differences.md) to decide whether the walker gets a
+Chrome-backed suite -- but there is no test project asserting anything about
+this file today, so it is still owed.
