@@ -95,19 +95,19 @@ public static class Lanes
 
     public static string DbFile => Path.Combine(Config.StateDir, "lanes.db");
 
-    // The reserved lanes. Both are rows like any other -- same table, same sweep --
-    // and differ only in having a fixed, guessable id instead of a minted one.
-    //
-    // `cli` exists because a human at a terminal runs `passenger open <url>` and
-    // then `passenger script --tab <id>` thirty seconds later, from two separate
-    // processes. A minted id would have to be copied by hand; a lane per invocation
-    // would break the second command outright.
+    // The reserved lane. A row like any other -- same table, same sweep -- and
+    // differs only in having a fixed, guessable id instead of a minted one.
     //
     // `orphan` holds tabs nothing else can claim -- overwhelmingly the ones a human
     // opened during a handoff, which have no opener to trace. Any caller may read
     // and close it, which makes it a junk drawer and it is documented as one: an
     // agent can empty it while a human is mid-login.
-    public const string Cli = "cli";
+    //
+    // There were two. `cli` existed because a human at a terminal ran `passenger
+    // open <url>` and then `passenger script --tab <id>` thirty seconds later, from
+    // two separate processes, and a minted id would have had to be copied by hand.
+    // Ticket 057 deleted that terminal: nobody had ever typed either command, so
+    // the lane had no writer left and was a reserved id that existed to be swept.
     public const string Orphan = "orphan";
 
     public const int DefaultTtlS = 1800;
@@ -159,7 +159,6 @@ public static class Lanes
         Execute(connection, "PRAGMA journal_mode=WAL");
         Execute(connection, "PRAGMA foreign_keys=ON");
         Execute(connection, Schema);
-        Ensure(connection, Cli, DefaultTtlS);
         Ensure(connection, Orphan, NoTtl);
         return connection;
     }
@@ -314,10 +313,10 @@ public static class Lanes
     public static void Destroy(string lane)
     {
         using SqliteConnection connection = Open();
-        if (lane is Cli or Orphan)
+        if (lane is Orphan)
         {
-            // Reserved lanes are emptied, never removed: the next call would
-            // recreate them anyway, and `destroyLane('orphan')` reading as
+            // The reserved lane is emptied, never removed: the next call would
+            // recreate it anyway, and `destroyLane('orphan')` reading as
             // success while the lane came straight back is a lie.
             Execute(connection, "DELETE FROM tabs WHERE lane = $lane", ("$lane", lane));
             return;
@@ -386,6 +385,50 @@ public static class Lanes
         }
 
         return claims;
+    }
+
+    /// <summary>
+    /// Lanes that would lose work if Chrome went away now, with how many tabs each
+    /// holds. Ticket 057: what `stop` refuses on.
+    ///
+    /// Live tabs, not rows: a row for a tab Chrome no longer has is not work, and
+    /// the sweep that would drop it may not have run. Reserved lanes are excluded
+    /// because Chrome is launched with `about:blank` (`Browser.StartAsync`), which
+    /// lands in `orphan` on the first reconcile -- counting it would mean a refusal
+    /// that never lifts.
+    ///
+    /// Empty when Chrome does not answer, on <see cref="Counts"/>'s reasoning and
+    /// for the same caller: a wedged browser is the case `stop` exists for, and a
+    /// check that cannot complete must not be what stands in the way.
+    /// </summary>
+    public static IReadOnlyList<(string Lane, int Tabs)> Occupied()
+    {
+        HashSet<string> live;
+        try
+        {
+            live = [.. Chrome.LiveTabs()];
+        }
+        catch (Exception)
+        {
+            return [];
+        }
+
+        using SqliteConnection connection = Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = "SELECT lane, tab FROM tabs WHERE lane != $orphan";
+        command.Parameters.AddWithValue("$orphan", Orphan);
+        using SqliteDataReader rows = command.ExecuteReader();
+        var counts = new Dictionary<string, int>();
+        while (rows.Read())
+        {
+            if (live.Contains(rows.GetString(1)))
+            {
+                string lane = rows.GetString(0);
+                counts[lane] = counts.GetValueOrDefault(lane) + 1;
+            }
+        }
+
+        return [.. counts.OrderBy(pair => pair.Key).Select(pair => (pair.Key, pair.Value))];
     }
 
     // --- reconciling with Chrome --------------------------------------------

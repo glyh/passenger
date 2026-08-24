@@ -1,9 +1,13 @@
-// The MCP entry point.
+// The MCP entry point, and since ticket 057 the only entry point there is.
 //
 // Everything the server says about itself is here; everything it can do is in
 // Tools.cs. stdio because that is what an MCP client launches, and it is why
 // nothing in this process may write to stdout except the protocol -- the flake's
 // shell hook carries the same warning for the same reason.
+//
+// Two things run before the server and neither one starts it: the viewer re-exec,
+// and the human's `stop`. Both are argv checks, deliberately ahead of anything
+// that could write a byte to stdout.
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -11,14 +15,22 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using Passenger;
+using Passenger.Mcp;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-// Before anything else: the detached re-exec that serves the viewer page.
-// Either frontend can be the one that ends up serving it.
+// Before anything else: the detached re-exec that serves the viewer page. This
+// process is the one that ends up serving it.
 if (Webserve.ServeIfAsked(args))
 {
-    return;
+    return 0;
+}
+
+// The one verb a person types, and the only argv this binary accepts. Null means
+// there was none, so the server starts as a client expects it to.
+if (Stop.IfAsked(args) is { } status)
+{
+    return status;
 }
 
 // Roslyn's first compile in a process costs several hundred milliseconds of
@@ -84,3 +96,4 @@ builder.Services
     .WithToolsFromAssembly(serializerOptions: wireOptions);
 
 await builder.Build().RunAsync();
+return 0;

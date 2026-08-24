@@ -44,13 +44,10 @@ public class LanesTests : IDisposable
         Assert.NotEqual(Lanes.OpenLane(), Lanes.OpenLane());
 
     [Fact]
-    public void ReservedLanesExistWithoutBeingOpened()
-    {
-        Assert.Equal(Lanes.DefaultTtlS, Lanes.Require(Lanes.Cli).TtlS);
+    public void TheReservedLaneExistsWithoutBeingOpened() =>
         // `orphan` never expires: a TTL there would collect the tabs a human
         // opened during a handoff, which is what ticket 018 exists to prevent.
         Assert.Equal(Lanes.NoTtl, Lanes.Require(Lanes.Orphan).TtlS);
-    }
 
     [Fact]
     public void UnknownLaneIsRefused() =>
@@ -111,7 +108,7 @@ public class LanesTests : IDisposable
     }
 
     [Fact]
-    public void ReservedLanesAreEmptiedRatherThanRemoved()
+    public void TheReservedLaneIsEmptiedRatherThanRemoved()
     {
         // `destroyLane('orphan')` reading as success while the lane comes
         // straight back on the next call would be a lie.
