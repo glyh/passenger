@@ -28,6 +28,22 @@ Script.Warm();
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+// What goes on the wire, character by character. The SDK's default encoder
+// leaves only BasicLatin alone and escapes everything else to \uXXXX -- six
+// bytes for a CJK character that UTF-8 writes in three, on every `script`
+// reply read straight into a caller's context. Ticket 056 measured that.
+//
+// It has to be said twice because a reply is written twice. A tool's return
+// value becomes a JSON *document* inside a content block, written with the
+// options the tool registration carries; the JSON-RPC envelope that wraps
+// that document is written separately, with the server's. Set one and the
+// other re-escapes what it was handed, which is why 056 found the tool
+// options alone had no effect on the bytes.
+JsonSerializerOptions wireOptions = new(McpJsonUtilities.DefaultOptions)
+{
+    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+};
+
 // Every log line goes to stderr. The protocol owns stdout, and a stray info
 // line there corrupts the JSON-RPC stream -- the same hazard the flake's shell
 // hook is written around.
@@ -59,18 +75,12 @@ builder.Services
             + "read is only the first screen, and why reading beats driving -- is "
             + "the `using-passenger` skill. Load it before the first call.";
 
-        // What goes on the wire, character by character. The SDK's default
-        // encoder leaves only BasicLatin alone and escapes everything else to
-        // \uXXXX -- six bytes for a CJK character that UTF-8 writes in three,
-        // on every `script` reply read straight into a caller's context.
-        // Ticket 056 measured that and found no way to reach the envelope's
-        // encoder; this property is the fork's answer to it.
-        options.JsonSerializerOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
-        {
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        };
+        // The envelope's half. Upstream 2.2.0 has no such property -- reaching
+        // this encoder is the whole reason this repo builds a forked SDK.
+        options.JsonSerializerOptions = wireOptions;
     })
     .WithStdioServerTransport()
-    .WithToolsFromAssembly();
+    // The content block's half, and this one upstream has always accepted.
+    .WithToolsFromAssembly(serializerOptions: wireOptions);
 
 await builder.Build().RunAsync();

@@ -604,7 +604,11 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   adding `McpServerOptions.JsonSerializerOptions` that the stdio transport
   reads. `Program.cs` sets `UnsafeRelaxedJsonEscaping` and the wire now carries
   literal `腾冲`, zero `\u` sequences, verified by raw JSON-RPC probe against
-  the built server. The dependency reaches the build as nupkgs the flake packs
+  the built server. That took two goes: a reply is written *twice* -- the tool's
+  return value into a JSON document inside a content block, with the tool
+  registration's options, and then the envelope around it with the server's --
+  so either one alone re-escapes what the other emitted, and the first probe
+  passed only because an error reply has no inner document to escape. The dependency reaches the build as nupkgs the flake packs
   from a pinned source input and hands to restore as a local source, versioned
   `2.2.0-utf8wire.1` so it cannot be mistaken for the published 2.2.0; the two
   traps in that route — a hand-run `dotnet` has no offline source, and nixpkgs

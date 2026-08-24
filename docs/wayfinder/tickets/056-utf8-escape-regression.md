@@ -254,3 +254,45 @@ content source. `JavaScriptEncoder.Create(UnicodeRanges.All)` does not fix it
 either -- it permits the same two characters, while spending bytes escaping
 `<`, `>` and `&` -- so the choice was the relaxed encoder plus a sentence in
 the `using-passenger` skill, which is not yet written.
+
+## Correction: the reply is written twice, and both writers escape
+
+The section above was verified against an *error* reply -- a `tools/call`
+naming a tool that does not exist -- and closed on it. Driving a real `script`
+call through the MCP client immediately afterwards showed non-ASCII still
+arriving as `\uXXXX`, with the envelope fix in place and live. The envelope
+measurement was not wrong; it was incomplete, and the difference between the
+two probes is the whole finding.
+
+**A tool reply is two JSON documents, nested, written by different code with
+different options.** A tool's return value is serialized into a JSON *string*
+that becomes the `text` of a content block --
+`AIFunctionMcpServerTool.cs:331`, `JsonSerializer.Serialize(result,
+AIFunction.JsonSerializerOptions...)`, which is whatever the tool registration
+was given. That string is then a value inside the JSON-RPC envelope, written
+with the server's options. An error message has no inner document, which is
+why the error probe saw a clean wire and a `script` reply did not.
+
+Setting either alone changes nothing observable: the inner writer escapes and
+the envelope faithfully carries the escapes, or the inner writer emits UTF-8
+and the envelope escapes it again. This also explains 056's earlier finding
+that passing `UnsafeRelaxedJsonEscaping` to `WithToolsFromAssembly` left the
+wire bytes unchanged -- that experiment was correct and its conclusion, that
+the envelope was the obstacle, was half of one. Both halves are the answer.
+
+`Program.cs` now builds the options once and hands them to both:
+`options.JsonSerializerOptions = wireOptions` (the fork's property) and
+`WithToolsFromAssembly(serializerOptions: wireOptions)` (which upstream has
+always accepted).
+
+Measured on a real `script` reply, driven over stdio with a two-call probe
+(`openLane`, then a script returning a dictionary of Chinese strings):
+
+```
+{"result":{"content":[{"type":"text","text":"{\"type\":\"ran\",...,\"returned\":{\"place\":\"腾冲\",\"note\":\"旅居 避雷\"},...}"}]},"id":3,"jsonrpc":"2.0"}
+```
+
+Zero `\u` sequences in the line. The lesson worth keeping is not about
+encoders: a probe that exercises a *different code path* than the thing being
+fixed can pass while the thing stays broken, and an error reply is a different
+code path from a result reply.
