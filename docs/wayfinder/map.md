@@ -532,6 +532,14 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   last owed item and, by running the suite somewhere `/bin` does not exist,
   found `SessionTests.cs` assumed it anyway.
 
+- [The C# door sends its caller to the Python skill](tickets/050-csharp-door-names-the-python-skill.md)
+  — closed by construction rather than by the find-and-replace it proposed:
+  [053](tickets/053-delete-the-python-door.md) renamed the surviving skill to
+  `using-passenger`, which is the address the server's four strings already
+  named. What was live in it outlived it — the three facts every eval agent had
+  to guess are in the fog entry below, and only the first (a script shares the
+  caller's filesystem) has since been written into the skill.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

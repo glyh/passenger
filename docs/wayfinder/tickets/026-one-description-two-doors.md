@@ -83,3 +83,47 @@ What survives of the question:
 
 Re-read before claiming. This may now be small enough to close as answered by
 subtraction.
+
+## The one surviving claim is now wrong
+
+*Recorded 2026-08-24.* The note above says `show_browser` still exists only on
+the MCP side. It does not: the C# CLI has both verbs --
+`src/Passenger.Cli/Program.cs:213` (`show`) and `:233` (`hide`). What is true is
+narrower and is still this ticket:
+
+**`showBrowser` takes six parameters at the MCP door and one at the CLI.**
+`Tools.cs:250` takes `lane`, `tab`, `waitSeconds`, `notifyHuman`, `ttlMinutes`
+and `until`; `show` takes a lane and nothing else.
+[018](018-asking-for-a-human.md) argued that is correct rather than drift --
+reaching a human who is not the caller is meaningless at a terminal where the
+caller *is* the human -- and `until="unblocked"`, which
+[047](047-one-door-script.md) added, is the one of the five that argument does
+not obviously cover. It is not about a human at all; it is a wait on a page
+state, and there is no reason a person at a terminal would not want it.
+
+The rest of the doors, counted after the port: MCP has ten tools; the CLI has
+`script`, `tabs`, `open`, `close-tabs`, `serve`, `stop`, `show`, `hide` and
+`status`.
+`open`, `serve`, `stop` and `status` have no MCP counterpart and should not --
+they are daemon administration. So the honest surface is *two verbs in common*,
+one of which agrees exactly and one of which differs by four parameters that 018
+already ruled on.
+
+**What this does to the generator's case.** [023](023-rewriting-into-csharp.md)
+settled decision 5 sideways: .NET generates the MCP schema from the method
+signature, `[Description]` and bounds included, and System.CommandLine replaced
+cyclopts "at more lines for the same contract -- which makes 026 slightly worse,
+not better". So one door already generates and the other is hand-written, which
+is the asymmetric version of what this ticket asked for, and the gap between them
+is now a single parameter list that a human can hold in their head.
+
+Decisions 1 and 2 are dead as written: `ab/models.py` and its pydantic request
+models are gone with the Python door, and "what a pydantic model cannot express"
+is now "what a C# parameter list plus `[Description]` cannot express" -- which
+is a different and much smaller question, since the attributes already carry the
+prose.
+
+**Recommendation for whoever claims this.** Close it, and spend the ticket on
+the one live disagreement instead: whether `until` belongs on `passenger show`.
+A generator for two verbs, one of which is a single string, cannot pay for
+itself.

@@ -132,3 +132,36 @@ worried about handles.
 **Left open deliberately.** Nothing here is blocking, and the estimate has
 moved: option 1 is a day of bookkeeping plus a resize policy that has to be
 argued against two closed tickets.
+
+## Where all of this lives now
+
+*Recorded 2026-08-24.* Everything above cites Python files that
+[053](053-delete-the-python-door.md) deleted. The design survived the port to C#
+unchanged -- every singular assumption this ticket is about is still singular --
+so nothing in the argument moves, but none of the references resolve. The
+translation, so whoever claims this does not have to redo it:
+
+| named above | now |
+|---|---|
+| `present.py:127` (`present()` short-circuits) | `src/Passenger/Present.cs:142` |
+| `present.py:132` (early return when the pid is alive) | `Present.cs:137`, `Presented() => Sessions.ViewerPid() is not null` |
+| `present.py:168` (`dismiss` reaps exactly it) | `Present.cs:225` |
+| `session.py:243` (one `viewer.pid`) | `src/Passenger/NestedSessions.cs:48` |
+| `session.live()` | `NestedSessions.Live()`, `NestedSessions.cs:175` |
+| `session.py` port scan | `NestedSessions.FreePort`, `NestedSessions.cs:189` |
+| `handoff.bring_to_front`, `mcp_server.py:158` | `Handoff.BringToFrontAsync`, `Handoff.cs:103`, called from `src/Passenger.Mcp/Tools.cs:302` |
+| `handoff.wait_for_dismissal` | `Handoff.WaitForDismissalAsync`, `Handoff.cs:67` |
+| `observes_presence` | `IPresenter.ObservesPresence`, `Present.cs:41` |
+| `WindowPresenter` / `LinkPresenter` / `NullPresenter` | `Present.cs:116` / `245` / `279` |
+| `viewer.html` `rfb.resizeSession = true` | `src/Passenger/Assets/web/viewer.html:67` |
+| 040's refcount | `screen_claims` in sqlite, `src/Passenger/Lanes.cs:131`, read by `Lanes.ScreenClaims()` at `Lanes.cs:376` |
+
+Two things worth noting beyond the renaming. The refcount is now a **sqlite
+table** rather than a Python structure, so "a table beside `screen_claims`" is
+literally a second table in the same database and cheaper than the estimate
+above assumed. And `browserStatus` already reports `screenClaims`
+(`Tools.cs:392`), so a plural viewer story has somewhere to be observed from
+without inventing a surface for it.
+
+The estimate is otherwise unchanged: option 1 is a day of bookkeeping plus a
+resize policy that has to be argued against 002 and 003.

@@ -78,6 +78,20 @@ two files plus `tests/test_walker.py`. 049's *Owed* section flagged exactly this
 comment in each enforcing it" — and this is the first change that has to honour
 it.
 
+*Struck 2026-08-24.* [Delete the Python door](053-delete-the-python-door.md)
+deleted the second skill and the Python suite. `walker.js` exists once, at
+`skills/using-passenger/walker.js`, and there is nothing left to keep it
+identical *to*; `tests/test_walker.py` is gone and `tests/Passenger.Tests/` has
+no walker tests at all, so a fix is **one file and no test**. That is worse
+rather than better: the defect below was found by an eval, and nothing in the
+build would notice it coming back. See
+[043](043-tidy-hides-walker-differences.md), which is now about that absence.
+
+Nothing else here has moved. `walker.js:20` still strips `aside`, the three
+options stand as written, and the paragraph they should feed -- that the walker
+can strip a semantic element carrying content, invisibly to the character count
+-- now belongs in one "It is not magic" section rather than two.
+
 ### How it was found
 
 A twelve-run skill eval (three tasks × {Python, C#} doors × {skill, no skill}),

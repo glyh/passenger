@@ -121,3 +121,38 @@ all eight the character count looked right and only reading the tail of the
 output revealed it. That is the same shape as [051](051-walker-strips-asides.md)
 and the same shape as 039's fog entry, arriving now from three independent
 directions in one afternoon.
+
+## Two thirds of this went with the Python door
+
+*Recorded 2026-08-24.* [Delete the Python door](053-delete-the-python-door.md)
+changed the recipe and the file layout underneath this ticket, and most of what
+is above is now about things that do not exist.
+
+- **The skill stopped pasting the walker.** `skills/using-passenger/SKILL.md:124`
+  reads it off disk with `File.ReadAllTextAsync`, because the server runs on the
+  caller's own machine. The escapes never cross a JSON boundary on that path, so
+  the measured failure is unreachable at the only call site the skill ships.
+- **Option 4 is done.** The misleading raw-literal paragraph is gone with the
+  raw literal. What replaced it names the JSON-transport hazard directly, as its
+  own sentence, and says why reading beats pasting.
+- **Option 2 is dead.** There is one skill, so the "it would be written twice"
+  objection has nothing to be twice.
+- **The coupling section is void.** `walker.js` exists once, at
+  `skills/using-passenger/walker.js`. `tests/test_walker.py` went with the
+  Python suite and nothing replaced it -- see
+  [043](043-tidy-hides-walker-differences.md), which is now about the same
+  absence.
+
+**What is left is option 1 alone, and it is smaller and weaker.** Lines 196 and
+205 still carry the backslash-u escapes for U+2028, U+2029 and U+00A0 inside
+regex literals, so the file is still hostile to being pasted -- by an agent that
+did not read the skill, or by any future caller with a reason to inline it.
+Fixing it at the source with `new RegExp` over ASCII-only strings costs two less
+readable lines and makes the paragraph in the skill unnecessary rather than
+merely correct. Against that: nothing on the shipped path hits it any more, so
+this is now insurance rather than a bug with a reproduction.
+
+The test-shaped version of it has lost its home. There is no walker suite in
+`tests/Passenger.Tests/` at all, so "a walker that survives a JSON round trip"
+cannot be asserted until [043](043-tidy-hides-walker-differences.md) decides
+whether the walker gets tests again.

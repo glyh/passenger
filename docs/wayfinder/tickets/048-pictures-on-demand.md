@@ -72,3 +72,31 @@ To decide:
    not in the skill. If this ticket lands, that comment and the embedded
    resource both come back out -- so it is cheaper to decide before the port's
    MCP surface is finished than after.
+
+## Decision 5 has expired; the rest stands
+
+*Recorded 2026-08-24.* The port landed and
+[the Python door is deleted](053-delete-the-python-door.md), so the "cheaper to
+decide before the port's MCP surface is finished" pricing in decision 5 is spent.
+It was not decided before, and the thing it warned about is now the actual cost:
+`pictures.js` is an embedded resource at `src/Passenger/Assets/pictures.js`,
+loaded by `src/Passenger/PicturesJs.cs`, and moving it to the skill means taking
+the embed and its comment back out.
+
+Everything else is unchanged and still live. The envelope is built on every
+`script` reply at `src/Passenger/Service.cs:242` -- a `TitleAsync`, an
+`InnerTextAsync("body")` and a `PicturesJs.MeasureAsync`, three round trips,
+whether or not the caller wanted any of them. Decisions 1 through 4 are as
+written.
+
+Two small corrections to the Question. The fields are camelCase now, not snake:
+`url`, `title`, `charCount`, `largestImage`, `largeImages`, `largestImageSrc`
+(`Service.cs:266-274`). And decision 4's "two places" is cheaper than it was --
+there is one skill, so shipping `pictures.js` beside `walker.js` is one copy, not
+two.
+
+One thing the skill eval added that bears on decision 3. `largestImageSrc` can
+name a different asset than the `<img src>` a reader sees -- on xkcd 2347 it
+points at the retina variant -- so if the geometry moves to the caller, the
+recipe has to say that where today nothing does. It is an argument for moving it:
+a number the caller computes is a number the caller can see the definition of.

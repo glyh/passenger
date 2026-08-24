@@ -4,7 +4,7 @@ title: tidy() normalises away the differences the walker suite would catch
 labels: [wayfinder:task]
 status: open
 assignee:
-blocked_by: [047]
+blocked_by: []
 ---
 
 ## Question
@@ -86,3 +86,45 @@ hides more than trailing whitespace. Collapsing blank runs masks missing and
 spurious block boundaries equally, and those are `nl()` bugs -- closer to
 something a caller would notice than the stray space that started this. That
 question is unchanged by the move, and after 047 it is the whole ticket.
+
+## The suite this is about no longer exists
+
+*Recorded 2026-08-24.* [Delete the Python door](053-delete-the-python-door.md)
+took `tests/test_walker.py` with it, along with `dom_text` and the `tidy` call
+site this ticket measures. Nothing replaced them: `tests/Passenger.Tests/` does
+not mention the walker at any name, so **the walker has no tests at all**, and
+`walker.js` is the only file in `skills/using-passenger/` that nothing exercises.
+
+`blocked_by: [047]` is cleared -- 047 landed, and everything it settled above
+stands. Decision 3 stays answered (the walker's contract is its tidied output,
+because after the move there is no other form). Decisions 1 and 2 stay moot.
+
+What this ticket becomes is one question, and it is bigger than the one it
+started as:
+
+**Does the walker get a suite again, and in what?** Thirteen tests entering
+through `dom_text` were the thing whose fidelity was in doubt; zero tests have no
+fidelity to argue about. The constraint that shaped them survives the port
+intact -- [001](001-testing-the-shells.md) and
+[034](034-broken-walker-passes-its-tests.md) refused a seam into the JavaScript
+because a seam lets a test pass against a mock and fail against Chrome, and
+[028](028-the-root-heuristic-picks-a-decoy.md) had already pinned a chromium in
+the flake so a test can start a real browser. So the honest shape is a C# test
+that launches Chrome, loads a fixture, evaluates `walker.js` off disk exactly as
+the skill's recipe does, and asserts on what comes back. That also happens to be
+the only way to assert the two properties other open tickets now want:
+
+- a walker that survives a JSON round trip ([052](052-walker-escapes-do-not-survive-transport.md)),
+- footnotes surviving the strip list ([051](051-walker-strips-asides.md)).
+
+Decision 4 -- that collapsing blank runs hides missing and spurious block
+boundaries equally, which are `nl()` bugs a caller would notice -- is unchanged
+and becomes the first thing such a suite should be pointed at, rather than the
+whole ticket.
+
+Note the asymmetry that makes this less urgent than it sounds and more urgent
+than it was: the walker is no longer production code. It ships as a recipe the
+caller runs, so a defect in it costs an agent a rework call rather than
+corrupting a reply -- but by the same token nothing in this repo's build can
+fail because of it, and 051 and 052 were both found by an eval rather than by
+the suite.

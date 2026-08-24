@@ -2,7 +2,7 @@
 id: 050
 title: The C# door sends its caller to the Python skill
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee:
 blocked_by: []
 ---
@@ -118,3 +118,35 @@ is asymmetric in exactly the direction that hurts.
    recipe, or whether — given the overlap ends when the Python door is deleted —
    it is left to die as it is. The eval says the gap costs a capable agent
    nothing measurable.
+
+## Answer
+
+*Closed 2026-08-24, by construction rather than by the find-and-replace above.*
+
+[Delete the Python door](053-delete-the-python-door.md) renamed
+`skills/using-passenger-csharp` to `skills/using-passenger`, the address the
+deleted Python skill held. The four server strings were never edited and are now
+correct:
+
+    src/Passenger.Cli/Program.cs:65
+    src/Passenger.Mcp/Program.cs:57
+    src/Passenger.Mcp/Tools.cs:17, 94, 107
+
+Decision 1 is therefore moot -- there is one door, so naming its skill cannot
+send anyone to the wrong one, and the agent keeps the searchable string. The
+paths in the Question are stale in a second way: `dotnet/` is gone from every
+one of them, the tree having moved to the repository root in the same commit.
+
+What did **not** close with it, and is live elsewhere:
+
+- The three convergent findings (decision 2) -- filesystem sharing,
+  `largestImageSrc` naming a different asset than the visible `<img src>`, and
+  the recipe's own silent failures. The first is now stated outright in
+  `skills/using-passenger/SKILL.md` ("The server runs on your machine, in your
+  filesystem"). The other two are not, and the map's Fog entry on the skill eval
+  carries them.
+- Decision 3 answered itself: the Python skill is deleted, so it was left to die
+  as it was.
+- The asymmetry section is history. There is one file; `What cannot cross back`
+  and the working picture recipe are in it because it is the C# one that
+  survived.
