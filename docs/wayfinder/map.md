@@ -476,6 +476,23 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   now says what was *checked* rather than asserting the negative, and `status`
   carries `wedged:` on both doors — a count per wedge, following 040.
 
+- [Whether this moves to C#](tickets/023-rewriting-into-csharp.md)
+  — yes, and it is built: `dotnet/` beside `passenger/`, both suites green, the
+  Python still the daily driver. Not F#: Fable was F#'s whole advantage and it
+  buys the walker being written in the tool's language, but the walker is a
+  recipe the *caller* runs, so that unifies two things 046 deliberately
+  separated — and at the door that matters, `script` on Roslyn, C# is what
+  measurement 3 tested 3/3. **walker.js is untouched.** The port was affordable
+  only because 047 deleted extraction first, which was priced here at twice the
+  size of the program. The three owed measurements are discharged: packaging
+  went moot with Fable, the MCP server serves all ten tools over stdio with
+  bounds in the schema (measurement 2 had tested one), and System.CommandLine
+  replaces cyclopts at more lines for the same contract — which makes 026
+  slightly worse, not better. Verified against a real browser including both of
+  042's wedges, each detected, distinguished and freed. The port's real tax is
+  two seams C# needs that Python did not, both at a process boundary. Left: the
+  flake does not build it, and 049 — the skill still teaches the Python door.
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

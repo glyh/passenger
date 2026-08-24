@@ -2,7 +2,7 @@
 id: 023
 title: Whether this moves to C#
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -316,3 +316,106 @@ string evaluated in the page and does not care what language sent it.
 
 A markdown asset with the three measurements attached, and a go or no-go
 that follows from them rather than from an impression.
+
+## Answer
+
+**Yes, C#, and it is built.** Decided by the developer on 2026-08-24 once all
+five measurements were in and none of them said no. What follows is what the
+port actually cost and what it changed, recorded against what this ticket
+predicted.
+
+### Not F#, and not Fable
+
+Raised as F# on the strength of measurement 5 -- 165 lines of walker compiled
+through Fable to 5,727 bytes, smaller than the JavaScript it replaces, passing
+13/13. It was set aside for two reasons, and neither is that the measurement was
+wrong.
+
+The Fable half was the whole of F#'s advantage here, and it buys the walker
+being written in the same language as the rest of the tool. But `walker.js` is a
+*recipe the caller runs* (046), not code this side executes -- so the language
+it is written in is the caller's concern, not this codebase's, and unifying it
+with the server's language unifies two things that were deliberately separated.
+The packaging risk was real too and was never measured: Fable, node and esbuild
+joining a flake whose entire history is packaging pain.
+
+Without Fable the case narrows to preference between two .NET languages, and the
+door that matters decides it. `script` runs caller-supplied source through
+Roslyn, its caller is an LLM, and measurement 3 tested C# there -- 3/3 first-try
+against real tasks. FSharp.Compiler.Service costs ~1-2s of compiler startup per
+call against Roslyn's ~100ms, and there is far less F# Playwright in any model's
+training data. A worse hit rate at the central door is a functional regression
+no amount of preference covers, which is what decision 3 said before any of this
+was built.
+
+So: **walker.js is untouched and stays in the skill directory**, exactly as 030
+and 046 left it.
+
+### What it cost
+
+~2,900 lines of Python became ~4,400 lines of C# across 21 files, plus 84 tests
+against the Python's 83. The extraction port that this ticket priced at roughly
+twice the size of the program never happened, because 047 deleted extraction
+first -- the single largest thing that made this affordable.
+
+Alongside, not big-bang, as this ticket settled: `dotnet/` sits beside
+`passenger/`, both suites are green, and the Python is still the daily driver.
+The deletion trigger is unchanged -- all tools working in C# against the README's
+page set, and a couple of weeks as the daily driver.
+
+### The three owed measurements, discharged
+
+1. **Packaging.** Moot in the form it was asked. It was about Fable, node and
+   esbuild; without Fable the toolchain is `dotnet` and NuGet. The flake is not
+   yet wired, which is the one piece of this port still outstanding.
+2. **An MCP server end to end, across every tool.** Done, and this was the real
+   gap -- measurement 2 had tested schema generation for a *single* tool. All ten
+   are served over stdio to a live client, with `[Range]` emitting the same
+   `minimum`/`maximum` pydantic's `Field(ge=, le=)` did. No hand-written JSON.
+3. **What replaces `cyclopts`.** System.CommandLine 2.0, which went GA. It is
+   more lines for the same contract: cyclopts read names, types and prose off the
+   signature and docstring, where this wants each option constructed. That is
+   [026](026-one-description-two-doors.md)'s subject, and it got slightly worse
+   here rather than better.
+
+### What changed shape, and what did not
+
+- **The async rewrite was the smallest surprise, again.** `Session` becomes an
+  `OpenAsync` factory plus `IAsyncDisposable`; the hand-rolled websocket deadline
+  in `targets.py` collapses into one `CancellationToken` covering the connect and
+  every read, and reads better than the original.
+- **pydantic's construction-time invariants become `Validated()` methods.** The
+  shapes it refused still cannot exist; they are checked by hand.
+- **Two seams the Python did not need**, both at a process boundary rather than
+  inside a rule, because C# cannot reach into a module the way `monkeypatch`
+  does: `Lanes.Chrome` over the three questions lanes asks the browser, and
+  `Sessions.Alive` for the one state that cannot be produced honestly. This is
+  the port's real tax and it is worth watching -- a seam that exists gets used.
+- **The surface is camelCase**, verbs and parameters alike, because the schema
+  takes its names from the signature. Error codes stay SCREAMING_SNAKE: a code is
+  a constant a caller matches on, not a field name.
+- **`Page`, not `page`.** A Roslyn globals member is a member, so it takes C#'s
+  convention like every other name in the same expression. Caught end to end
+  rather than by review -- the documented snippet did not run.
+
+### Verified against a real browser
+
+On a throwaway Chrome, so the warm session was never touched. `status` reports
+every line; `script` navigates, reads and continues on the same tab across calls;
+exit codes are 2 / 0 / 1 as the Python's are. Both of 042's wedges were built and
+both were detected, distinguished and freed by their own remedy -- uncommitted in
+17s against the Python's 15.5s, silent in 20s, each leaving `wedged: none`.
+
+**The bug this ticket's own porting found is fixed.** 042 was filed because
+rebuilding the mechanism made its assumption visible, and the C# reproduces the
+fix rather than the fault.
+
+### What is left
+
+- The flake does not build the port yet.
+- [049](049-skill-for-the-csharp-door.md) is the blocking one for anybody
+  actually using this door: the skill's every recipe is Python against a
+  synchronous Playwright, and it is the first thing an agent is told to read.
+- [048](048-pictures-on-demand.md) would remove the `Measured` envelope and move
+  `pictures.js` to the skill; cheaper to settle before this MCP surface is
+  considered final than after.
