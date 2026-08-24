@@ -155,7 +155,7 @@ public static class Service
     /// The passthrough door: caller-supplied code, run against a page.
     ///
     /// Everything this project knows how to do to a page is reachable from here
-    /// without being rewrapped, because what is handed over is `page` itself
+    /// without being rewrapped, because what is handed over is `Page` itself
     /// (ticket 004). What this function adds is the envelope: which tab, a bounded
     /// clock, and a reading of the ending page -- so a challenge met halfway
     /// through a sequence comes back as `blocked`, not as a puzzling empty string.

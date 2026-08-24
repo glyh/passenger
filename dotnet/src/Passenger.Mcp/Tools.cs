@@ -23,7 +23,7 @@
 // That division got sharper with ticket 046: extraction left this codebase
 // entirely, so the *recipes* for reading a page -- including walker.js itself
 // -- are in the skill directory rather than here. There is one door now, and it
-// hands over `page`.
+// hands over `Page`.
 //
 // **What the port buys at this door.** Ticket 023's measurement 2: the schema is
 // generated from the method signature, bounds and prose included, so there is no
@@ -85,7 +85,7 @@ public static class Tools
         Open a page, drive it, and read it -- the only door onto the browser.
 
         Navigation, interaction and reading are all this call: `await
-        page.GotoAsync(url)` then whatever you need. The reply carries what you
+        Page.GotoAsync(url)` then whatever you need. The reply carries what you
         returned, plus a measurement of the tab you ended on -- its character
         count and pictures, or a `blocked` record if a known vendor's wall is in
         the way.
@@ -98,12 +98,13 @@ public static class Tools
         """)]
     public static async Task<ScriptOutcome> Script(
         [Description("""
-            C#, run with `page` (a Playwright IPage) in scope. Use `return` to
+            C#, run with `Page` (a Playwright IPage) in scope. Use `return` to
             hand a value back; it must be JSON, so return text or a list, never a
-            locator. Playwright .NET is async, so every call is awaited. To just
-            read a page: await page.GotoAsync(url); return await
-            page.InnerTextAsync("body"); For markdown with links and headings,
-            paste the walker recipe from the `using-passenger` skill.
+            locator. Playwright .NET is async, so every call is awaited, and every
+            member is PascalCase. To just read a page:
+            await Page.GotoAsync(url); return await Page.InnerTextAsync("body");
+            For markdown with links and headings, paste the walker recipe from the
+            `using-passenger` skill.
             """)]
         string source,
         [Description("""

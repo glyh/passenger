@@ -60,7 +60,7 @@ Argument<string> scriptFile = new("file")
 Command script = new("script",
     "Run a Playwright script against a tab, and print where it ends up.\n\n"
     + "The only door onto a page, at either surface, since ticket 046 retired "
-    + "`fetch`: navigate with `await page.GotoAsync(url)`, drive whatever needs "
+    + "`fetch`: navigate with `await Page.GotoAsync(url)`, drive whatever needs "
     + "driving, and return what you want. This tool does not interpret pages -- "
     + "the recipes for reading one live in the `using-passenger` skill, next to "
     + "walker.js.")

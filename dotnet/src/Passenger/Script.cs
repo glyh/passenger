@@ -9,11 +9,12 @@
 //
 // **The one place the port changes the caller's contract.** The source was
 // Python, run with `exec` against a compiled function body. There is no
-// in-process Python here, so it is C# on Roslyn instead. Everything else about
-// the door is unchanged: `page` is the only name bound, `return` hands a value
-// back, and what may cross is still JSON and nothing else. What the caller writes
-// is `await page.GotoAsync(url)` where it used to be `page.goto(url)`, because
-// Playwright .NET has no sync API -- the same async rewrite the rest of the shell
+// in-process Python here, so it is C# on Roslyn instead. The shape of the door is
+// unchanged: one name is bound, `return` hands a value back, and what may cross
+// is still JSON and nothing else. What the caller writes is
+// `await Page.GotoAsync(url)` where it used to be `page.goto(url)` -- PascalCase
+// because a Roslyn globals member is a member, and awaited because Playwright
+// .NET has no sync API, which is the same async rewrite the rest of the shell
 // took.
 
 using System.Reflection;
@@ -37,6 +38,14 @@ namespace Passenger;
 /// </summary>
 public sealed class ScriptGlobals
 {
+    /// <summary>
+    /// `Page`, not `page`. A Roslyn globals member is a member, so it takes the
+    /// convention of the language the caller is writing -- and the caller here is
+    /// writing C#, where every other name they touch (`GotoAsync`,
+    /// `InnerTextAsync`, `Url`) is PascalCase too. Keeping the Python door's
+    /// lowercase spelling would have made the one name this side introduces the
+    /// only one that broke the rule.
+    /// </summary>
     public required IPage Page { get; init; }
 }
 
@@ -207,7 +216,7 @@ public static class Script
     private static ScriptException NotJson(string typeName) =>
         new(ErrorCode.ScriptReturnNotJson,
             $"a {typeName} cannot cross the tool boundary",
-            "return what you wanted from it instead -- page.Url, "
+            "return what you wanted from it instead -- Page.Url, "
             + "await locator.InnerTextAsync(), a list of hrefs");
 
     /// <summary>

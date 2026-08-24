@@ -250,7 +250,7 @@ public sealed record Blocker
 ///
 /// `Src` is how to reach that picture, not necessarily a URL: two of the five
 /// tags measured -- inline `svg` and `canvas` -- have no URL to give, so it
-/// falls back to a CSS selector, which `page.Locator(sel).ScreenshotAsync()`
+/// falls back to a CSS selector, which `Page.Locator(sel).ScreenshotAsync()`
 /// takes (ticket 014). A `data:` placeholder parked by a lazy loader does the
 /// same.
 /// </summary>
