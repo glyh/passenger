@@ -3,7 +3,7 @@ id: 057
 title: Delete the CLI door
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
