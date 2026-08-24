@@ -3,7 +3,7 @@ id: 048
 title: Move the picture measurement to the caller
 labels: [wayfinder:grilling]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
