@@ -3,7 +3,7 @@ id: 042
 title: A tab waiting on a server that never answers hangs every attach
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
