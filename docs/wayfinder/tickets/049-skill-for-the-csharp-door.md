@@ -3,7 +3,7 @@ id: 049
 title: The skill teaches a door that no longer exists
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
