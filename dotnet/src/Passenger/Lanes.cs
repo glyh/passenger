@@ -56,8 +56,43 @@ public sealed record Lane
     public bool ExpiredAt(long now) => TtlS != Lanes.NoTtl && now - TouchedAt >= TtlS;
 }
 
+/// <summary>
+/// The three questions this module asks Chrome.
+///
+/// An interface because C# cannot do what the Python tests did -- reach into
+/// `targets` and replace three module functions. The seam is at the *process*
+/// boundary rather than inside any rule here: what is swapped out is a browser
+/// on the other end of an HTTP endpoint, which is exactly the kind of thing a
+/// unit test has no business starting. Nothing about a lane's own logic is
+/// reachable through it, which is the line tickets 001 and 034 drew.
+/// </summary>
+public interface IChromeTabs
+{
+    IReadOnlyList<string> LiveTabs();
+
+    bool Close(string tab);
+
+    IReadOnlyDictionary<string, string> Openers();
+}
+
+/// <summary>The real Chrome, over the CDP HTTP endpoint.</summary>
+public sealed class LiveChromeTabs : IChromeTabs
+{
+    public IReadOnlyList<string> LiveTabs() => [.. Targets.Pages().Select(p => p.Id)];
+
+    public bool Close(string tab) => Targets.Close(tab);
+
+    public IReadOnlyDictionary<string, string> Openers() => Targets.Openers();
+}
+
 public static class Lanes
 {
+    /// <summary>
+    /// Where this module's view of Chrome comes from. Assigned only by the test
+    /// suite; every other caller gets the live browser.
+    /// </summary>
+    public static IChromeTabs Chrome { get; set; } = new LiveChromeTabs();
+
     public static string DbFile => Path.Combine(Config.StateDir, "lanes.db");
 
     // The reserved lanes. Both are rows like any other -- same table, same sweep --
@@ -425,14 +460,14 @@ public static class Lanes
         IReadOnlyList<string> live;
         try
         {
-            live = [.. Targets.Pages().Select(p => p.Id)];
+            live = Chrome.LiveTabs();
         }
         catch (Exception)
         {
             return [];  // no daemon, or it is not answering; nothing to reconcile
         }
 
-        Reconcile(live, Targets.Openers());
+        Reconcile(live, Chrome.Openers());
         IReadOnlyList<string> dead = Expired();
         foreach (string lane in dead)
         {
@@ -459,10 +494,10 @@ public static class Lanes
     {
         var mine = new HashSet<string>(TabsOf(lane));
         List<string> doomed = [.. tabs.Where(mine.Contains)];
-        List<string> live;
+        IReadOnlyList<string> live;
         try
         {
-            live = [.. Targets.Pages().Select(p => p.Id)];
+            live = Chrome.LiveTabs();
         }
         catch (Exception)
         {
@@ -479,7 +514,7 @@ public static class Lanes
         int closed = 0;
         foreach (string tab in doomed)
         {
-            if (Targets.Close(tab))
+            if (Chrome.Close(tab))
             {
                 closed++;
             }
@@ -501,10 +536,10 @@ public static class Lanes
     /// </summary>
     public static (int Open, int Orphaned) Counts()
     {
-        List<string> live;
+        IReadOnlyList<string> live;
         try
         {
-            live = [.. Targets.Pages().Select(p => p.Id)];
+            live = Chrome.LiveTabs();
         }
         catch (Exception)
         {

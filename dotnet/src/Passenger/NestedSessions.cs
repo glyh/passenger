@@ -53,6 +53,17 @@ public static class Sessions
     private const int PollIntervalMs = 100;
 
     /// <summary>
+    /// How liveness is decided. Replaced only by the suite, and only for the one
+    /// case that cannot be produced honestly: nothing in userspace survives
+    /// SIGKILL, so a pid that does -- one in uninterruptible sleep, or one that is
+    /// not ours -- has to be stood in for. The Python tests monkeypatched the same
+    /// function for the same test.
+    /// </summary>
+    public static Func<int, bool> Alive { get; set; } = ReadProcState;
+
+    public static bool IsAlive(int pid) => Alive(pid);
+
+    /// <summary>
     /// Is this pid a running process?
     ///
     /// A zombie does not count. Chrome dying inside cage leaves an unreaped child
@@ -60,7 +71,7 @@ public static class Sessions
     /// alone reports a dead session as live -- which is the state that had a
     /// viewer showing a black screen with everything claiming to be fine.
     /// </summary>
-    public static bool IsAlive(int pid)
+    public static bool ReadProcState(int pid)
     {
         string stat;
         try
@@ -258,7 +269,12 @@ public static class Sessions
     /// where even that fails, because an unowned listener is the worse half of
     /// the bug.
     /// </summary>
-    private static string? StopAll(NestedSession session)
+    /// <summary>
+    /// Public so the suite can assert the port is back before this returns, which
+    /// is the regression ticket 024 landed for. Nothing else calls it directly:
+    /// <see cref="Teardown"/> and <see cref="ReapStale"/> are the ways in.
+    /// </summary>
+    public static string? StopAll(NestedSession session)
     {
         // Deduplicated so a record that names one process twice cannot report it
         // twice in the note.
@@ -301,7 +317,12 @@ public static class Sessions
         Delete(SessionFile);
     }
 
-    internal static void Delete(string path)
+    /// <summary>
+    /// Unlink, tolerating a path that was never there. Public because the suite
+    /// clears the record between tests, and because <see cref="ClearViewer"/> is
+    /// the same act by another name.
+    /// </summary>
+    public static void Delete(string path)
     {
         try
         {

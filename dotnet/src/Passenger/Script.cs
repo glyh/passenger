@@ -169,8 +169,7 @@ public static class Script
         // it would not throw, it would emit a page of the driver's internals.
         // That is the .NET-specific half of this check: Python's json.dumps
         // refused a Locator outright.
-        if (value is ILocator or IElementHandle or IPage or IFrame or IBrowser
-                  or IBrowserContext or IResponse or IRequest)
+        if (value is not null && IsHandle(value.GetType()))
         {
             throw NotJson(value.GetType().Name);
         }
@@ -186,6 +185,24 @@ public static class Script
 
         return value;
     }
+
+    /// <summary>
+    /// The Playwright handles a script must not return.
+    ///
+    /// A list of interfaces rather than a pattern over an instance, so the rule
+    /// can be asserted without constructing one -- hand-implementing ILocator to
+    /// get a test subject would be a hundred members that break on every driver
+    /// update, to check a rule that is really about these eight types.
+    /// </summary>
+    private static readonly Type[] Handles =
+    [
+        typeof(ILocator), typeof(IElementHandle), typeof(IPage), typeof(IFrame),
+        typeof(IBrowser), typeof(IBrowserContext), typeof(IResponse), typeof(IRequest),
+    ];
+
+    /// <summary>Is this one of the live handles that cannot cross the boundary?</summary>
+    public static bool IsHandle(Type type) =>
+        Array.Exists(Handles, handle => handle.IsAssignableFrom(type));
 
     private static ScriptException NotJson(string typeName) =>
         new(ErrorCode.ScriptReturnNotJson,

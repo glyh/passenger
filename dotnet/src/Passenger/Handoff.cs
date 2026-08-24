@@ -10,7 +10,13 @@ namespace Passenger;
 
 public static class Handoff
 {
-    private const int PollIntervalMs = 2000;
+    /// <summary>
+    /// How often a wait looks again. Settable only so the suite can assert what
+    /// ends a wait without sleeping out a five-minute budget -- the Python tests
+    /// monkeypatched the same number for the same reason. It is a clock, not a
+    /// rule: no behaviour here reads differently at a different interval.
+    /// </summary>
+    public static int PollIntervalMs { get; set; } = 2000;
 
     /// <summary>
     /// Poll until the vendor's signature stops matching, and say what ended it.
