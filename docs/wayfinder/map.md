@@ -665,6 +665,22 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   backslash escape whose JSON reading differs from its JavaScript one", which is
   an assertion over bytes and needs no browser.
 
+- [One description, two doors](tickets/026-one-description-two-doors.md) —
+  closed by subtraction: there is no second door. Grilling it started from the
+  question the ticket never asked, who uses the CLI, and the answer is nobody —
+  never run by the owner, invoked by no test, named in no skill, and the warm
+  profile it exists for was logged in through the MCP door. Both of the ticket's
+  own counts were wrong on the way out: six verbs overlapped rather than two
+  (the names differ, not the behaviour), and the drift ran *both* ways, with
+  `status` and `browserStatus` disagreeing in each direction at once. Every
+  difference but one followed a statable rule — the CLI's extras served a human
+  at a terminal, MCP's reached a human who is not the caller (018) — and the
+  exception, `until="unblocked"`, is moot with the door gone. Recorded for reuse:
+  the alternative to a generator was a conformance test that subtracts the two
+  parameter lists and fails unless each difference is declared beside its reason,
+  which is the ticket's own goal for forty lines. It needed two doors. See
+  [Delete the CLI door](tickets/057-delete-the-cli.md).
+
 ## Fog
 
 - **A picture measurement can be fooled from both ends.** 017 reports the

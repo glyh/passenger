@@ -2,8 +2,8 @@
 id: 026
 title: One description, two doors
 labels: [wayfinder:grilling]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -127,3 +127,48 @@ prose.
 the one live disagreement instead: whether `until` belongs on `passenger show`.
 A generator for two verbs, one of which is a single string, cannot pay for
 itself.
+
+## Closed: there is no second door to keep in step
+
+*Recorded 2026-08-24.* Answered by subtraction, further than the section above
+imagined. Grilling the recommendation to "spend the ticket on the one live
+disagreement instead" started with the question this ticket never asked -- who
+uses the CLI -- and the answer is nobody. The owner has never run it; no test
+invokes it; `skills/` never names it. The profile this tool exists to keep warm
+was logged in through the *MCP* door, so even `passenger open <url> --show`, the
+workflow `Lanes.cs:101` reserves a whole lane for, has never been performed.
+
+[057](057-delete-the-cli.md) deletes it, keeping `stop` alone and folding that
+into `Passenger.Mcp` as a verb. With one door there is nothing to generate
+twice.
+
+Corrections this ticket earned on its way out, since both of its own counts were
+wrong:
+
+- **"Two verbs in common" undercounted.** It counted names, and the names
+  differ. By behaviour, six of the ten MCP tools have a CLI counterpart:
+  `script`, `listTabs`/`tabs`, `closeTabs`/`close-tabs`,
+  `browserStatus`/`status`, `showBrowser`/`show`, `hideBrowser`/`hide`.
+- **The drift ran both ways, not one.** Four of the six leaned CLI-wide
+  (`--json`, `--force`, an optional tab list covering `closeAllTabs`, and
+  `status`'s `launch:`/`recognises:`); only `showBrowser` leaned the other way.
+  `status` and `browserStatus` disagreed in both directions at once -- the CLI
+  never printed `screenClaims`.
+
+And the finding that outlives the ticket: every difference except one followed a
+statable rule. What the CLI had extra served a human at a terminal; what MCP had
+extra reached a human who is *not* the caller ([018](018-asking-for-a-human.md))
+or managed a lane the CLI did not need. The exception was `until="unblocked"`,
+which is a wait on page state and belonged at both doors -- the single genuine
+drift on the whole surface, and now moot.
+
+**The alternative that was nearly built.** Before deletion was on the table, the
+cheap answer to this ticket was a conformance test rather than a generator:
+reflect over both doors, subtract the parameter lists, and fail unless every
+difference is declared in one file beside its reason. That is 026's actual
+stated goal -- "makes it impossible rather than merely noticed" -- for about
+forty lines and no indirection, with the declaration file doubling as the
+generator's spec if the list ever grew fast enough to justify one. It needed two
+doors. Recorded here because the *shape* is reusable: when two surfaces must
+agree, checking is much cheaper than generating, and the exception list is where
+the reasons finally get written down.
