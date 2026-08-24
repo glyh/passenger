@@ -636,3 +636,49 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   which is what separates it from the four heuristics that were deleted for
   ruling on meaning. What is missing is not a design but a second instance: one
   site is not a class, and the probe that would settle it was never run.
+
+- **The C# door tells its caller to read the Python skill.** 049 decided two
+  skills discriminated by verb casing, and both open with **Which door you are
+  at** pointing at the other. But the C# server's own instruction text -- read
+  *before* any skill is loaded -- names `using-passenger` in four places, so the
+  default path at that door is: trust the pointer, write Python, fail. The
+  **Which door** section is recovery after the wrong file is already in context.
+  This is the fog entry above -- an agent treats the document in front of it as
+  the whole procedure -- arriving in the one place 049 thought it had closed:
+  the proximate authority is now wrong on purpose-built routing.
+  See [The C# door sends its caller to the Python
+  skill](tickets/050-csharp-door-names-the-python-skill.md).
+
+- **A read can lose a page's reference apparatus inside the noise floor.** The
+  walker strips `aside`, and docutils and Sphinx emit footnotes as
+  `<aside class="footnote">`. On PEP 8 that is a populated `## References`
+  reduced to an empty heading and three absolute links gone, for an **18
+  character** shortfall against `char_count` -- 0.04% of the body. 039's fog
+  entry above is about an extraction that came back empty and cannot say so;
+  this is the same shape at the other end of the scale, where the extraction
+  came back 99.96% full and cannot say what the missing 0.04% was carrying. The
+  comparison of two numbers already in hand does not reach it. See [The walker
+  strips aside, and aside carries
+  footnotes](tickets/051-walker-strips-asides.md).
+
+- **Two skills, and no measurable difference between having one and not.**
+  Twelve runs -- three tasks across both doors, with and without the skill --
+  logging every `script` call and its error code. All twelve produced correct
+  output. Eight -- the image and the HN tasks, every condition -- finished in
+  one or two calls with zero errors, with or without a skill, and the image
+  outputs were byte-identical across all four conditions. The only failed calls
+  in the whole run belonged to a *with-skill* run, spent on the shipped walker
+  (052). Agents reasoned their way
+  unaided to the two things the C# skill claims as its own (`BodyAsync()` rather
+  than the response; bytes cannot cross, so write from inside the script), and
+  the `script` schema already carries the PascalCase-async convention and the
+  JSON-only return rule that three of the C# skill's seven extra blocks restate.
+  What the runs *did* surface was three facts neither skill states and every
+  agent had to guess: whether a script shares the caller's filesystem (it does,
+  and knowing it upfront halves the image task), that `largest_image`'s `src`
+  can name a different asset than the `<img src>` a reader sees, and the walker
+  entry above. The unexamined question is whether either skill is earning its
+  context -- on the one task that cost anyone a failed call, the shipped recipe
+  was the cause and both no-skill runs, writing their own extractor, did no
+  worse -- or whether what is load-bearing in them belongs in the tool schemas
+  that 032's fog entry says an agent reads anyway.
