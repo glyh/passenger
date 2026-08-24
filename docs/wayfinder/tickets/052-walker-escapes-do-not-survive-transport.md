@@ -224,8 +224,16 @@ parsing. That was the defect, and it is gone.
 Making the file paste-safe outright means having no backslashes in it at all:
 `String.fromCharCode(10)` for the newlines, `new RegExp` for the `\s` classes,
 and rewording line 200's comment. That is a bigger and uglier change to a file
-the skill tells nobody to paste, and it should be its own ticket if anyone wants
-it.
+the skill tells nobody to paste.
+
+**Ruled out on the day, and this is the reason not to reopen it.** The file is
+best-effort by design: it is a recipe an agent reads off disk and is expected to
+tweak for the page in front of it, not an interface anything depends on. Making
+it survive byte-for-byte retyping would buy fidelity for a path nobody is asked
+to take, at the cost of the literalness that makes it readable and editable --
+which is the property that actually earns its keep. The skill now says so
+outright, in *It is a recipe, not an API*, so the seven remaining backslashes
+are known and left alone rather than merely unnoticed.
 
 The test-shaped version still has nowhere to live. Note that the property is not
 "survives a JSON round trip" as the ticket above guessed -- `JSON.parse(

@@ -5,7 +5,8 @@ description: |
   its `openLane`, `script`, `showBrowser`, `listTabs` and `closeTabs` tools.
   Scripts are C# against an async Playwright. Covers opening a lane before the
   first call, the recipes for reading a page and for measuring its pictures
-  (`markdown.js` and `pictures.js`, both in this directory), what the `blocked`
+  (`markdown.js` and `pictures.js`, both in this directory -- best-effort
+  recipes to read and adapt, not fixed APIs), what the `blocked`
   verdict does and does not catch,
   recognising a login wall or captcha the tool cannot name and handing the
   page to a human, why a read is only the first screen, why reading beats
@@ -170,6 +171,17 @@ It is not magic and it is not always right. Two known shapes:
 - It picks its root from a short list of candidates (`main`, `article`,
   `#content`…). On a page whose furniture matches one of those thirty times
   over, it can start in the wrong place.
+
+**It is a recipe, not an API -- read it, and change it when it is wrong.** It is
+a single arrow-function expression in a file you already have on disk, deliberately
+literal so that it can be understood in one pass. Nothing here versions it or
+depends on its internals: no C# calls into it, the reply carries only what your
+script returned, and the two overrides it takes cover the common case rather
+than every case. So when the root heuristic picks a decoy, or the strip list
+discards something that was carrying the content, editing the source you just
+read and evaluating that is a normal thing to do -- either in the string you
+pass to `EvaluateAsync`, or by keeping your own copy for a site you come back
+to. That is best-effort by design; it is not a contract you are working around.
 
 **Do not restructure a script to avoid the compile.** Measured: after the
 server's first call, compiling a script costs a flat ~40ms whatever it says --

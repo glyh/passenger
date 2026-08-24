@@ -628,8 +628,13 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   remain, and a strict transcriber is rejected at the first `/\s+/` on line 113,
   before it ever reaches what was fixed. The difference is that those fail loudly
   at the boundary while the backslash-u pair failed silently, handing the page
-  something that still looked like JavaScript. The skill's paragraph stayed and
-  changed its grounds — reading still beats pasting, for the general reason now.
+  something that still looked like JavaScript. Chasing the rest was ruled out on
+  the day rather than deferred: the file is best-effort by design, a recipe an
+  agent reads off disk and is expected to tweak, so paying the literalness that
+  makes it readable for fidelity on a path nobody is asked to take is the wrong
+  trade. The skill now says that outright — *It is a recipe, not an API* — and
+  its pasting paragraph stayed and changed its grounds: reading still beats
+  pasting, for the general reason now.
   Two things worth carrying forward: the first draft of the explanatory comment
   broke the file by spelling a bare U+2028 in prose, so the file's rule is that
   nothing in it may spell one, comments included; and the test-shaped property is
