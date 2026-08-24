@@ -2,7 +2,7 @@
 id: 058
 title: A stale predecessor on the viewer port makes showBrowser hand out a 404
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -119,3 +119,56 @@ Found while watching a scraping agent work, on 2026-08-24. The viewer had
 presumably been broken on this machine since the rename; nothing had asked for
 a window in between, which is its own small lesson about how long a silent
 failure can sit in a path only humans use.
+
+## Answer
+
+Both halves landed, and the second one turned out to *be* the first one: the
+identity check is a fetch of `/`, so `Ensure` cannot answer "yes, it is served"
+without having been served it. There is no separate GET before returning
+because there is nowhere left to put one that would learn anything new.
+
+**Identity, not liveness.** `Webserve.Ensure` now opens with `Serving(port)`
+rather than `Listening(port)`. `Serving` fetches `http://host:port/` and asks
+`IsViewerPage` whether what came back is ours; `Fetch` returns null on a
+non-200 or on nothing at all, so one request covers both "is anything there"
+and "is it us". The mark is `<title>passenger</title>` -- one stable line
+rather than the whole page compared byte for byte, because an *older build* of
+this tool left serving the port is still ours and must not be called a
+squatter. The post-spawn poll waits on `Serving` too: the bind happens before
+the first route exists, and a caller told "yes" in that window is told a URL it
+could not have fetched.
+
+**What it does about a squatter: refuses, and names it.** As the ticket
+argued, taking the port means killing a process this tool did not start, and
+that stays out of agent hands (057). So `Ensure` throws
+`[PORT_IN_USE] the viewer port is taken -- pid 620775
+(/home/lyh/agent-browser/.venv/bin/python3 -m ab.webserve 6080) answers on 6080
+but serves no viewer page; stop it and call again. This tool will not kill a
+process it did not start`. The pid and command line are the whole value: the
+human reading it is the one who can decide whether that process is disposable.
+
+**Finding the pid.** `Sessions.ListenerOn(port)` reads `/proc/net/tcp` and
+`/proc/net/tcp6` for a socket in state `0A` (LISTEN) on that port, takes its
+inode, and finds the process whose `/proc/<pid>/fd` holds `socket:[inode]`.
+Read directly rather than shelling out to `ss`, the same way `PidsRunning`
+reads `/proc` rather than shelling out to `pgrep`. Best-effort throughout: a
+socket held by another user has no fd list this process may read, so the answer
+is null and the refusal says "an unidentifiable process" rather than nothing.
+The column arithmetic is a pure function, `ListeningInode(lines, port)`, and is
+tested on a verbatim table -- including the row that would name the *browser*
+as the squatter if state `01` were mistaken for `0A`.
+
+**Verified against a real one.** A throwaway test started
+`python3 -m http.server 16081`, and `ListenerOn` returned that process's own
+pid and its command line, with `Serving` false against it -- so the `/proc`
+walk and `File.ResolveLinkTarget` on an fd symlink both do what they are
+assumed to do here, rather than only in principle. Deleted afterwards; what
+stays in the suite is the pure half plus `IsViewerPage` against this
+assembly's own page and against python's error page. 94 tests green.
+
+**What is still the human's.** Whether the page *renders* -- that stays
+judgement, and the module header in `Present.cs` says so. What is now a fact
+this tool holds is that the URL it reported was served, by us. The stale
+predecessor that started this was gone from 6080 by the time the fix was
+written, so the original failure was not re-reproduced against the fix; the
+synthetic squatter above is the same shape.

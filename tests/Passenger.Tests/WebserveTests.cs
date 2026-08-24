@@ -61,4 +61,24 @@ public class WebserveTests
         // failure rather than a first-handoff one.
         Assert.Contains("<", Webserve.Page, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ThePageThisAssemblyServesIsRecognisedAsOurs() =>
+        // The mark is an identity claim, so it has to hold against the page this
+        // build actually hands out -- otherwise the check ticket 058 added would
+        // call our own server a squatter.
+        Assert.True(Webserve.IsViewerPage(Webserve.Page));
+
+    [Fact]
+    public void SomethingElseOnThePortIsNotOurs()
+    {
+        // The shape that started ticket 058: `python -m http.server` holding the
+        // viewer port, answering everything except the page itself.
+        Assert.False(Webserve.IsViewerPage(
+            "<html><title>Error response</title>Error code: 404</html>"));
+        Assert.False(Webserve.IsViewerPage("<title>Directory listing for /</title>"));
+
+        // Nothing came back at all: no listener, or a status that was not 200.
+        Assert.False(Webserve.IsViewerPage(null));
+    }
 }

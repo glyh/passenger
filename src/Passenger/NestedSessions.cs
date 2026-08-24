@@ -17,6 +17,7 @@
 // that is the only place that can observe what actually came up: the display it
 // got, and the pids of the processes cage really started.
 
+using System.Globalization;
 using System.Net.Sockets;
 
 namespace Passenger;
@@ -217,6 +218,156 @@ public static class Sessions
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// The socket inode listening on a port, out of a /proc/net/tcp table.
+    ///
+    /// Pure, and separated from the file reading so the column arithmetic is
+    /// testable without binding anything: the table is hex, the state code `0A`
+    /// is LISTEN, and the port is the tail of the local address rather than a
+    /// field of its own.
+    /// </summary>
+    public static long? ListeningInode(IEnumerable<string> lines, int port)
+    {
+        foreach (string line in lines)
+        {
+            string[] fields = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length < 10 || fields[3] != "0A")
+            {
+                continue;  // the header row, and every connected socket
+            }
+
+            int colon = fields[1].LastIndexOf(':');
+            if (colon < 0
+                || !int.TryParse(fields[1][(colon + 1)..], NumberStyles.HexNumber,
+                                 CultureInfo.InvariantCulture, out int listening)
+                || listening != port)
+            {
+                continue;
+            }
+
+            if (long.TryParse(fields[9], out long inode))
+            {
+                return inode;
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly string[] TcpTables = ["/proc/net/tcp", "/proc/net/tcp6"];
+
+    /// <summary>
+    /// Who is listening on a local port: pid and command line, when they can be
+    /// found.
+    ///
+    /// A socket probe answers "is something there", and that stood in for "is
+    /// *this* there" until ticket 058 found this tool's own Python predecessor
+    /// still holding the viewer port from before the project was renamed.
+    /// Refusing a port is only useful advice if the refusal names the process to
+    /// stop, and /proc is the only thing that knows which one that is.
+    ///
+    /// Read directly rather than shelling out to `ss`, the same way
+    /// <see cref="PidsRunning"/> reads it rather than shelling out to `pgrep`.
+    /// Best effort throughout: a socket held by another user has no fd list this
+    /// process may read, so the answer is null and the caller says less rather
+    /// than nothing.
+    /// </summary>
+    public static (int Pid, string Command)? ListenerOn(int port)
+    {
+        foreach (string table in TcpTables)
+        {
+            string[] lines;
+            try
+            {
+                lines = File.ReadAllLines(table);
+            }
+            catch (Exception)
+            {
+                continue;  // no /proc/net at all, or not Linux
+            }
+
+            if (ListeningInode(lines, port) is not { } inode)
+            {
+                continue;
+            }
+
+            if (PidHoldingSocket(inode) is { } pid)
+            {
+                return (pid, CommandOf(pid) ?? "unknown command");
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The process holding one socket inode, by the fd symlinks that name it.
+    ///
+    /// O(processes x fds), which is affordable only because this runs once, on
+    /// the way to refusing a port -- never on a hot path.
+    /// </summary>
+    private static int? PidHoldingSocket(long inode)
+    {
+        string target = $"socket:[{inode}]";
+        foreach (string entry in Directory.EnumerateDirectories("/proc"))
+        {
+            if (!int.TryParse(Path.GetFileName(entry), out int pid))
+            {
+                continue;
+            }
+
+            IEnumerable<string> fds;
+            try
+            {
+                fds = Directory.EnumerateFileSystemEntries(Path.Combine(entry, "fd"));
+            }
+            catch (Exception)
+            {
+                continue;  // someone else's process, or one that just exited
+            }
+
+            foreach (string fd in fds)
+            {
+                try
+                {
+                    if (File.ResolveLinkTarget(fd, returnFinalTarget: false)?.Name == target)
+                    {
+                        return pid;
+                    }
+                }
+                catch (Exception)
+                {
+                    // The fd closed between listing and reading. Keep looking.
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// One process's command line, spaces where the NULs were.
+    ///
+    /// For showing a human which process to stop, so it is decoded here -- unlike
+    /// <see cref="PidsRunning"/>, which matches on the raw bytes precisely to
+    /// avoid decoding one.
+    /// </summary>
+    public static string? CommandOf(int pid)
+    {
+        byte[] raw;
+        try
+        {
+            raw = File.ReadAllBytes($"/proc/{pid}/cmdline");
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+
+        string text = System.Text.Encoding.UTF8.GetString(raw).TrimEnd('\0').Replace('\0', ' ');
+        return text.Length == 0 ? null : text;
     }
 
     /// <summary>

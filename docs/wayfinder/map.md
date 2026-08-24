@@ -855,3 +855,12 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   was the cause and both no-skill runs, writing their own extractor, did no
   worse -- or whether what is load-bearing in them belongs in the tool schemas
   that 032's fog entry says an agent reads anyway.
+
+- **A socket probe cannot tell a predecessor from an incumbent.** `Ensure` now
+  fetches `/` and checks the page is ours before believing the port is served,
+  and refuses a port held by anything else with the pid and command line of the
+  process to stop -- it does not kill what it did not start. Because the check
+  *is* a fetch, every viewer URL this tool reports has been served before it was
+  reported; whether the page renders stays the human's judgement. See [A stale
+  predecessor on the viewer port makes showBrowser hand out a
+  404](tickets/058-stale-webserve-squats-the-port.md).

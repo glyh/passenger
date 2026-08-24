@@ -22,6 +22,14 @@
 // Opening it in app mode is what makes it read as a window rather than a browser
 // tab: no tab strip, no address bar, and the page itself is the screen, edge to
 // edge.
+//
+// Every URL reported from here has been fetched before it was reported. This is
+// a handoff to a *human*, and the cost of handing over a broken page is that the
+// person stares at an error and reports the tool as broken -- which is exactly
+// what ticket 058 was. `Webserve.Ensure` does the fetching, so the check is one
+// request against a local server on a call that already blocks. Note the limit:
+// whether the page *renders* stays the human's judgement; whether it was
+// *served* is a fact this tool can have, and now does.
 
 using System.Diagnostics;
 

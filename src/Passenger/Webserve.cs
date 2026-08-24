@@ -193,7 +193,76 @@ public static class Webserve
         Sessions.IsListening(Config.Settings.VncHost, port);
 
     /// <summary>
-    /// Start the server unless it is already up. False if it cannot be.
+    /// What the viewer page says about itself.
+    ///
+    /// Identity has to survive a rebuild -- an older build of this tool left
+    /// serving the port is still ours -- so it is this one stable line rather
+    /// than the whole page compared byte for byte.
+    /// </summary>
+    public const string PageMark = "<title>passenger</title>";
+
+    /// <summary>Did this body come from us? Pure, so it is testable.</summary>
+    public static bool IsViewerPage(string? body) =>
+        body is not null && body.Contains(PageMark, StringComparison.Ordinal);
+
+    // One client, one short timeout: everything it talks to is on loopback and
+    // already up, so a request that takes seconds has already told us what we
+    // needed to know.
+    private static readonly HttpClient Probe =
+        new() { Timeout = TimeSpan.FromSeconds(2) };
+
+    /// <summary>
+    /// The body served at a path, or null if nothing usable came back.
+    ///
+    /// Synchronous because every caller is: `Ensure` is the shell step between
+    /// deciding to present and presenting, and nothing is waiting on the thread.
+    /// </summary>
+    public static string? Fetch(int port, string path = "/")
+    {
+        try
+        {
+            using HttpResponseMessage response = Probe
+                .GetAsync($"http://{Config.Settings.VncHost}:{port}{path}")
+                .GetAwaiter().GetResult();
+            return response.IsSuccessStatusCode
+                ? response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Is *our* viewer answering on that port -- not merely something?
+    ///
+    /// The question <see cref="Listening"/> was standing in for, and could not
+    /// answer. One request against a server that is by definition local and up.
+    /// </summary>
+    public static bool Serving(int port) => IsViewerPage(Fetch(port));
+
+    /// <summary>
+    /// Whoever is on the port, and why this tool is not taking it from them.
+    ///
+    /// Naming the pid and the command line is the whole value here: the human
+    /// reading this is the one who can decide whether that process is disposable.
+    /// Killing it would be this tool's decision to make on their behalf, out of
+    /// an agent-facing call, which is the kind of destructive act ticket 057
+    /// deliberately kept out of agent hands.
+    /// </summary>
+    private static string Squatter(int port)
+    {
+        string who = Sessions.ListenerOn(port) is { } holder
+            ? $"pid {holder.Pid} ({holder.Command})"
+            : "an unidentifiable process";
+        return $"{who} answers on {port} but serves no viewer page; stop it and "
+               + "call again. This tool will not kill a process it did not start";
+    }
+
+    /// <summary>
+    /// Start the server unless *our* server is already up. False if it cannot be,
+    /// and a PORT_IN_USE failure if the port belongs to somebody else.
     ///
     /// Started as a detached child rather than a thread because the CLI process
     /// exits as soon as `show` has returned, and the window it opened needs the
@@ -201,9 +270,19 @@ public static class Webserve
     /// </summary>
     public static bool Ensure(int port)
     {
-        if (Listening(port))
+        if (Serving(port))
         {
             return true;
+        }
+
+        // Something is there and it is not us. Ticket 058: this used to be a
+        // socket probe alone, so a predecessor of this tool left holding the
+        // port made `Ensure` return true without starting anything, and the URL
+        // `showBrowser` handed a human was a 404 from a stranger.
+        if (Listening(port))
+        {
+            throw new WindowException(ErrorCode.PortInUse,
+                                      "the viewer port is taken", Squatter(port));
         }
 
         if (NovncRoot() is null)
@@ -244,7 +323,10 @@ public static class Webserve
 
         for (int i = 0; i < 20; i++)
         {
-            if (Listening(port))
+            // Serving, not listening: the bind happens before the first route
+            // exists, and a caller told "yes" in that window is told a URL it
+            // could not have fetched.
+            if (Serving(port))
             {
                 return true;
             }
