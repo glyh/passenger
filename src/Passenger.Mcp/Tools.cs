@@ -21,7 +21,7 @@
 // event, so a second copy here buys nothing and drifts.
 //
 // That division got sharper with ticket 046: extraction left this codebase
-// entirely, so the *recipes* for reading a page -- including walker.js itself
+// entirely, so the *recipes* for reading a page -- including markdown.js itself
 // -- are in the skill directory rather than here. There is one door now, and it
 // hands over `Page`.
 //
@@ -104,7 +104,7 @@ public static class Tools
             locator. Playwright .NET is async, so every call is awaited, and every
             member is PascalCase. To just read a page:
             await Page.GotoAsync(url); return await Page.InnerTextAsync("body");
-            For markdown with links and headings, paste the walker recipe from the
+            For markdown with links and headings, run markdown.js from the
             `using-passenger` skill.
             """)]
         string source,

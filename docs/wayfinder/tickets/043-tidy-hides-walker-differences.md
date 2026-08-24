@@ -128,3 +128,8 @@ caller runs, so a defect in it costs an agent a rework call rather than
 corrupting a reply -- but by the same token nothing in this repo's build can
 fail because of it, and 051 and 052 were both found by an eval rather than by
 the suite.
+
+*Renamed 2026-08-24.* `skills/using-passenger/walker.js` is now
+`skills/using-passenger/markdown.js`. Every `walker.js` above means that
+file; the line numbers are unchanged apart from its header comment, which
+was rewritten in the same commit. The traversal is still called a walk.

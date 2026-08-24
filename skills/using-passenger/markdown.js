@@ -1,20 +1,26 @@
-// The DOM walker: visible text off the live document, as markdown.
+// A page as markdown: the visible text off the live document, with headings,
+// list markers, fenced code and links resolved against it.
 //
-// This file is one JavaScript expression -- an arrow function -- because
-// `page.evaluate` calls it with the argument array `extract.py` passes.
-// Nothing else may be at the top level. `_STRIP` and `_ROOTS` stay on the
-// Python side and arrive as parameters; they are the two things a reader
-// looks for first, and a test that wants to pin the root heuristic varies
-// them without touching this file.
+// Evaluate it in the page and it hands back a string. It takes an optional
+// `[stripSelector, rootSelectors]` if you want to override where it starts or
+// what it discards; both default below, and both were parameters passed from
+// the server when the server was the one running this.
 //
-// It stays JavaScript deliberately. Ticket 030 weighed rewriting it in Python
-// over a `DOMSnapshot` and refused: this is the one part of `extract.py` that
-// a C# port inherits unchanged, and the walker's semantics *are* `innerText`,
-// `checkVisibility()` and layout -- which is also why every test of it runs in
-// a real browser rather than jsdom.
+// This file is one JavaScript expression -- an arrow function -- because that
+// is what `EvaluateAsync` takes. Nothing else may be at the top level.
 //
-// There is no seam here for tests to reach into. `tests/test_walker.py` enters
-// through `dom_text`, which is the only call site that exists in production.
+// It stays JavaScript deliberately. Ticket 030 weighed rewriting it against a
+// `DOMSnapshot` and refused: its semantics *are* `innerText`,
+// `checkVisibility()` and layout, so it cannot be computed off a snapshot, and
+// running in the page is what makes it a recipe either door can hand you
+// rather than code one of them owns.
+//
+// It is not magic, and its failures are quiet. It keeps everything under the
+// root it picks and it can pick the wrong root; it strips a fixed list of
+// furniture, and something carrying content can be on that list. Nothing here
+// will tell you either happened -- the character count looks right both times.
+//
+// Was `walker.js`, and the code still calls the traversal a walk.
 (args) => {
   const DEFAULT_STRIP =
     'script, style, noscript, template, svg, nav, header, footer, aside, ' +

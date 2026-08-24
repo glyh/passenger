@@ -20,7 +20,7 @@ challenge the agent shouldn't (and shouldn't try to) solve.
 and ticket 046 retired both: extraction is a judgement about what a page means,
 and this tool's whole design says judgement belongs to the caller. `script` is
 the only door onto a page — it navigates, drives and hands back what you
-return. The recipes for reading one, including the DOM walker that used to be
+return. The recipes for reading one, including the DOM walk that used to be
 `dom` mode, live in `skills/using-passenger/`.
 
 Every tab command takes `--lane` and defaults to the reserved `cli` lane,
@@ -109,7 +109,7 @@ lives in the shell.
             src/Passenger.Mcp/Program.cs   the MCP frontend over the same service layer
 
     skill   skills/using-passenger/SKILL.md      how an agent operates this
-            skills/using-passenger/walker.js     the DOM-to-markdown recipe
+            skills/using-passenger/markdown.js     the DOM-to-markdown recipe
 
 Detection is pure because the shell measures first: `Probe.Run` tests every
 candidate selector against the live page and records the hits in a `PageProbe`,
@@ -131,7 +131,7 @@ has the reasoning and the measurements.
 here.** Per-site scrapers rot because they fuse the two. This side owns
 transport: a warm real browser, a tab, a handoff when a human is needed, and a
 measurement of what it handed over. Extraction is the caller's, and lives in
-`skills/using-passenger/walker.js` as a recipe rather than in this codebase as
+`skills/using-passenger/markdown.js` as a recipe rather than in this codebase as
 a mode.
 
 That was not the original design. There were two extractors -- `article`
@@ -159,7 +159,7 @@ wall if there is one. The wall check itself can be turned off with `checkWall`,
 and says `unchecked` when it is, so a page nobody looked at never reads like a
 page that came back clean.
 
-**The walker is still this repo's** in the sense that it ships here, and so does
+**The DOM walk is still this repo's** in the sense that it ships here, and so does
 `pictures.js` now -- both in `skills/using-passenger/`, both recipes the caller
 reads off disk and runs in the page. Neither is something this tool decides to
 run.

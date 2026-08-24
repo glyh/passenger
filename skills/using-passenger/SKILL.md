@@ -5,7 +5,7 @@ description: |
   its `openLane`, `script`, `showBrowser`, `listTabs` and `closeTabs` tools.
   Scripts are C# against an async Playwright. Covers opening a lane before the
   first call, the recipes for reading a page and for measuring its pictures
-  (`walker.js` and `pictures.js`, both in this directory), what the `blocked`
+  (`markdown.js` and `pictures.js`, both in this directory), what the `blocked`
   verdict does and does not catch,
   recognising a login wall or captcha the tool cannot name and handing the
   page to a human, why a read is only the first screen, why reading beats
@@ -27,7 +27,7 @@ is in the tool schemas and is not repeated here.
 
 **The server runs on your machine, in your filesystem.** A script's `File.*`
 calls land on the same disk your other tools see, in both directions: read a
-recipe like `walker.js` from its real path instead of pasting it in (see
+recipe like `markdown.js` from its real path instead of pasting it in (see
 below), and write bytes with `File.WriteAllBytesAsync` to a path you can then
 open yourself -- a screenshot or a downloaded image does not have to cross
 back as JSON.
@@ -117,13 +117,13 @@ it is the single most common way this call fails. There is an overload without
 it, so the compiler will not always save you: it returns `JsonElement`, which
 crosses the boundary as a shape you did not intend. Say the type you want.
 
-**Markdown, with headings, lists, fenced code and resolved links.** `walker.js`
+**Markdown, with headings, lists, fenced code and resolved links.** `markdown.js`
 sits in this skill's directory, and **the server runs on your machine, in your
 filesystem** -- so read it from disk rather than pasting its contents into the
 script:
 
-    var walker = await File.ReadAllTextAsync("/path/to/skills/using-passenger/walker.js");
-    return await Page.EvaluateAsync<string>(walker);
+    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
+    return await Page.EvaluateAsync<string>(js);
 
 **For a whole page, write it out instead of returning it.** A tool reply is
 JSON, so a returned string arrives quoted and escaped -- every newline as `\n`,
@@ -131,8 +131,8 @@ on one line, and the whole page in your context whether you wanted all of it or
 not. The filesystem is shared, so hand it to yourself as a file and read what
 you need:
 
-    var walker = await File.ReadAllTextAsync("/path/to/skills/using-passenger/walker.js");
-    var markdown = await Page.EvaluateAsync<string>(walker);
+    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/markdown.js");
+    var markdown = await Page.EvaluateAsync<string>(js);
     var path = "/tmp/pep8.md";              // yours to name; nothing here picks one
     await File.WriteAllTextAsync(path, markdown);
     return new Dictionary<string, object> { ["path"] = path, ["chars"] = markdown.Length };
@@ -141,9 +141,9 @@ Now the markdown is text on disk, and `chars` is there to read against what you
 expected. Return the string directly for a short read; write it out for a long
 one.
 
-Use the actual path -- the one this file was read from, since `walker.js` is
+Use the actual path -- the one this file was read from, since `markdown.js` is
 its sibling. Reading beats pasting for a reason sharper than convenience: one
-of the walker's regexes carries a pair of backslash-`u` escapes for two
+of its regexes carries a pair of backslash-`u` escapes for two
 Unicode line separators, and a tool call is JSON, which decodes those to the
 literal characters they name -- both are JavaScript line terminators, so a
 *pasted* copy ends a regex literal early and fails with `SyntaxError: Invalid
@@ -170,8 +170,8 @@ It is not magic and it is not always right. Two known shapes:
 
 **Do not restructure a script to avoid the compile.** Measured: after the
 server's first call, compiling a script costs a flat ~40ms whatever it says --
-an 11 KB source carrying the whole walker compiles in the same time as a
-one-line one. It is noise beside a single navigation, and batching unrelated
+an 11 KB source carrying the whole of `markdown.js` compiles in the same time
+as a one-line one. It is noise beside a single navigation, and batching unrelated
 work into one script to amortise it buys nothing while costing you the ability
 to continue from where a failure left off.
 
@@ -253,7 +253,7 @@ such a page reads as *short* rather than as *truncated*. **Nothing in the reply
 will tell you this happened.** The reply carries what you returned; if you did
 not measure the pictures, nobody did.
 
-`pictures.js` sits in this skill's directory beside `walker.js`, and reads the
+`pictures.js` sits in this skill's directory beside `markdown.js`, and reads the
 same way -- off disk, since the server runs on your machine:
 
     var pictures = await File.ReadAllTextAsync("/path/to/skills/using-passenger/pictures.js");

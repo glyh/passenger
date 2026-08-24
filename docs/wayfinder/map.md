@@ -68,6 +68,12 @@ lane still costs every lane, and freeing it can stop another lane's navigation
 would throw away the warm session, so it is measured and named rather than
 prevented.
 
+**`walker.js` is `markdown.js`.** Renamed 2026-08-24, in
+`skills/using-passenger/`. Everything closed below says `walker.js` and means
+this file; history was left as it was written. The traversal is still a walk,
+and the code still calls it one -- what changed is the name a caller reads,
+which now says what the recipe produces rather than how.
+
 **The layer stays thin.** The agent does the work; this side hands over the
 capability and gets out of the way. Ticket 004 settled that for verbs — one
 door with `page` bound, rather than a tool per Playwright call — and the same

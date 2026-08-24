@@ -102,3 +102,8 @@ without a skill. This was the only task where anything went wrong, and what went
 wrong was in the shared recipe rather than in either skill's prose. Recorded
 alongside the routing bug in
 [050](050-csharp-door-names-the-python-skill.md).
+
+*Renamed 2026-08-24.* `skills/using-passenger/walker.js` is now
+`skills/using-passenger/markdown.js`. Every `walker.js` above means that
+file; the line numbers are unchanged apart from its header comment, which
+was rewritten in the same commit. The traversal is still called a walk.

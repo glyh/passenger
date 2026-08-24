@@ -12,8 +12,8 @@
 // Nothing will tell you a page was picture-borne. Run this when a page reads
 // shorter than it should.
 //
-// Same shape as walker.js: one arrow function, evaluated in the page. It stays
-// JavaScript for walker.js's reason -- geometry *is* layout, so it cannot be
+// Same shape as markdown.js: one arrow function, evaluated in the page. It stays
+// JavaScript for markdown.js's reason -- geometry *is* layout, so it cannot be
 // computed off a snapshot.
 //
 // Returns { largest, count, src }: the biggest visible picture as a share of
@@ -26,7 +26,7 @@
 // can still be the whole content -- an xkcd comic measures 0.06 -- which is
 // why this is a number and not a verdict.
 (args) => {
-  // The threshold lives here, the way walker.js holds DEFAULT_STRIP and
+  // The threshold lives here, the way markdown.js holds DEFAULT_STRIP and
   // DEFAULT_ROOTS: it used to be a constant on the C# side passed in on every
   // call, which is where a reader looked for it when the C# side was the only
   // caller. Now you are.
@@ -45,7 +45,7 @@
   // IMG on a xiaohongshu 图文 note, VIDEO on a xiaohongshu video note, svg on
   // an ourworldindata grapher, CANVAS on stripe's blog, IFRAME on APOD --
   // which without IFRAME read 0.00, the Astronomy Picture of the Day with no
-  // picture. IFRAME also belongs on the walker's own terms: it is in its
+  // picture. IFRAME also belongs on markdown.js's own terms: it is in its
   // OPAQUE set, so an iframe's content is not in the markdown either, which
   // makes it exactly a payload that is not text.
   const PICTURE = "img, video, svg, canvas, iframe";

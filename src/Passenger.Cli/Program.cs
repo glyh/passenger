@@ -71,7 +71,7 @@ Command script = new("script",
     + "driving, and return what you want. This tool does not interpret pages "
     + "and does not measure them -- the recipes for reading one and for "
     + "measuring its pictures both live in the `using-passenger` skill, next to "
-    + "walker.js and pictures.js.")
+    + "markdown.js and pictures.js.")
 {
     scriptFile, scriptLane, scriptTab, scriptTimeout, scriptJson, scriptNoCheckWall,
 };

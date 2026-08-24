@@ -156,3 +156,8 @@ The test-shaped version of it has lost its home. There is no walker suite in
 `tests/Passenger.Tests/` at all, so "a walker that survives a JSON round trip"
 cannot be asserted until [043](043-tidy-hides-walker-differences.md) decides
 whether the walker gets tests again.
+
+*Renamed 2026-08-24.* `skills/using-passenger/walker.js` is now
+`skills/using-passenger/markdown.js`. Every `walker.js` above means that
+file; the line numbers are unchanged apart from its header comment, which
+was rewritten in the same commit. The traversal is still called a walk.
