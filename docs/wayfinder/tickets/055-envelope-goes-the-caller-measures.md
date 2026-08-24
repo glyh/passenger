@@ -3,7 +3,7 @@ id: 055
 title: Delete the Measured envelope, and ship pictures.js to the skill
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
