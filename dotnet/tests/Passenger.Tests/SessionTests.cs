@@ -8,10 +8,14 @@
 // but this stops either returning.
 //
 // These run against real processes rather than fixture text. `ReadProcState`
-// reads `/proc/<pid>/stat`, and a `true` that nobody reaped is a zombie in about
-// 200ms -- so the thing under test is the actual read and the actual parse, not a
-// seam holding a string somebody typed. `true` and `sleep` are not cage, wayvnc
-// and Chrome: nothing here starts the real stack.
+// reads `/proc/<pid>/stat`, so the thing under test is the actual read and the
+// actual parse, not a seam holding a string somebody typed. `sh` and `sleep` are
+// not cage, wayvnc and Chrome: nothing here starts the real stack.
+//
+// **Nothing here runs python.** The Python suite reached for it freely, and the
+// first draft of this file inherited the habit -- which would have left a port
+// whose whole point is dropping that dependency unable to run its own tests
+// without it. What the children need is a POSIX shell, `sleep`, and `trap`.
 //
 // State is redirected in Sandbox, which is load-bearing -- see the note there
 // about what a teardown would otherwise do to a live session.
@@ -62,38 +66,45 @@ public class SessionTests : IDisposable
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
 
     /// <summary>
-    /// A child that prints `ready` once it is, returned once it has.
+    /// A shell child that prints `ready` once it is, returned once it has.
     ///
     /// Every child here has to reach some state before the assertion means
-    /// anything -- its argv has to be its own, its socket has to be bound -- and
-    /// the tests used to wait for that by polling for the effect, 200 times at
-    /// 10ms. Two seconds is a guess at a fork, an exec and an interpreter start:
-    /// it held on one machine and lost in the nix sandbox, where the check went
-    /// red on a test that nothing in the commit reached and green on an immediate
-    /// re-run. A gate that is re-run until it passes is not one.
+    /// anything, and the tests this is modelled on used to wait for that by
+    /// polling, 200 times at 10ms. Two seconds is a guess at a fork, an exec and
+    /// an interpreter start: it held on one machine and lost in the nix sandbox,
+    /// where the check went red on a test that nothing in the commit reached and
+    /// green on an immediate re-run. A gate that is re-run until it passes is not
+    /// one.
     ///
     /// A child that says when it is ready removes the guess instead of enlarging
     /// it. The line cannot be printed before the state exists, because the child
     /// prints it afterwards, so there is no window left to size. If the child dies
-    /// first the pipe closes and the read returns empty, so a broken child fails
+    /// first the pipe closes and the read returns null, so a broken child fails
     /// the test rather than hanging it.
+    ///
+    /// `name` becomes the shell's `$0`, which is how a test puts a chosen string
+    /// into a real process's argv without needing a program that accepts one.
     /// </summary>
-    private Process Python(string script, params string[] args)
+    private Process Sh(string script, string name = "sh", int[]? pidLine = null)
     {
-        var start = new ProcessStartInfo("python3")
+        var start = new ProcessStartInfo("/bin/sh")
         {
             RedirectStandardOutput = true,
             UseShellExecute = false,
         };
         start.ArgumentList.Add("-c");
         start.ArgumentList.Add(script);
-        foreach (string arg in args)
-        {
-            start.ArgumentList.Add(arg);
-        }
+        start.ArgumentList.Add(name);
 
         Process child = Process.Start(start)!;
         spawned.Add(child);
+        if (pidLine is not null)
+        {
+            // A script that announces a pid prints it before `ready`, so both
+            // reads are ordered by the child rather than by a wait on this side.
+            pidLine[0] = int.Parse(child.StandardOutput.ReadLine()!);
+        }
+
         string? line = child.StandardOutput.ReadLine();
         Assert.True(line == "ready", $"child never announced itself: {line}");
         return child;
@@ -102,41 +113,42 @@ public class SessionTests : IDisposable
     /// <summary>
     /// A pid that is exited-but-unreaped, which is what Chrome leaves in cage.
     ///
-    /// Made under a parent this process does not own, and that is not incidental.
-    /// .NET's `Process` installs a SIGCHLD handler and reaps every child it
-    /// started the moment it exits, so a zombie created with `Process.Start`
-    /// never exists to be measured -- the /proc entry is gone before the
-    /// assertion reads it. Python's subprocess reaps only when asked, which is
-    /// why the original test could just start `true` and look.
+    /// Three approaches, and only the third survives contact.
     ///
-    /// So the zombie is a child of a small python parent that forks, lets the
-    /// child exit, and then sleeps without waiting on it. The pid is printed
-    /// before the `ready` line, so there is nothing to poll for.
+    /// `Process.Start` cannot make one: .NET installs a SIGCHLD handler and reaps
+    /// every child it started the moment it exits, so the /proc entry is gone
+    /// before the assertion reads it.
+    ///
+    /// Forking in-process cannot either. A raw `fork` the runtime does not know
+    /// about does leave a zombie -- measured, in a single-threaded probe -- but
+    /// forking a runtime with xUnit's worker threads in it crashes the test host,
+    /// which is how it presented: 48 of 84 tests ran and the run reported success.
+    ///
+    /// So the parent is a shell that stops itself. `sh` normally reaps its own
+    /// background children, which is why `true &amp;` leaves nothing behind -- but a
+    /// shell under SIGSTOP cannot run the reaping, so the `sleep` it backgrounded
+    /// becomes a zombie and stays one. Nothing here is beyond a POSIX shell.
+    ///
+    /// The pid is printed before the `ready` line, so there is nothing to poll for
+    /// except the second between the shell stopping and the child exiting.
     /// </summary>
     private int Zombie()
     {
-        var start = new ProcessStartInfo("python3")
+        int[] announced = new int[1];
+        _ = Sh("""
+            sleep 1 &
+            echo $!
+            echo ready
+            kill -s STOP $$
+            """, pidLine: announced);
+        int zombie = announced[0];
+        for (int i = 0; i < 300; i++)
         {
-            RedirectStandardOutput = true,
-            UseShellExecute = false,
-        };
-        start.ArgumentList.Add("-c");
-        start.ArgumentList.Add("""
-            import os, sys, time
-            pid = os.fork()
-            if pid == 0:
-                os._exit(0)
-            print(pid, flush=True)
-            print('ready', flush=True)
-            time.sleep(30)
-            """);
-        Process parent = Process.Start(start)!;
-        spawned.Add(parent);
-        int zombie = int.Parse(parent.StandardOutput.ReadLine()!);
-        Assert.Equal("ready", parent.StandardOutput.ReadLine());
+            if (!File.Exists($"/proc/{zombie}/stat"))
+            {
+                break;
+            }
 
-        for (int i = 0; i < 200; i++)
-        {
             if (State(zombie) == "Z")
             {
                 return zombie;
@@ -222,6 +234,9 @@ public class SessionTests : IDisposable
     {
         // Scanned rather than fixed so a second session -- or anyone else's
         // wayvnc -- cannot silently take the port this one is about to advertise.
+        //
+        // The listener is this process, which is why no child is needed: the
+        // question is only what the scan reads, not who is answering.
         using var held = new Socket(AddressFamily.InterNetwork, SocketType.Stream,
                                     ProtocolType.Tcp);
         held.Bind(new IPEndPoint(IPAddress.Parse(Config.Settings.VncHost),
@@ -230,41 +245,50 @@ public class SessionTests : IDisposable
         Assert.Equal(Config.Settings.VncPort + 1, Sessions.FreePort());
     }
 
-    [Fact]
-    public void TeardownGivesThePortBackBeforeItReturns()
-    {
-        // The port-drift regression, asserted on the port rather than on the pids.
-        //
-        // SIGTERM is asynchronous. A teardown that fired and forgot left the old
-        // listener holding the port, so the session started immediately afterwards
-        // quietly claimed a different one and the port climbed on every restart.
-        //
-        // The child dies *slowly* on purpose: against one that exits instantly
-        // this test would pass even if StopAll never waited at all, and would be
-        // green for the wrong reason.
-        Process slow = Python(SlowScript, Config.Settings.VncHost,
-                              Config.Settings.VncPort.ToString());
-        Assert.NotEqual(Config.Settings.VncPort, Sessions.FreePort());
-
-        Sessions.StopAll(Record(cagePid: slow.Id, vncPid: slow.Id));
-        Assert.Equal(Config.Settings.VncPort, Sessions.FreePort());
-    }
-
+    // A child that will not die at once: the trap runs only after the foreground
+    // `sleep` returns, and then sleeps again before exiting. So SIGTERM takes
+    // between one and two seconds to take effect, which is the whole point --
+    // against a child that exits instantly these tests would pass even if StopAll
+    // never waited at all, and would be green for the wrong reason.
     private const string SlowScript = """
-        import socket, signal, sys, time
-        s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()
-        signal.signal(signal.SIGTERM, lambda *_: (time.sleep(0.5), sys.exit(0)))
-        print("ready", flush=True)
-        time.sleep(30)
+        trap 'sleep 1; exit 0' TERM
+        echo ready
+        while :; do sleep 1; done
         """;
 
+    // And one that never leaves on its own. `trap '' TERM` ignores the signal
+    // outright, which is what a wayvnc wedged in a syscall looks like from here.
     private const string StubbornScript = """
-        import socket, signal, sys, time
-        s = socket.socket(); s.bind((sys.argv[1], int(sys.argv[2]))); s.listen()
-        signal.signal(signal.SIGTERM, signal.SIG_IGN)
-        print("ready", flush=True)
-        time.sleep(60)
+        trap '' TERM
+        echo ready
+        while :; do sleep 1; done
         """;
+
+    [Fact]
+    public void TeardownWaitsForTheProcessToActuallyGo()
+    {
+        // The port-drift regression. SIGTERM is asynchronous: a teardown that
+        // fired and forgot left the old listener holding the port, so the session
+        // started immediately afterwards quietly claimed a different one and the
+        // port climbed on every restart.
+        //
+        // Asserted on the pid and the elapsed time rather than on the port, which
+        // is where the Python version put it. Holding a TCP port needs a program
+        // that can bind one, and a POSIX shell cannot -- the original reached for
+        // python to get it, which is the dependency this port exists to drop. The
+        // port-reading half is covered on its own by
+        // FreePortStepsOverAPortSomeoneElseHolds; what is left to prove here is
+        // that StopAll does not return until the process is gone, which is the
+        // mechanism the port was only ever the symptom of.
+        Process slow = Sh(SlowScript);
+        var clock = Stopwatch.StartNew();
+        Sessions.StopAll(Record(cagePid: slow.Id, vncPid: slow.Id));
+        clock.Stop();
+
+        Assert.False(Sessions.ReadProcState(slow.Id));
+        Assert.True(clock.ElapsedMilliseconds >= 900,
+            $"returned in {clock.ElapsedMilliseconds}ms, so it did not wait");
+    }
 
     [Fact]
     public void TeardownKillsWhatWillNotTerminate()
@@ -275,13 +299,11 @@ public class SessionTests : IDisposable
         // record gone the surviving pid is unowned, so ReapStale cannot clean up
         // after it either. It needs only a wayvnc that takes longer than two
         // seconds to die.
-        Process child = Python(StubbornScript, Config.Settings.VncHost,
-                               Config.Settings.VncPort.ToString());
-        Assert.NotEqual(Config.Settings.VncPort, Sessions.FreePort());
+        Process child = Sh(StubbornScript);
         Write(Record(cagePid: child.Id, vncPid: child.Id));
 
         Assert.Null(Sessions.StopAll(Record(cagePid: child.Id, vncPid: child.Id)));
-        Assert.Equal(Config.Settings.VncPort, Sessions.FreePort());
+        Assert.False(Sessions.ReadProcState(child.Id));
         Assert.Null(Sessions.Current());
     }
 
@@ -357,15 +379,14 @@ public class SessionTests : IDisposable
         // and therefore in the argv of any shell that was handed this file's text
         // -- which is how the first draft of this test failed against the process
         // that wrote it.
+        //
+        // The tag rides in as the shell's `$0`, so it is in a real process's
+        // cmdline without needing a program that takes an arbitrary argument.
         string tag = "passenger-test-" + Guid.NewGuid().ToString("N");
-        // Announced rather than polled for: between fork and exec the child's
-        // cmdline is not yet its own, so reading /proc straight away is a race.
-        // The announcement closes it, because the kernel sets the cmdline at exec
-        // and the child prints only after. Walking all of /proc is also the
-        // slowest possible way to ask, so a poll would get slower under precisely
-        // the load that made it necessary.
-        Process child = Python(
-            $"import time; print('ready', flush=True); time.sleep(30)  # {tag}");
+        Process child = Sh("""
+            echo ready
+            while :; do sleep 1; done
+            """, name: tag);
         Assert.Contains(child.Id, Sessions.PidsRunning(tag));
         Assert.Empty(Sessions.PidsRunning("absent-" + Guid.NewGuid().ToString("N")));
     }
