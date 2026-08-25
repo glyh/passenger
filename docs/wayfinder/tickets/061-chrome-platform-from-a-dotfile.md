@@ -3,7 +3,7 @@ id: 061
 title: The nested browser's display platform comes from the host's dotfile
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
