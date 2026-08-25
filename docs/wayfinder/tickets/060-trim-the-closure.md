@@ -2,7 +2,7 @@
 id: 060
 title: The bundle carries a Python nothing runs
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -103,3 +103,59 @@ fonts, its GPU, its IP -- and a closure that also inherits a Python for a mouse
 utility is the same failure in the other direction: things arriving because
 nothing stopped them, rather than because someone asked. The bundle is the
 first artifact where that cost is visible to whoever downloads it.
+
+## Answer
+
+All three, and the interesting part is that only one of them changes what gets
+built. **896 MiB across 268 paths -> 658 MiB across 216**, and the `toArx`
+bundle the ticket opens with, **302 MB -> 222 MB**.
+
+**The Python is a propagation, not a dependency.** libinput splits into
+`out`/`bin`/`dev`, and nixpkgs' multiple-outputs hook has `dev` propagate `bin`
+so that a package building against a library also gets its tools on PATH. So
+holding libinput's *headers* -- which wlroots does, and propagates in turn --
+makes eleven Python analysis scripts a runtime reference, and their shebang
+drags CPython, setuptools, pyyaml, pyudev and libevdev in behind them.
+
+The knob for it is `propagatedBuildOutputs`, which names the outputs `dev`
+passes on; setting it to `[ "out" ]` on an overridden libinput ends the chain.
+The tools are still built and still work for anyone who installs libinput --
+what stops is a header consumer inheriting them, and nothing in this closure
+runs a libinput binary at build time. Worth recording that the obvious version
+of this does not work and looks like it does: editing
+`$dev/nix-support/propagated-build-inputs` from `postFixup` succeeds, and is
+then overwritten, because `_multioutPropagateDev` runs *after* `postFixup`
+inside the same `runHook`. The build passes, the closure does not move, and
+nothing says why.
+
+**Xwayland is compiled out**, now that [061](061-chrome-platform-from-a-dotfile.md)
+has closed: `enableXWayland = false` through `sway` to `sway-unwrapped` to
+wlroots. gtk+3 and libdecor leave with it. This is the one trim that changes the
+artifact rather than the reference graph, and it is only safe because nothing
+falls back to X11 any more.
+
+**Node is `nodejs-slim`**, losing npm and corepack. What runs is Playwright's
+driver over a pipe; it installs nothing.
+
+Verified against a real handoff on the built closure, not just a green
+`nix build` -- server on its own state dir and ports (`PASSENGER_STATE`,
+`PASSENGER_PORT`, `PASSENGER_VNC_PORT`, `PASSENGER_NOVNC_PORT`, so the
+developer's own server was never disturbed):
+
+- sway came up headless, Chrome ran inside it, `https://example.com` loaded and
+  read back through `script`;
+- wayvnc bound its port and answered a websocket upgrade with `RFB 003.008`;
+- the noVNC viewer page served, 7001 bytes of it;
+- the two checks this ticket asked for: `outerHeight` 740 against `innerHeight`
+  633 is 107px of tab strip and toolbar, so ticket 006's un-fullscreening
+  survives; and nothing fingerprint-visible moved -- `screen: 1280x720`,
+  `devicePixelRatio: 1`, WebGL still
+  `ANGLE (Intel, Mesa Intel(R) Graphics (LNL), OpenGL ES 3.2)`. The
+  `WaylandWindowDecorations` half of the question answered itself under 061:
+  Chrome draws its decorations without being asked.
+
+The bundle runs (`--help` from the 222 MB executable, exit 0).
+
+What is left at the top of the closure is load-bearing or nearly so:
+nodejs-slim 85.7 MiB, dotnet-runtime 78.3, icu4c 39.5, the build itself 36.1,
+ffmpeg-lib 33.8 (wayvnc's, for encoding the framebuffer), glibc 33.4.

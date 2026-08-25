@@ -86,6 +86,14 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [The closure carried a Python nothing runs](tickets/060-trim-the-closure.md)
+  — 896 MiB down to 658, and the `toArx` bundle 302 MB down to 222. libinput's
+  `dev` output no longer propagates its `bin` output (`propagatedBuildOutputs`),
+  which is what made CPython a runtime reference of anything holding wlroots'
+  headers; Xwayland is compiled out of wlroots and sway now that 061 leaves
+  nothing to fall back to X11, taking gtk+3 with it; and Patchright's node is
+  `nodejs-slim`. Checked against a real handoff, not just a green build.
+
 - [The nested browser's flags are this repo's, not the host's](tickets/061-chrome-platform-from-a-dotfile.md)
   — `--ozone-platform=wayland` is passed by the nested backend rather than
   arriving from whoever's `~/.config/chrome-flags.conf` happens to be on the

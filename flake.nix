@@ -31,16 +31,73 @@
           cp -r ${pkgs.novnc}/share/webapps/novnc $out
         '';
 
+        # The nested compositor, trimmed twice before it is used (ticket 060):
+        # once in the reference graph, where libinput's tools follow its headers
+        # around, and once in what is built, where Xwayland is compiled out.
+        #
+        # libinput's command-line tools, kept out of everything that merely
+        # compiles against it.
+        #
+        # libinput splits into out/bin/dev, and nixpkgs' multiple-outputs setup
+        # has `dev` propagate `bin`, so a package that builds against the
+        # library also gets the tools on PATH. Eleven of those tools are Python
+        # -- mouse-button and touchpad analysers -- and their shebang makes
+        # CPython, setuptools, pyyaml, pyudev and libevdev a *runtime*
+        # dependency of anything holding the headers. Here that is wlroots,
+        # which sway links, which this server starts: 135 MiB of interpreter
+        # reachable from an MCP binary, for tools nothing invokes and nothing
+        # could use anyway -- Launch.cs starts the compositor with
+        # WLR_LIBINPUT_NO_DEVICES=1, so there are no input devices to analyse.
+        #
+        # Dropping the propagation rather than deleting the tools: they are
+        # still built, still installed, still work for anyone who asks for
+        # libinput by name. What stops is a header consumer inheriting them.
+        # Nothing in this closure runs a libinput binary at build time.
+        #
+        # `propagatedBuildOutputs` is the supported knob for it -- naming the
+        # outputs `dev` passes on, where the default is bin+include+lib. Editing
+        # the propagated-build-inputs file from postFixup does not work and
+        # looks like it does: the hook that writes it runs *after* postFixup, so
+        # the sed lands and is then overwritten.
+        trimmedLibinput = pkgs.libinput.overrideAttrs (_: {
+          propagatedBuildOutputs = [ "out" ];
+        });
+
+        # No Xwayland, and so no gtk+3 behind it.
+        #
+        # wlroots takes Xwayland as a build input when enableXWayland is on,
+        # Xwayland takes libdecor to draw client-side decorations, and libdecor
+        # takes gtk+3 -- a toolkit nothing in this repo links, arriving because
+        # nothing stopped it. The X path was load-bearing for exactly one
+        # reason: a Chrome that fell back to X11 inside the session needed
+        # something to answer it. Since ticket 061 the browser is told
+        # `--ozone-platform=wayland` outright, so there is no fallback left to
+        # catch. A window opened by a human on the *host* is unaffected: that is
+        # their own desktop's compositor, not this one.
+        trimmedWlroots = pkgs.wlroots_0_20.override { libinput = trimmedLibinput; };
+
+        # sway wraps sway-unwrapped, which overrides wlroots itself to pass
+        # enableXWayland down -- so the trimmed wlroots has to be handed in as
+        # the package to override, and `enableXWayland = false` goes to the
+        # wrapper, which forwards it to both.
+        trimmedSway = pkgs.sway.override {
+          enableXWayland = false;
+          sway-unwrapped = pkgs.sway-unwrapped.override {
+            libinput = trimmedLibinput;
+            wlroots_0_20 = trimmedWlroots;
+          };
+        };
+
         # The nested compositor and its VNC server. These are the packages you
         # would otherwise install with a system package manager.
         #
-        # sway rather than cage since ticket 063, and the swap costs 33 MiB on a
-        # 896 MiB closure -- cage was never the light one, since wlroots, Xwayland
-        # and mesa dominate either way. What the 33 MiB buys is a data-control
-        # protocol (so wayvnc's clipboard has something to talk to), text-input
-        # and input-method (so an IME can exist in the session at all), several
-        # headless outputs on request, and swaymsg to ask for any of it. `sway`
-        # brings swaymsg with it, which the session script needs.
+        # sway rather than cage since ticket 063, and the swap costs 33 MiB --
+        # cage was never the light one, since wlroots and mesa dominate either
+        # way. What the 33 MiB buys is a data-control protocol (so wayvnc's
+        # clipboard has something to talk to), text-input and input-method (so
+        # an IME can exist in the session at all), several headless outputs on
+        # request, and swaymsg to ask for any of it. `sway` brings swaymsg with
+        # it, which the session script needs.
         #
         # dbus is here for `dbus-send`: the session asks the human's own fcitx5
         # to serve its display too, over the D-Bus interface fcitx5 already
@@ -57,7 +114,8 @@
         # wlr-randr and wayland-utils remain for the one thing a viewer cannot
         # ask for: the output scale, which decides the density the nested
         # Chrome renders at.
-        runtimeDeps = with pkgs; [ sway wayvnc wlr-randr wayland-utils dbus ];
+        runtimeDeps = [ trimmedSway ]
+          ++ (with pkgs; [ wayvnc wlr-randr wayland-utils dbus ]);
 
         # Deliberately NOT pinned here: Chrome is taken from the host.
         #
@@ -170,10 +228,15 @@
           # /lib64/ld-linux-x86-64.so.2, which does not exist here.
           # Substitute nixpkgs' own node for the bundled one rather than patch
           # the ELF interpreter.
+          #
+          # nodejs-slim, which is the same interpreter without npm and corepack:
+          # what runs here is Playwright's driver, over a pipe, and it installs
+          # nothing. `pkgs.nodejs` would carry a package manager into a bundle
+          # whose whole job is to speak MCP on a machine that never builds.
           postFixup = ''
             for node in $out/lib/passenger/.playwright/node/*/node; do
               rm "$node"
-              ln -s ${pkgs.lib.getExe pkgs.nodejs} "$node"
+              ln -s ${pkgs.lib.getExe pkgs.nodejs-slim} "$node"
             done
           '';
 

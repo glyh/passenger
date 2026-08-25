@@ -215,7 +215,7 @@ protocol for it to talk to, so nothing pasted across the glass. There was no
 which on a CJK machine means the browser you are handed cannot be typed into.
 And one output forever means two humans can never be handed two screens
 (`docs/wayfinder/tickets/041-multiple-display-windows.md`). sway costs 33 MiB
-more in a 896 MiB closure, answers on a socket, and offers all three.
+more in a 658 MiB closure, answers on a socket, and offers all three.
 
 The fullscreen is gone with cage: sway does not fullscreen what it starts, so
 the browser is windowed from the start. Chrome is still put back into a window
@@ -339,6 +339,19 @@ out -- and runs Chrome against a symlink mirror of `$XDG_CONFIG_HOME` with
 wrapper that splices that file into argv. A mirror rather than an empty
 directory: fontconfig's config lives there too, and inheriting the host's fonts
 is the argument below against containers.
+
+Three things are kept out of the closure on purpose (ticket 060), because the
+same argument that makes this tool inherit the host's fonts makes it worth
+noticing what arrives for no reason at all. libinput's `dev` output is stopped
+from propagating its `bin` output, which is eleven Python analysis tools and so
+a 135 MiB CPython, reachable from an MCP server through wlroots' headers.
+Xwayland is compiled out of wlroots and sway, taking gtk+3 with it -- it was
+only ever there to catch a Chrome that fell back to X11, and since the browser
+is told `--ozone-platform=wayland` outright there is no fallback to catch. And
+the node substituted for Patchright's is `nodejs-slim`, the same interpreter
+without npm and corepack. Together: 896 MiB down to 658, 268 store paths down to
+216, and `nix bundle --bundler github:NixOS/bundlers#toArx .` down from 302 MB
+to 222.
 
 Without nix, install the equivalents yourself: `sway wayvnc` plus a copy of
 noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
