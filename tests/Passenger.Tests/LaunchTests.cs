@@ -90,17 +90,17 @@ public class LaunchTests
     }
 
     [Fact]
-    public void TheImeGetsItsOwnBusAndItsOwnCopyOfTheConfig()
+    public void TheImeIsTheHumansOwn()
     {
         string section = Launch.ImeSection("fcitx5", available: true);
 
-        // Its own bus, because the human's desktop almost certainly has an
-        // fcitx5 holding org.fcitx.Fcitx5 already, and two on one bus fight.
-        Assert.Contains("dbus-run-session -- fcitx5", section);
-        // Its own config, copied from the host's: the dictionaries and layouts
-        // come along, and the running desktop's profile is never written to.
-        Assert.Contains("XDG_CONFIG_HOME=", section);
-        Assert.Contains("$HOME/.config/fcitx5", section);
+        // Not a second instance: the fcitx5 already running for the human's
+        // desktop is asked to serve this display as well, so the session gets
+        // the real config and the real learned dictionary rather than a copy.
+        Assert.Contains("OpenWaylandConnection", section);
+        Assert.Contains("$WAYLAND_DISPLAY", section);
+        Assert.DoesNotContain("dbus-run-session", section);
+        Assert.DoesNotContain("XDG_CONFIG_HOME", section);
     }
 
     [Fact]
@@ -113,14 +113,15 @@ public class LaunchTests
     }
 
     [Fact]
-    public void TheImeIsTakenDownWithChrome()
+    public void TheSessionKeepsALog()
     {
         (_, _, string script) = Planned();
 
-        // A daemon left behind would outlive the session that wanted it. It is
-        // also a Wayland client, so the compositor's exit would end it anyway --
-        // this is the belt to that pair of braces.
-        Assert.Contains("kill \"$ime_pid\"", script);
+        // Everything the session said about itself used to go to /dev/null,
+        // which is how a wayvnc that could not bind and a compositor that
+        // refused to exit both passed for a healthy session.
+        Assert.Contains("session.log", script);
+        Assert.Contains("swaymsg exit || echo", script);
     }
 
     [Fact]

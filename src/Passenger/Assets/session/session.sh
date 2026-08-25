@@ -5,6 +5,14 @@
 # Run from inside the compositor, which is the only place that can observe what
 # actually came up: $PPID is the sway that started it, and WAYLAND_DISPLAY is
 # the display sway got rather than the one anyone hoped for.
+
+# Everything this session says about itself, including its children's. Until
+# there was a log, wayvnc failing to bind and the compositor refusing to exit
+# were both silent -- the session came up looking healthy and was not. Truncated
+# per start, because it is the current session that is worth explaining.
+exec > '{state}/session.log' 2>&1
+echo "=== session starting, display $WAYLAND_DISPLAY, compositor $PPID ==="
+
 wayvnc --render-cursor --websocket -o {output} -S '{ctl}' '{host}' '{port}' &
 vnc_pid=$!
 
@@ -19,7 +27,13 @@ printf 'compositor_pid=%s\nchrome_pid=%s\nvnc_pid=%s\nvnc_host=%s\nvnc_port=%s\n
 
 # Chrome is the session. cage exited when its child did and sway does not, so a
 # dead browser would otherwise leave a live compositor holding the port -- the
-# black screen this project started from.
+# black screen this project started from, and what happened the first time this
+# was tried: the human closed the window and sway stayed up.
 wait "$chrome_pid"
-[ -n "${ime_pid:-}" ] && kill "$ime_pid" 2>/dev/null
-swaymsg exit >/dev/null 2>&1 || kill "$PPID" 2>/dev/null
+echo "=== chrome $chrome_pid exited; stopping the compositor ==="
+
+# Both, in this order, and both reported. `swaymsg exit` is the polite one and
+# needs a socket that may not be there; the signal needs nothing at all.
+swaymsg exit || echo "swaymsg exit failed ($?)"
+sleep 1
+kill "$PPID" 2>/dev/null || echo "kill $PPID failed ($?)"

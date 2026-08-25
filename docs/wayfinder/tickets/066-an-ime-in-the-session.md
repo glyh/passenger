@@ -34,31 +34,43 @@ missing piece was that no process in the session was *being* an input method.
 Spiked by hand against the live session first -- fcitx5 attached, pinyin loaded,
 and the owner typed into the nested browser and called it usable -- then built.
 
-**The binary is the host's**, found on PATH, exactly like the browser and for
-the same reason ticket 023 gives: an input method is a person's configuration,
-dictionaries and habits, and pinning one in the closure would hand them somebody
-else's keyboard. `PASSENGER_IME` names it, defaults to `fcitx5`, and `none`
-turns it off. No fcitx5 on the machine is not an error -- it is a session that
-cannot compose, which is what every session was until today.
+**It is the human's own fcitx5, and not a second one.** The first version ran a
+private instance on a private bus against a copy of `~/.config/fcitx5`, and the
+owner asked the question that killed it: *why can't we reuse the same fcitx
+program?* We can. fcitx5's controller exposes `OpenWaylandConnection` for
+precisely this -- one process serving several compositors -- so the session
+script makes one D-Bus call and the running instance attaches to the nested
+display:
 
-**It runs on a private D-Bus.** fcitx5 claims `org.fcitx.Fcitx5` on the session
-bus, and the human's desktop is almost certainly already running one -- here it
-was pid 8996. Two instances on one bus is a fight over the name, so the session's
-gets its own via `dbus-run-session`, and the desktop's is never disturbed. That
-is why `dbus` joins the closure.
+    Group [wayland:]          has 3 InputContext(s)     <- the desktop
+    Group [wayland:wayland-2] has 1 InputContext(s)     <- the session
 
-**It runs against a copy of the config,** refreshed at every start.
-`XDG_CONFIG_HOME` points at `{state}/ime`, into which `~/.config/fcitx5` is
-copied. The dictionaries, layouts and pinyin settings come along; the running
-desktop's profile is never written to, because two fcitx5 instances sharing one
-config directory would write over each other's state. The deliberate cost: a
-setting changed *inside* the session does not persist. That is the right way
-round for a tool that [does not learn](019-the-tool-does-not-learn.md) -- the
-durable copy stays the human's, on their desktop, where they can see it.
+That is the real config, the real learned dictionary and this morning's changes,
+live rather than copied. It disposes of the private bus, the copy, and the
+copy's own bug: `~/.config/fcitx5` here is a symlink into a dotfiles repo, and
+`cp -r` copied the link, so the isolation the first version advertised pointed
+straight back at the original. `dbus` stays in the closure for `dbus-send` and
+nothing else.
 
-**It dies with the browser.** The session script kills it after `wait
-"$chrome_pid"`, and it would go anyway as a Wayland client when the compositor
-exits; the explicit kill is the belt to that pair of braces.
+`PASSENGER_IME=none` asks for no IME; an fcitx5 that is not running answers the
+call with an error, which the session log now records. Either way the session
+cannot compose, which is what every session was until today, and pasting is the
+route.
+
+**Nothing to tear down.** fcitx5 drops the connection when the display goes
+away.
+
+## What the first attempt cost, and paid for
+
+It was tried, packaged, and did not work -- and the failure was invisible,
+because the session script sent everything to `/dev/null`. A wayvnc that cannot
+bind ([064](064-wayvnc-socket-path-too-long.md)) and a compositor that refuses
+to exit both look exactly like a healthy session from outside. So the script now
+writes `{state}/session.log`, truncated per start, carrying its own account and
+its children's; and its teardown says which half failed rather than trying two
+things silently.
+
+That log exists because of this ticket, and it belongs to 064's second half.
 
 ## What moved beside it
 

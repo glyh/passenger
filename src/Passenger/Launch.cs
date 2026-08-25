@@ -99,25 +99,25 @@ public static class Launch
     public static string SessionScript => Assets.Read("Passenger.session.sh");
 
     /// <summary>
-    /// Starting the host's IME inside the session, or nothing at all.
+    /// Attaching the human's own IME to the session, or nothing at all.
     ///
     /// Without this a human handed the browser could not type Chinese into it:
     /// sway offers `text_input_v3` and `input_method_v2` since ticket 063, and
     /// nothing was there to *be* an input method. Chrome needed no argument --
-    /// it already speaks the protocol -- so the whole fix is a daemon.
+    /// it already speaks the protocol -- so the whole fix is one D-Bus call.
     ///
-    /// **Its own D-Bus.** fcitx5 takes `org.fcitx.Fcitx5` on the session bus, and
-    /// the human almost certainly has one running for their desktop already; two
-    /// instances on one bus is a fight over the name, so this one gets a private
-    /// bus and never touches theirs.
+    /// **The human's own fcitx5, not a second one.** The first version started a
+    /// private instance on a private bus, against a copy of `~/.config/fcitx5`,
+    /// and the owner asked the obvious question: why not reuse the one already
+    /// running? fcitx5 exposes `OpenWaylandConnection` for exactly this -- one
+    /// process serving several compositors -- so the session gets the real
+    /// config and the real learned dictionary, live. It also disposes of
+    /// everything the copy needed: no private bus to arrange, no config to keep
+    /// in step, and no copy that was silently a symlink back to the original,
+    /// which is what the first attempt turned out to be.
     ///
-    /// **Its own copy of the config.** Pointing `XDG_CONFIG_HOME` at a copy is
-    /// what makes the host's dictionaries, layouts and pinyin settings arrive
-    /// while keeping the running desktop's profile read-only -- two fcitx5
-    /// instances sharing one config directory would write over each other's
-    /// state. The copy is refreshed at every start, so a setting changed on the
-    /// host is picked up next session, and one changed *inside* the session is
-    /// deliberately not kept.
+    /// Nothing to tear down, either: fcitx5 drops the connection when the
+    /// display goes away.
     /// </summary>
     public static string ImeScript => Assets.Read("Passenger.ime.sh");
 
@@ -125,14 +125,14 @@ public static class Launch
     /// The IME lines for a session, or a comment saying why there are none.
     ///
     /// No IME is an ordinary outcome rather than a failure: `PASSENGER_IME=none`
-    /// asks for none, and a machine without fcitx5 has none to give. Pure, and
-    /// separated from the PATH lookup, so both answers are testable on a machine
-    /// that happens to have an IME installed and on one that does not.
+    /// asks for none, and a machine whose fcitx5 is not running answers the call
+    /// with an error the log records. Pure, and separated from the PATH lookup,
+    /// so both answers are testable wherever the suite happens to run.
     /// </summary>
     public static string ImeSection(string command, bool available) =>
         command is "none" or "" || !available
             ? "# no input method (PASSENGER_IME)"
-            : ImeScript.Replace("{state}", Config.StateDir).Replace("{ime}", command);
+            : ImeScript;
 
     /// <summary>
     /// The sway config, which exists to make sway behave like the kiosk cage was.
@@ -183,8 +183,7 @@ public static class Launch
             string ctl = Sessions.CtlSocket(port);
             string quoted = string.Join(" ", argv.Select(a => $"'{a}'"));
             string ime = Config.Settings.ImeCommand;
-            string imeScript = ImeSection(
-                ime, Which(ime) is not null && Which("dbus-run-session") is not null);
+            string imeScript = ImeSection(ime, Which("dbus-send") is not null);
 
             File.WriteAllText(SessionSh, SessionScript
                 .Replace("{ime}", imeScript)

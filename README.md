@@ -270,22 +270,29 @@ own compositor sidesteps that whole class of breakage.
 
 ## Typing in the nested browser
 
-The session runs **the host's own IME** inside itself -- `fcitx5` by default,
-found on PATH the same way Chrome is, and for the same reason: an input method
-is a person's configuration, dictionaries and habits, and pinning one in the
-closure would hand them somebody else's keyboard. Sway offers the `text-input`
-and `input-method` protocols cage never did, and Chrome already speaks them, so
-the whole mechanism is a daemon started beside the browser.
+The session borrows **the fcitx5 you are already running** -- not a second
+instance. fcitx5 exposes `OpenWaylandConnection` on its D-Bus interface for
+exactly this, one process serving several compositors, so the session starts by
+asking yours to attach to the nested display as well:
 
-Two things it does deliberately. It runs on a **private D-Bus**, because the
-human's desktop almost certainly has an fcitx5 holding `org.fcitx.Fcitx5`
-already and two instances on one bus fight over the name. And it runs against a
-**copy** of `~/.config/fcitx5`, refreshed at every start: the dictionaries and
-layouts come along, the running desktop's profile is never written to, and a
-setting changed inside the session is deliberately not kept.
+    dbus-send --session --dest=org.fcitx.Fcitx5 --type=method_call /controller \
+      org.fcitx.Fcitx.Controller1.OpenWaylandConnection string:"$WAYLAND_DISPLAY"
 
-`PASSENGER_IME=none` turns it off; so does having no fcitx5 installed, in which
-case CJK goes in by pasting, which the viewer's clipboard supports both ways.
+Which means your real config, your real learned dictionary, and whatever you
+changed this morning -- live, not copied. It also means nothing to tear down:
+fcitx5 drops the connection when the display goes away.
+
+Sway offers the `text-input` and `input-method` protocols cage never did, and
+Chrome already speaks them, so that one call is the entire mechanism.
+
+An earlier version started a private fcitx5 on a private bus against a *copy* of
+`~/.config/fcitx5`. It was replaced within the hour, for the reason its owner
+asked out loud: why run a second one? The copy also turned out to be a symlink
+back to the original, so the isolation it claimed was never real.
+
+`PASSENGER_IME=none` turns it off, and so does an fcitx5 that is not running, in
+which case CJK goes in by pasting -- which the viewer's clipboard supports both
+ways.
 
 ## Environment
 
@@ -293,7 +300,8 @@ case CJK goes in by pasting, which the viewer's clipboard supports both ways.
     PASSENGER_PORT          CDP port (default 9222)
     PASSENGER_CHROME        chrome binary (default google-chrome-stable)
     PASSENGER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
-    PASSENGER_IME           input method for the session (default fcitx5; `none` for no IME)
+    PASSENGER_IME           `fcitx5` (default) asks the running one to serve the
+                            session; `none` asks for no IME at all
     PASSENGER_WM            window backend
     PASSENGER_VNC_HOST/PORT default 127.0.0.1:5900 (websocket)
     PASSENGER_NOVNC_PORT    viewer page (default 6080)

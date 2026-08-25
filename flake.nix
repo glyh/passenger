@@ -42,10 +42,10 @@
         # headless outputs on request, and swaymsg to ask for any of it. `sway`
         # brings swaymsg with it, which the session script needs.
         #
-        # dbus is here for `dbus-run-session`, which the session's IME runs on so
-        # that its bus name cannot collide with the fcitx5 the human's own
-        # desktop is already running (ticket 066). The IME binary itself is the
-        # host's, like the browser.
+        # dbus is here for `dbus-send`: the session asks the human's own fcitx5
+        # to serve its display too, over the D-Bus interface fcitx5 already
+        # exposes for serving more than one compositor (ticket 066). No IME is
+        # started here and none is pinned -- theirs is the one that runs.
         #
         # No VNC client: the viewer is a page in the host's own browser (see
         # Present.cs). That is not only lighter than every native client that
