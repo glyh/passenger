@@ -18,3 +18,12 @@ let stateDir = ref(
   | None => join(homedir(), ".local", "share", "passenger")
   },
 )
+
+let cdpPort = ref(
+  switch raw("PASSENGER_PORT")->Option.flatMap(s => Int.fromString(s)) {
+  | Some(port) if port >= 1 && port <= 65535 => port
+  | _ => 9222
+  },
+)
+
+let cdpUrl = () => `http://127.0.0.1:${cdpPort.contents->Int.toString}`

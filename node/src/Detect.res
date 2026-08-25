@@ -80,7 +80,7 @@ let selectorsOf = () =>
   )
 
 /// Every condition the signature declares must hold.
-let matches = (signature, probe) =>
+let matches = (signature, probe: probe) =>
   signature
   ->conditions
   ->Array.every(c =>
@@ -104,7 +104,7 @@ let matches = (signature, probe) =>
 /// The table was a parameter until ticket 019, threaded from a registry that
 /// added learned rules. There is no learned list and no second table, and a
 /// parameter with one possible argument advertises a variation nobody wants.
-let classify = (probe): option<blocker> =>
+let classify = (probe: probe): option<blocker> =>
   builtin
   ->Array.find(s => matches(s, probe))
   ->Option.map(signature => {signature, probe})

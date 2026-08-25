@@ -58,22 +58,27 @@ let expiredAt = (lane, now) => lane.ttlS != noTtl && now -. lane.touchedAt >= In
 /// a browser on the other end of an HTTP endpoint, which is exactly the kind of
 /// thing a unit test has no business starting. Nothing about a lane's own logic
 /// is reachable through it, which is the line tickets 001 and 034 drew.
+///
+/// Every question is async here, where the C# interface answered synchronously.
+/// That side reached the same endpoints through `.GetAwaiter().GetResult()`;
+/// JavaScript has no such move, so the promise travels and the four rules below
+/// that ask Chrome anything are async with it. The rules themselves are
+/// unchanged -- what could not be blocked on is a property of the runtime, not
+/// of what a lane means.
 type chromeTabs = {
-  liveTabs: unit => array<string>,
-  close: string => bool,
-  openers: unit => Dict.t<string>,
+  liveTabs: unit => promise<array<string>>,
+  close: string => promise<bool>,
+  openers: unit => promise<Dict.t<string>>,
 }
 
-// Filled in when `Targets` ports. Until then `liveTabs` raises, which every
-// rule below already treats as "no daemon, nothing to reconcile" -- the same
-// path a wedged browser takes.
-let notPorted: chromeTabs = {
-  liveTabs: () => throw(Errors.Passenger({code: DaemonNotRunning, message: "Targets is not ported yet"})),
-  close: _ => false,
-  openers: () => Dict.make(),
+/// The real Chrome, over the CDP HTTP endpoint and the browser's own socket.
+let liveChrome: chromeTabs = {
+  liveTabs: async () => (await Targets.pages())->Array.map(t => t.id),
+  close: Targets.close,
+  openers: () => Targets.openers(),
 }
 
-let chrome = ref(notPorted)
+let chrome = ref(liveChrome)
 
 let dbFile = () => joinPath(Config.stateDir.contents, "lanes.db")
 
@@ -304,8 +309,8 @@ let releaseScreen = lane => {
 /// Empty when Chrome does not answer, and for the same caller: a wedged browser
 /// is the case `stop` exists for, and a check that cannot complete must not be
 /// what stands in the way.
-let occupied = () =>
-  switch chrome.contents.liveTabs() {
+let occupied = async () =>
+  switch await chrome.contents.liveTabs() {
   | live =>
     let counts = Dict.make()
     withDb(db => {
@@ -375,10 +380,10 @@ let reconcile = (live: array<string>, openedBy: Dict.t<string>) =>
 /// an invariant here instead: whatever is asked for, one page stays. It lands in
 /// `orphan` on the next reconcile, which is the correct home for a tab that
 /// exists only so Chrome keeps running.
-let closeTabs = (lane, tabs) => {
+let closeTabs = async (lane, tabs) => {
   let mine = tabsOf(lane)
   let doomed = tabs->Array.filter(t => mine->Array.includes(t))
-  switch chrome.contents.liveTabs() {
+  switch await chrome.contents.liveTabs() {
   | live =>
     let doomed = if doomed->Array.length >= live->Array.length {
       // Would empty the browser. Hold one back rather than closing it and
@@ -388,12 +393,13 @@ let closeTabs = (lane, tabs) => {
       doomed
     }
     let closed = ref(0)
-    doomed->Array.forEach(tab => {
-      if chrome.contents.close(tab) {
+    for i in 0 to doomed->Array.length - 1 {
+      let tab = doomed->Array.getUnsafe(i)
+      if await chrome.contents.close(tab) {
         closed := closed.contents + 1
       }
       forget([tab])
-    })
+    }
     closed.contents
   | exception _ => 0
   }
@@ -403,15 +409,16 @@ let closeTabs = (lane, tabs) => {
 ///
 /// Opportunistic: run at the top of any call that touches the registry, so there
 /// is no background thread and nothing to keep alive.
-let sweep = () =>
-  switch chrome.contents.liveTabs() {
+let sweep = async () =>
+  switch await chrome.contents.liveTabs() {
   | live =>
-    reconcile(live, chrome.contents.openers())
+    reconcile(live, await chrome.contents.openers())
     let dead = expired()
-    dead->Array.forEach(lane => {
-      ignore(closeTabs(lane, tabsOf(lane)))
+    for i in 0 to dead->Array.length - 1 {
+      let lane = dead->Array.getUnsafe(i)
+      let _ = await closeTabs(lane, tabsOf(lane))
       destroy(lane)
-    })
+    }
     dead
   | exception _ => [] // no daemon, or it is not answering; nothing to reconcile
   }
@@ -422,8 +429,8 @@ let sweep = () =>
 /// tabs, so without this there is no view anywhere in the tool that shows tabs
 /// piling up. A count is a measurement; ids and owners would be a listing, which
 /// is the side of the line agents stay off.
-let counts = () =>
-  switch chrome.contents.liveTabs() {
+let counts = async () =>
+  switch await chrome.contents.liveTabs() {
   | live => (live->Array.length, tabsOf(orphan)->Array.filter(t => live->Array.includes(t))->Array.length)
   | exception _ => (0, 0)
   }

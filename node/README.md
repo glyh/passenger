@@ -39,7 +39,7 @@ The pure core, against the C# suite as the oracle -- `dotnet test` on both
 `DetectTests` and `GeometryTests` is green today, and every case that still
 describes something is here.
 
-    npm test        # 50 passing
+    npm test        # 63 passing
 
 - `Errors.res` -- the codes, with `value` a switch the compiler checks.
 - `Models.res` -- `signature`, `probe`, `blocker`, and `condition`.
@@ -48,6 +48,9 @@ describes something is here.
   discovered through, and `Scale` as an abstract type.
 - `Lanes.res` -- the registry, all 26 C# cases, on `node:sqlite` rather than a
   package. `Config.res` and `Sqlite.res` come with it.
+- `Targets.res` -- Chrome's targets over the CDP HTTP endpoint and a page's own
+  socket, all 13 C# cases. `WebSocket.res` binds the runtime's own global, so
+  the CDP socket costs no dependency either.
 
 Three invariants stopped being tests and became shapes, which is the same move
 `DetectTests.cs` records for ticket 021 ("structural rather than tested"):
@@ -63,16 +66,31 @@ One behaviour deliberately differs: `number(".")` answers `None` where C#
 reached `double.Parse(".")` and would have thrown. No recorded output has
 produced it, but nothing prevented it either.
 
+## The one place the runtime changed a signature
+
+`Lanes.chromeTabs` is async here where the C# interface was synchronous. That
+side reached the same endpoints through `.GetAwaiter().GetResult()`; JavaScript
+has no such move, so the promise travels and the four rules that ask Chrome
+anything -- `occupied`, `closeTabs`, `sweep`, `counts` -- are async with it. The
+rules are unchanged: what could not be blocked on is a property of the runtime,
+not of what a lane means.
+
+Checked against the live browser (`node live.mjs`, which points the state
+directory at a temp path so it cannot touch a real registry):
+
+    pages: 2 | first title: "腾冲温泉的相关微信公众号文章 – 搜狗微信搜索"
+    socket looks right: true
+    stuckSummary: none
+    counts through the live seam: open=2 orphaned=0
+    sweep collected: [] | orphan now holds 2
+
 ## What is deliberately missing
 
-`Targets` -- so `Lanes.chrome` starts as a seam that raises, which every rule in
-`Lanes` already treats as "no daemon, nothing to reconcile", the same path a
-wedged browser takes. Until it ports, the registry is fully tested and not yet
-wired to `Main.res`, which still opens a page directly and closes it.
-
-Then: `Browser`, `NestedSessions`, `Probe`, `Handoff`, `Present`, `Launch`,
-`Webserve`, `Script`'s crossing checks, and nine of the ten tools. Geometry's
-half that spawns `wlr-randr` is not here either.
+`Browser`, `NestedSessions`, `Probe`, `Handoff`, `Present`, `Launch`,
+`Webserve`, `Script`'s crossing checks, and nine of the ten tools. `Main.res` is
+still the skeleton: it opens a page directly and closes it, rather than going
+through the registry that is now sitting there ported. Geometry's half that
+spawns `wlr-randr` is not here either.
 
 ## Two seams, and why they are different
 

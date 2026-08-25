@@ -24,29 +24,41 @@ type fake = {mutable ids: array<string>, mutable closed: array<string>, mutable 
 let fake = {ids: [], closed: [], wedged: false}
 
 let seam: Lanes.chromeTabs = {
-  liveTabs: () =>
+  liveTabs: async () =>
     fake.wedged
       ? throw(Errors.Passenger({code: DaemonNotRunning, message: "no daemon"}))
       : fake.ids,
-  close: tab => {
+  close: async tab => {
     fake.closed = fake.closed->Array.concat([tab])
     fake.ids = fake.ids->Array.filter(t => t != tab)
     true
   },
-  openers: () => Dict.make(),
+  openers: async () => Dict.make(),
 }
 
 // Each test starts on an empty table and a fresh browser, since the file and
 // the fake are both shared.
+let fixture = () => {
+  Lanes.clock := (() => Math.floor(Date.now() /. 1000.0))
+  Lanes.reset()
+  Lanes.chrome := seam
+  fake.ids = ["T1", "T2", "T3"]
+  fake.closed = []
+  fake.wedged = false
+}
+
 let laneTest = (name, body) =>
   T.test(name, () => {
-    Lanes.clock := (() => Math.floor(Date.now() /. 1000.0))
-    Lanes.reset()
-    Lanes.chrome := seam
-    fake.ids = ["T1", "T2", "T3"]
-    fake.closed = []
-    fake.wedged = false
+    fixture()
     body()
+  })
+
+// The four rules that ask Chrome anything are async now, because JavaScript
+// cannot block on a promise the way `.GetAwaiter().GetResult()` did.
+let laneTestAsync = (name, body) =>
+  T.testAsync(name, async () => {
+    fixture()
+    await body()
   })
 
 let notFound = f =>
@@ -118,31 +130,31 @@ laneTest("destroying a lane takes its rows with it", () => {
 
 // --- what `stop` refuses on (057) ------------------------------------------
 
-laneTest("occupied counts live tabs per lane and skips orphan", () => {
+laneTestAsync("occupied counts live tabs per lane and skips orphan", async () => {
   let mine = Lanes.openLane()
   Lanes.adopt("T1", mine)
   Lanes.adopt("T2", mine)
   // Chrome is launched with about:blank and it lands here, so counting
   // `orphan` would mean a refusal that never lifts.
   Lanes.adopt("T3", Lanes.orphan)
-  T.equal(Lanes.occupied(), [(mine, 2)])
+  T.equal(await Lanes.occupied(), [(mine, 2)])
 })
 
-laneTest("occupied ignores rows for tabs Chrome no longer holds", () => {
+laneTestAsync("occupied ignores rows for tabs Chrome no longer holds", async () => {
   let lane = Lanes.openLane()
   Lanes.adopt("T1", lane)
   fake.ids = fake.ids->Array.filter(t => t != "T1")
   // A row is not work. The sweep that would drop it may not have run.
-  T.equal(Lanes.occupied(), [])
+  T.equal(await Lanes.occupied(), [])
 })
 
-laneTest("occupied is empty when Chrome does not answer", () => {
+laneTestAsync("occupied is empty when Chrome does not answer", async () => {
   let lane = Lanes.openLane()
   Lanes.adopt("T1", lane)
   fake.wedged = true
   // The wedged browser is the case `stop` exists for: a check that cannot
   // complete must not be what stands in its way.
-  T.equal(Lanes.occupied(), [])
+  T.equal(await Lanes.occupied(), [])
 })
 
 laneTest("the reserved lane is emptied rather than removed", () => {
@@ -217,17 +229,17 @@ laneTest("claiming twice still needs one release", () => {
 
 // --- closing ----------------------------------------------------------------
 
-laneTest("closing reaches only this lane's tabs", () => {
+laneTestAsync("closing reaches only this lane's tabs", async () => {
   let mine = Lanes.openLane()
   let theirs = Lanes.openLane()
   Lanes.adopt("T1", mine)
   Lanes.adopt("T2", theirs)
-  T.equal(Lanes.closeTabs(mine, ["T1", "T2"]), 1)
+  T.equal(await Lanes.closeTabs(mine, ["T1", "T2"]), 1)
   T.equal(fake.closed, ["T1"])
   T.equal(Lanes.tabsOf(theirs), ["T2"])
 })
 
-laneTest("the last tab in the browser is never closed", () => {
+laneTestAsync("the last tab in the browser is never closed", async () => {
   // Chrome exits when it loses its final tab, taking the daemon and the warm
   // session with it. The old `close_other_tabs` kept one back by being phrased
   // as "keep that one"; under lanes the survivor must belong to nobody in
@@ -236,33 +248,33 @@ laneTest("the last tab in the browser is never closed", () => {
   fake.ids = ["ONLY"]
   let lane = Lanes.openLane()
   Lanes.adopt("ONLY", lane)
-  T.equal(Lanes.closeTabs(lane, ["ONLY"]), 0)
+  T.equal(await Lanes.closeTabs(lane, ["ONLY"]), 0)
   T.equal(fake.closed, [])
 })
 
-laneTest("a sweep collects an expired lane and its tabs", () => {
+laneTestAsync("a sweep collects an expired lane and its tabs", async () => {
   let stale = Lanes.openLane(~ttlS=1)
   Lanes.adopt("T1", stale)
   Lanes.adopt("T2", Lanes.orphan)
   Lanes.adopt("T3", Lanes.orphan)
   let base = Math.floor(Date.now() /. 1000.0)
   Lanes.clock := (() => base +. 2.0)
-  T.equal(Lanes.sweep(), [stale])
+  T.equal(await Lanes.sweep(), [stale])
   T.equal(fake.closed, ["T1"])
   T.ok(notFound(() => Lanes.require(stale)))
 })
 
-laneTest("a sweep leaves orphan alone however old", () => {
+laneTestAsync("a sweep leaves orphan alone however old", async () => {
   // A TTL on `orphan` would collect the tabs a human opened during a handoff,
   // which is the one thing ticket 018 exists to prevent.
   Lanes.adopt("T1", Lanes.orphan)
   let base = Math.floor(Date.now() /. 1000.0)
   Lanes.clock := (() => base +. 100000.0)
-  T.equal(Lanes.sweep(), [])
+  T.equal(await Lanes.sweep(), [])
   T.equal(fake.closed, [])
 })
 
-laneTest("an expired lane is refused rather than failing on a dangling row", () => {
+laneTestAsync("an expired lane is refused rather than failing on a dangling row", async () => {
   // The order bug: `require` before `sweep`.
   //
   // A lane that expired between calls is still a row, so checking first let it
@@ -273,16 +285,16 @@ laneTest("an expired lane is refused rather than failing on a dangling row", () 
   let lane = Lanes.openLane(~ttlS=1)
   let base = Math.floor(Date.now() /. 1000.0)
   Lanes.clock := (() => base +. 2.0)
-  ignore(Lanes.sweep())
+  let _ = await Lanes.sweep()
   T.ok(notFound(() => Lanes.require(lane)))
 })
 
-laneTest("counts reveal tabs piling up in a lane nobody is watching", () => {
+laneTestAsync("counts reveal tabs piling up in a lane nobody is watching", async () => {
   // The one number that reveals a lane you do not own -- a count, never a
   // listing, because a lane's tabs are nobody else's business.
   Lanes.adopt("T1", Lanes.openLane())
   Lanes.adopt("T2", Lanes.orphan)
-  let (open_, orphaned) = Lanes.counts()
+  let (open_, orphaned) = await Lanes.counts()
   T.equal(open_, 3)
   T.equal(orphaned, 1)
 })

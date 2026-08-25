@@ -7,3 +7,4 @@
 @module("node:test") external test: (string, unit => unit) => unit = "test"
 @module("node:assert/strict") external equal: ('a, 'a) => unit = "deepEqual"
 @module("node:assert/strict") external ok: bool => unit = "ok"
+@module("node:test") external testAsync: (string, unit => promise<unit>) => unit = "test"
