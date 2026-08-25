@@ -13,8 +13,9 @@ blocked_by: []
 [053](053-delete-the-python-door.md) left it standing.
 [069](069-powershell-instead-of-csharp.md) asked whether the *script* language
 should change and turned up something larger: what a model writes well is not
-a language but a language paired with a library, and the pair it knows best here -- Playwright's own JavaScript API
--- is already in this build, unused as an API.
+a language but a language paired with a library, and the pair it knows best
+here -- Playwright's own JavaScript API -- is already in this build, unused
+as an API.
 
 **Measured today**, from the bundled driver against the Chrome the C# side is
 currently driving, with nothing added to the closure:
