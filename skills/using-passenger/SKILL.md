@@ -2,17 +2,10 @@
 name: using-passenger
 description: |
   Use when reading or driving web pages through the passenger MCP server --
-  `openLane`, `script`, `showBrowser`, `listTabs`, `closeTabs`. Scripts are C#
-  against an async Playwright, and `script` is the only door onto a page: no
-  fetch, no extraction, nothing here interprets a page for you. Covers what to
-  do before the first call, reading a page cheaply and what the `markdown.js`,
-  `unstrip-asides.js` and `pictures.js` recipes in `scripts/` are for, what the
-  `blocked` verdict catches and what it never will, recognising a login wall or
-  captcha the tool cannot name and handing the page to a human, why a read is
-  only the first screen and why a picture-borne page reads short rather than
-  truncated, what driving spends that reading does not, and what the tool will
-  not remember for you. Read it before the first call in a session, and again
-  whenever a read comes back thinner than the page looked.
+  `openLane`, `script`, `showBrowser`, `listTabs`, `closeTabs`. Read it before
+  the first call in a session, and again whenever a read comes back thinner
+  than the page looked. Site-specific mechanics (selectors, silent failures,
+  login state) belong in that site's own skill, not here.
 ---
 
 # Using passenger
@@ -95,6 +88,8 @@ failure:
 The ones that bite after it compiles -- verbatim strings for JavaScript, a
 nested `await` that will not build, the type argument that is not optional, the
 live handles that cannot cross back -- are in `references/writing-scripts.md`.
+**Trigger:** open it the moment a script fails to compile or a call throws
+something other than a wall or a timeout.
 
 **This server does not interpret pages.** It used to: there was a `fetch` with
 an `article` mode and a `dom` mode, and choosing between them was the caller's
@@ -120,6 +115,9 @@ knowing by name, both in `references/reading-a-page.md`:
   site has one. Look for it before writing selectors.
 - **`markdown.js`**, when structure is the thing you need: headings, lists,
   fenced code, and every link resolved and inline.
+
+**Trigger:** open `references/reading-a-page.md` before writing a selector by
+hand, or before assuming a page has no structured JSON of its own.
 
 **A short read comes back; a long one goes to disk.** A tool reply is JSON, so
 a returned page arrives quoted and escaped, on one line, and all of it is in
@@ -211,6 +209,10 @@ how to get the bytes onto your disk. **A large picture and little text is the
 case worth acting on**, so measure the text in the same script and compare the
 two yourself.
 
+**Trigger:** open `references/pictures.md` whenever a read comes back short
+and you have not yet measured the pictures -- a menu, a price list, a chart, a
+comic panel never was text.
+
 ## Prefer reading to driving
 
 `script` is the way to reach a search box, a tab, the next page of a list. But
@@ -252,6 +254,10 @@ what you are done with; the TTL is a backstop for the calls you never got to
 make, not the plan. `references/tabs-and-lanes.md` has the rest: the shared
 screen, the `orphan` drawer a human's tabs land in, and why a tab wedged in
 someone else's lane still costs you.
+
+**Trigger:** open it when tabs are piling up, a call comes back `wedged` or
+`LANE_NOT_FOUND`, or you need to hand the screen to a human without stepping
+on another caller's tabs.
 
 ## The tool remembers nothing about a site
 

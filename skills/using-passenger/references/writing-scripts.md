@@ -56,6 +56,21 @@ the `tab` from the previous reply when you are continuing one. The opposite
 mistake is loud: a tab that has since been closed throws `TargetClosedError`,
 and the fix is to navigate again without it.
 
+**`JsonSerializer.Serialize` escapes every non-ASCII character by default.**
+Each Chinese (or other non-Latin) character comes back as a 6-byte `\uXXXX`
+escape instead of itself -- multiplying the size of the JSON for no reason,
+which on a page full of CJK text is most of the payload. Pass an encoder that
+doesn't do this:
+
+    var opts = new JsonSerializerOptions {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+    return JsonSerializer.Serialize(results, opts);
+
+"Unsafe" here refers to HTML-injection contexts (`<`, `>`, `&` pass through
+unescaped); a tool result read back as data, never rendered as HTML, is
+exactly the case it's safe for.
+
 ## What cannot cross back
 
 A tool result is JSON, and nearly every Playwright call hands back a live
