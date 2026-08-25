@@ -55,20 +55,41 @@ for Patchright's bundled one. It reaches for `pkgs.nodejs`, which carries npm
 and corepack; `pkgs.nodejs-slim` is the same interpreter without them. The
 interpreter itself, 85.7 MiB, is not negotiable.
 
-**gtk+3 is Xwayland's, and Xwayland may be load-bearing:**
+**gtk+3 is Xwayland's, and Xwayland is load-bearing for the wrong reason:**
 
     Passenger.Mcp -> cage -> xwayland-24.1.13 -> libdecor-0.2.5 -> gtk+3
 
 Nothing here links gtk. It arrives because libdecor draws client-side window
-decorations, which Xwayland wants. Building cage and wlroots without Xwayland
-would drop both -- *if* Chrome is a Wayland client inside the cage, and it is
-not obviously one: nothing in `Launch.cs` or `Browser.cs` passes
-`--ozone-platform=wayland` or `--ozone-platform-hint=auto`, so Chrome may well
-be taking the X11 path through Xwayland today, which would make this a
-behaviour change rather than a trim. Answer that first, by looking for an
-Xwayland process in a live session. If Chrome does have to be moved onto
-Wayland to drop it, that is a fingerprint-adjacent change and belongs in its
-own ticket.
+decorations, which Xwayland wants. Dropping Xwayland from cage and wlroots
+would drop both -- but only if Chrome is a Wayland client inside the cage, and
+measuring the live session turned up something worse than a no.
+
+It *is* a Wayland client. No Xwayland runs under cage (the one on this machine
+is the host compositor's, started days earlier under a different parent), and
+Chrome's argv carries:
+
+    --enable-features=UseOzonePlatform,WaylandWindowDecorations
+    --ozone-platform-hint=auto
+
+**Nothing in this repo passes those.** They come from
+`~/.config/chrome-flags.conf`, a personal dotfile of the developer's, which the
+Arch `google-chrome-stable` wrapper script reads and splices into argv. So the
+nested browser takes the Wayland path here by coincidence, and on any host
+without that file -- which is every host the bundle is for -- Chrome would
+default to X11 and need the Xwayland inside cage to start at all.
+
+That makes this a portability bug that predates the bundle and was only visible
+through it. The fix points the same way as the trim: `Launch.cs` already knows
+it is launching Chrome into a cage Wayland session, so it should pass
+`--ozone-platform=wayland` itself rather than inherit the question from whoever
+happens to own the machine. Once it does, Xwayland and gtk+3 can leave together.
+
+Two things to check before that lands, since it changes what the browser is
+rather than what ships beside it: that the handoff window still behaves (ticket
+006 took Chrome out of fullscreen so a human gets a real toolbar), and that
+nothing fingerprint-visible moves with the platform swap -- `screen`, device
+pixel ratio, and the `WaylandWindowDecorations` half of the flag the dotfile
+was also setting.
 
 ## Why this is worth doing at all
 
