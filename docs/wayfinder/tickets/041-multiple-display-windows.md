@@ -133,6 +133,14 @@ worried about handles.
 moved: option 1 is a day of bookkeeping plus a resize policy that has to be
 argued against two closed tickets.
 
+## The compositor question is settled
+
+*2026-08-25.* [063](063-sway-instead-of-cage.md) replaces cage with
+`sway --headless`, whose `create_output` can add headless outputs at runtime.
+That removes the "none of them is small" objection to option 2 above -- it does
+not decide that option 2 has a caller, which is still this ticket's decision 2
+and still the question that matters.
+
 ## Where all of this lives now
 
 *Recorded 2026-08-24.* Everything above cites Python files that

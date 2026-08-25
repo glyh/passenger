@@ -85,6 +85,14 @@ the session, which is a real Chrome dialog on a real filesystem.
    said out loud when the browser is put in front of someone -- a person who
    does not know the clipboard is dead will spend a minute finding out.
 
+## The compositor question is settled
+
+*2026-08-25.* [063](063-sway-instead-of-cage.md) takes sway, which creates an
+`ext_data_control_manager_v1`. Cause 1 closes with it, and cause 2 reduces to
+composing on the host and pasting. Cause 3 -- whether an in-session drag
+survives a synthesised pointer -- is untouched by the swap and is what remains
+of this ticket.
+
 ## Related
 
 [One screen for everyone, or one window each](041-multiple-display-windows.md)
