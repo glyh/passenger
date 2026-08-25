@@ -1,0 +1,7 @@
+{
+  "name": "passenger-node",
+  "sources": [{ "dir": "src", "subdirs": true }],
+  "package-specs": [{ "module": "esmodule", "in-source": true }],
+  "suffix": ".res.mjs",
+  "compiler-flags": ["-w +a-4-9-20-40-41-42-44-45-48-67-70"]
+}
