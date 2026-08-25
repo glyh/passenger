@@ -1,15 +1,9 @@
 # The Node side, in ReScript
 
-**This is not the port yet, but it is no longer the skeleton either: the door
-works end to end.** It began as the walking skeleton for
-[071](../docs/wayfinder/tickets/071-port-to-node.md)**, which exists to prove
-the four things that could have stopped the port before 5,800 lines were spent
-finding out. All four are proved, against the Chrome that was already running:
-
-    tools: script
-    -> {"type":"ran","url":"https://www.chinanews.com.cn/",
-        "returned":{"title":"中国新闻网_梳理天下新闻","emoji":"😀 腾冲","n":676}}
-    -> {"type":"failed","error":"deliberate, line 2","line":2}
+**The port is complete: all ten tools, over stdio, against a real browser.**
+This is [071](../docs/wayfinder/tickets/071-port-to-node.md), and it started as
+a walking skeleton for four things that could have stopped it before 5,800
+lines were spent finding out. All four held:
 
 1. **The toolchain builds.** ReScript 12.3.1 from npm, `rescript build`,
    readable ES modules beside the sources.
@@ -36,11 +30,10 @@ encoder, so it goes too.
 
 ## What is ported
 
-The pure core, against the C# suite as the oracle -- `dotnet test` on both
-`DetectTests` and `GeometryTests` is green today, and every case that still
-describes something is here.
+Everything, against the C# suite as the oracle: `dotnet test` is green at
+107/107 today, and every case that still describes something is here.
 
-    npm test        # 76 passing
+    npm test        # 117 passing
 
 - `Errors.res` -- the codes, with `value` a switch the compiler checks.
 - `Models.res` -- `signature`, `probe`, `blocker`, and `condition`.
@@ -64,7 +57,19 @@ describes something is here.
   spelled those as a base record with a `type` discriminator and wrote out every
   JSON property name, because C# has no unions; here they are unions and the
   wire shape is written once, in `encode`, to the same bytes.
-- `Main.res` -- seven of the ten tools, over stdio.
+- `Sessions.res` -- the record that says which sway, wayvnc and viewer belong
+  together, and the /proc predicates under it. All 14 C# cases, against real
+  processes: `/bin/sh`, `sleep` and `trap`, no python.
+- `Launch.res` -- the nested sway backend, the generated session script and
+  config, and `which`. All 12 C# cases, plus one the port needs (below).
+- `Webserve.res` -- the viewer's server and the path rule under it, all 8 C#
+  cases. `Present.res`, `Notify.res` and `Handoff.res` come with it; Handoff's
+  3 cases are here too.
+- `Browser.res` -- the daemon lifecycle, and `Geometry`'s other half: the
+  `wlr-randr` probe and the scale it applies.
+- `Stop.res` -- the one verb a human types, and the refusal that guards it.
+- `Main.res` -- all ten tools, over stdio, plus the two argv checks that run
+  before the server: the viewer re-exec and `stop`.
 
 Three invariants stopped being tests and became shapes, which is the same move
 `DetectTests.cs` records for ticket 021 ("structural rather than tested"):
@@ -89,7 +94,7 @@ produced it, but nothing prevented it either.
 
 ## Where the runtime changed a signature
 
-Two so far, and both are the runtime rather than the design.
+Three so far, and every one of them is the runtime rather than the design.
 
 The first is `Lanes.chromeTabs`, async here where the C# interface was synchronous. That
 side reached the same endpoints through `.GetAwaiter().GetResult()`; JavaScript
@@ -118,6 +123,19 @@ same process with cleanup that closes the CDP transport. That is a reading of
 the library rather than a measurement against a wedged tab, so our own race
 stays as the thing that guarantees the call returns.
 
+The third is `Launch.plan`, async where the C# interface was synchronous. The
+port a session advertises is claimed by scanning for a free one, and asking
+whether a TCP port is taken has no synchronous form here. What is planned is
+unchanged, down to the quoting.
+
+Two things get *shorter* in this runtime, which is worth saying beside the
+three that got longer. `Posix.kill` was a `DllImport` because .NET's
+`Process.Kill` sends SIGKILL and only to a handle it owns; `process.kill` takes
+the signal by name and any pid. And `Webserve`'s re-exec needs no special case
+for how the binary was built -- `argv[0]` is the runtime and `argv[1]` is the
+entry module, always, where the C# side had to tell a framework-dependent
+`dotnet Passenger.Cli.dll` from a published apphost.
+
 `Session` too is checked against the live browser (`node live-session.mjs`):
 
     isUp: true
@@ -129,16 +147,19 @@ stays as the thing that guarantees the call returns.
       -- open in this lane: B9FCA16A0ACF939770B9A70144C64CBA
     detached; chrome still up: true
 
-## What is deliberately missing
+## What is still missing
 
-`Browser`, `NestedSessions`, `Handoff`, `Present`, `Launch` and `Webserve` --
-which is to say everything about *showing a human the browser*, plus starting
-the daemon. The three tools that need them (`showBrowser`, `hideBrowser`,
-`browserStatus`) are absent from `tools/list` rather than present and failing,
-so a caller sees what this server can actually do. Until `Browser` lands, a
-caller who finds Chrome down is told so plainly instead of being handed a
-failure from four layers in. Geometry's half that spawns `wlr-randr` is not
-here either.
+Nothing of the tool itself. What is left is packaging and the decision the
+ticket exists to make: the flake still builds the C# server, `nix run .` still
+starts it, and nothing has been deleted. The two trees run side by side until
+[071](../docs/wayfinder/tickets/071-port-to-node.md) closes.
+
+One duplication comes with that. The four assets -- `session.sh`, `sway.conf`,
+`ime.sh`, `viewer.html` -- exist in both trees, because the C# side embeds them
+in its assembly and this side reads them off disk beside the compiled modules.
+A thirteenth `Launch` case compares the two copies and fails on drift, and
+skips where the sibling tree is absent, so it deletes itself when the C# tree
+does.
 
 ## Two seams, and why they are different
 
@@ -166,6 +187,8 @@ kind (ticket 049 was the other).
     npx rescript build
     node probe.mjs          # drives the server over stdio, needs Chrome on 9222
     node live-session.mjs   # Session and the handle rule, against a real browser
+    node live-webserve.mjs  # the viewer server's routes, needs a real noVNC
+    node live-handoff.mjs   # the whole handoff path, opening no window
 
 `probe.mjs` opens a lane, runs a page, continues on the same tab, provokes each
 of the three failures, and takes the lane away again:
@@ -181,6 +204,25 @@ of the three failures, and takes the lane away again:
                "error":"a Locator cannot cross the tool boundary"}
     script !! [TAB_NOT_FOUND] no tab B912... in lane 31b1... -- this lane has no tabs
     script !! [LANE_NOT_FOUND] no lane ef8f... -- it expired, or never existed
+
+`live-handoff.mjs` is the one that covers the half a unit test cannot. It
+forces the `web` presenter, which hands back a URL and opens no window, so the
+screen claim, the detached viewer server and the scale probe are all exercised
+without putting a browser on anyone's desktop:
+
+    browserStatus -> {"daemon":"up","launch":"nested","presenter":"web",
+                      "session":"live","vnc":"127.0.0.1:5900",
+                      "tabs":"3 open, 1 orphan","wedged":"none","screenClaims":"0"}
+    showBrowser -> open http://127.0.0.1:6096/?ws=127.0.0.1:5900 to take over
+                   the browser, scale 1.601562
+    browserStatus -> {... "screenClaims":"1"}
+    hideBrowser -> dismissed
+    viewer server: node src/Main.res.mjs --serve-viewer 6096
+
+The scale is the fractional one `wlr-randr` reports rather than the integer
+`wl_output` would round it to, which is `Geometry.host` preferring the first --
+and the URL names the live session's real VNC port rather than the configured
+one, which is what keeps a viewer off a dead session.
 
 The emoji and the CJK are unescaped in both directions, which is
 [056](../docs/wayfinder/tickets/056-utf8-escape-regression.md) and

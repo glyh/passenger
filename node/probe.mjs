@@ -54,4 +54,6 @@ await call('closeAllTabs', { lane });
 await call('destroyLane', { lane });
 await call('script', { lane, source: `return 1;` });
 
+await call('browserStatus', {});
+
 await c.close();

@@ -132,5 +132,21 @@ let parsePresenter = text =>
 
 let backendNames = ["nested", "none"]
 
+/// What ends a `showBrowser` wait.
+type waitFor = Closed | Unblocked
+
+let waitForOf = w =>
+  switch w {
+  | Closed => "closed"
+  | Unblocked => "unblocked"
+  }
+
+let parseWaitFor = text =>
+  switch text {
+  | "closed" => Some(Closed)
+  | "unblocked" => Some(Unblocked)
+  | _ => None
+  }
+
 /// How a window backend wants Chrome started.
 type launchPlan = {argv: array<string>, env: Dict.t<string>}

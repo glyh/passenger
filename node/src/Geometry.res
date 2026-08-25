@@ -69,3 +69,107 @@ let firstBlock = report => {
     lines->Array.slice(~start, ~end)->Array.join("\n")
   }
 }
+
+// --- the shell half ---------------------------------------------------------
+//
+// Setting the scale leaves the framebuffer size alone, so unlike the old fitting
+// it cannot disturb a connected viewer; a live session was watched through a
+// scale change and back to confirm it.
+
+let headlessPrefix = "HEADLESS"
+
+/// An explicit scale from the environment, which wins over the probe.
+let configured = () => Config.vncScale.contents->Option.flatMap(Scale.make)
+
+/// The first output's integer buffer scale, from core `wl_output`.
+let wlOutputScale = () =>
+  switch Launch.which("wayland-info") {
+  | None => None
+  | Some(_) =>
+    let found = ref(None)
+    firstBlock(Proc.run("wayland-info", []))
+    ->String.split("\n")
+    ->Array.forEach(line =>
+      // Not `startsWith`: scale shares a line with the position, as
+      // `x: 0, y: 0, scale: 2,`.
+      if found.contents->Option.isNone && line->String.includes("scale:") {
+        found :=
+          line
+          ->String.split("scale:")
+          ->Array.get(1)
+          ->Option.flatMap(number)
+          ->Option.flatMap(Scale.make)
+      }
+    )
+    found.contents
+  }
+
+/// The scale the host screen runs, which the viewer's window inherits.
+///
+/// wlr-randr first and core `wl_output` second, because the two answer with
+/// different precision: wl_output carries an integer buffer scale, so a screen at
+/// 1.6 reads as 2, while wlr-randr reports the compositor's real fractional
+/// value. The integer is a usable fallback -- Chrome rounds the scale up to an
+/// integer anyway -- but it is not the same picture.
+let host = () => {
+  let found = ref(None)
+  Proc.run("wlr-randr", [])
+  ->String.split("\n")
+  ->Array.forEach(line =>
+    if found.contents->Option.isNone && line->String.trimStart->String.startsWith("Scale:") {
+      found :=
+        line->String.split("Scale:")->Array.get(1)->Option.flatMap(number)->Option.flatMap(Scale.make)
+    }
+  )
+  switch found.contents {
+  | Some(scale) => Some(scale)
+  | None => wlOutputScale()
+  }
+}
+
+/// The configured scale, or the host screen's, or nothing to say.
+let select = () =>
+  switch configured() {
+  | Some(scale) => Some(scale)
+  | None => host()
+  }
+
+let sessionEnv = display =>
+  Dict.fromArray([("WAYLAND_DISPLAY", display), ("XDG_RUNTIME_DIR", Config.runtimeDir())])
+
+let outputName = env => {
+  let found = ref(None)
+  Proc.run(~env, "wlr-randr", [])
+  ->String.split("\n")
+  ->Array.forEach(line =>
+    if found.contents->Option.isNone && line->String.startsWith(headlessPrefix) {
+      found := line->String.split(" ")->Array.filter(w => w != "")->Array.get(0)
+    }
+  )
+  found.contents
+}
+
+/// Set the nested output's scale, or `None` if it could not be set.
+///
+/// Best effort by design: a failure here costs picture quality, never the
+/// session, so it is reported rather than raised. Reported honestly, though --
+/// announcing a scale wlr-randr refused would be the same silent lie the old
+/// resize told.
+let apply = (display, scale) =>
+  switch Launch.which("wlr-randr") {
+  | None => None
+  | Some(_) =>
+    let env = sessionEnv(display)
+    switch outputName(env) {
+    | None => None
+    | Some(name) =>
+      let factor = Scale.factor(scale)->Float.toString
+      switch Proc.status(~env, "wlr-randr", ["--output", name, "--scale", factor]) {
+      | Some(0) => Some(`scale ${factor}`)
+      | _ => None
+      }
+    }
+  }
+
+/// Give the nested output the density of the screen it will be seen on.
+let fit = display => select()->Option.flatMap(scale => apply(display, scale))

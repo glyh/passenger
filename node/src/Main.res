@@ -72,17 +72,11 @@ let strings = (args, name) =>
 
 // --- the two things every tool does first -----------------------------------
 
-/// The daemon starts on demand, once `Browser` is ported. Until then a caller
-/// that finds Chrome down is told so plainly rather than being handed a failure
-/// from four layers in.
+/// The daemon starts on demand. A human runs it first; an agent should not have
+/// to know that.
 let ensureDaemon = async () =>
-  if !(await Targets.isUp()) {
-    Errors.fail(
-      DaemonNotRunning,
-      `chrome is not answering on ${Config.cdpUrl()}`,
-      ~detail="the node port cannot start it yet -- run the C# server's daemon, " ++
-      "or start chrome with --remote-debugging-port",
-    )
+  if !(await Browser.isUp()) {
+    (await Browser.start())->ignore
   }
 
 /// Collect expired lanes, then check the caller's is still one of them.
@@ -92,11 +86,15 @@ let ensureDaemon = async () =>
 /// later on a dangling foreign key rather than saying LANE_NOT_FOUND.
 ///
 /// A lane holding the screen when its clock runs out takes its claim with it,
-/// and nothing else would then put the viewer away -- so the sweep that frees
-/// the last claim is also what dismisses it. That dismissal is the one half of
-/// this function that is not here yet: it needs `Present`, and lands with it.
+/// and nothing else would then put the viewer away -- so the sweep that frees the
+/// last claim is also what dismisses it.
 let housekeep = async (~lane=?) => {
-  let _ = await Lanes.sweep()
+  let holders = Lanes.screenClaims()
+  let collected = await Lanes.sweep()
+  if holders->Array.some(h => collected->Array.includes(h)) && Lanes.screenClaims()->Array.length == 0 {
+    Present.select().dismiss()
+  }
+
   switch lane {
   | Some(lane) => Lanes.require(lane)->ignore
   | None => ()
@@ -260,10 +258,81 @@ reaches them.`,
   },
 }
 
-// `showBrowser`, `hideBrowser` and `browserStatus` are the three that are not
-// here yet: each needs `Present`, `Launch` or `NestedSessions`, none of which
-// are ported. They are absent from the listing rather than present and failing,
-// so a caller reading `tools/list` sees what this server can actually do.
+let showBrowserTool = {
+  "name": "showBrowser",
+  "description": `Put the browser on screen so the user can log in or solve a challenge.
+
+Also how you ask for a human deliberately, not only in answer to a \`blocked\`
+reply.
+
+By default nothing here inspects the page -- the wait ends when the human closes
+the viewer, and the reply says so. \`until="unblocked"\` is the other reading: it
+polls the named tab until the wall stops matching. That was
+\`fetch(wait_seconds=...)\` before ticket 046 retired it, and it is a measurement
+rather than a guess only because the signature table is fixed. Whichever you wait
+on, read the tab afterwards and judge for yourself.`,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "lane": {
+        "type": "string",
+        "description": "Your lane. It holds a claim on the screen until you call hideBrowser, so another caller finishing its work cannot take the window away from the person you just asked for help.",
+      },
+      "tab": {
+        "type": "string",
+        "description": "Bring this tab to the front first, from a previous reply or from listTabs, so the human lands on the page you mean.",
+      },
+      "waitSeconds": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 900,
+        "description": "Block for up to this long. 0 (default) returns as soon as it is on screen.",
+      },
+      "until": {
+        "type": "string",
+        "enum": ["closed", "unblocked"],
+        "description": "What ends the wait. `closed` (default) waits for the human to close the viewer, which is a fact about the human. `unblocked` waits for the vendor's wall to stop matching on `tab`, which is a fact about the page -- stronger, but it needs a tab and only sees walls this tool can name.",
+      },
+      "notifyHuman": {
+        "type": "boolean",
+        "description": "Send a desktop notification or webhook. Set this when the human is not watching this conversation -- running unattended, or on a machine they are not sitting at.",
+      },
+      "ttlMinutes": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1440,
+        "description": "Raise the lane's idle timeout for this handoff. A human who wanders off for longer than the lane's TTL comes back to a tab that was collected.",
+      },
+    },
+    "required": ["lane"],
+  },
+}
+
+let hideBrowserTool = {
+  "name": "hideBrowser",
+  "description": `Release your claim on the screen, tucking the browser away if you were the last
+one holding it.
+
+This closes nothing: your tabs stay open and your lane stays yours.
+\`closeTabs\` closes pages, \`destroyLane\` ends the lane.`,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "lane": {
+        "type": "string",
+        "description": "The lane releasing the screen. The viewer stays up while any other lane still holds a claim.",
+      },
+    },
+    "required": ["lane"],
+  },
+}
+
+let browserStatusTool = {
+  "name": "browserStatus",
+  "description": "Report whether the browser is running, and what is on screen.",
+  "inputSchema": {"type": "object", "properties": noProperties, "required": nothingRequired},
+}
+
 let tools: array<JSON.t> = [
   scriptTool->Obj.magic,
   openLaneTool->Obj.magic,
@@ -272,6 +341,9 @@ let tools: array<JSON.t> = [
   closeTabsTool->Obj.magic,
   closeAllTabsTool->Obj.magic,
   destroyLaneTool->Obj.magic,
+  showBrowserTool->Obj.magic,
+  hideBrowserTool->Obj.magic,
+  browserStatusTool->Obj.magic,
 ]
 
 let call = async (name, a) =>
@@ -342,6 +414,139 @@ let call = async (name, a) =>
     Lanes.destroy(lane)
     text(`closed ${closed->Int.toString} tab(s), lane ${lane} is gone`)
 
+  | "showBrowser" =>
+    await ensureDaemon()
+    let lane = a->string("lane")
+    let tab = a->optionalString("tab")
+    let waitSeconds = a->int("waitSeconds", ~fallback=0)
+    let until =
+      a
+      ->optionalString("until")
+      ->Option.flatMap(Models.parseWaitFor)
+      ->Option.getOr(Models.Closed)
+    await housekeep(~lane)
+    switch a->Dict.get("ttlMinutes")->Option.flatMap(v => v->JSON.Decode.float) {
+    | Some(minutes) => Lanes.setTtl(lane, minutes->Float.toInt * 60)
+    | None => ()
+    }
+
+    Lanes.touch(lane)
+    Lanes.claimScreen(lane)
+    switch tab {
+    | Some(tab) =>
+      let session = await Session.open_()
+      await Handoff.bringToFront(await Session.pageFor(session, lane, Some(tab)))
+      await Session.dispose(session)
+    | None => ()
+    }
+
+    let presenter = Present.select()
+    let how = await presenter.present()
+    if a->bool("notifyHuman", ~fallback=false) {
+      Notify.select().notify("Agent browser needs you", how)
+    }
+
+    if waitSeconds == 0 {
+      Lanes.touch(lane)
+      text(how)
+    } else {
+      let waited = switch (until, tab) {
+      | (Models.Unblocked, None) => Some("cannot wait on a wall with no tab named")
+      | (Models.Unblocked, Some(tab)) =>
+        let session = await Session.open_()
+        let page = await Session.pageFor(session, lane, Some(tab))
+        let answer = await Handoff.waitUntilUnblocked(page, ~timeoutS=waitSeconds)
+        await Session.dispose(session)
+        Some(answer)
+      | (Models.Closed, _) => Some(await Handoff.waitForDismissal(presenter, waitSeconds))
+      }
+      Lanes.touch(lane)
+      text(`${how} -- ${waited->Option.getOr("")}`)
+    }
+
+  | "hideBrowser" =>
+    let lane = a->string("lane")
+    // Sweeps before counting, so the tab count below is what Chrome really has
+    // and not what the db last heard: a tab the human closed during the handoff
+    // would otherwise be reported back as still open.
+    await housekeep(~lane)
+    Lanes.touch(lane)
+    let gone = Lanes.releaseScreen(lane)
+    if gone {
+      Present.select().dismiss()
+    }
+
+    let screen = gone
+      ? "dismissed"
+      : `still shown: ${Lanes.screenClaims()->Array.length->Int.toString} other claim(s)`
+
+    // Callers have reached for this one meaning "I am finished with the pages"
+    // and then walked away leaving the tabs open, because "hideBrowser" reads
+    // like the browser going away. It only ever took the *window* away; the lane
+    // and its tabs outlive it, and the only thing that ever closed them was a ttl
+    // sweep some minutes later. So when there is anything left open, the return
+    // says so and names the tools that do close it, rather than answering
+    // "dismissed" to a question the caller did not ask.
+    let open_ = Lanes.tabsOf(lane)->Array.length
+    text(
+      open_ == 0
+        ? screen
+        : `${screen} -- ${open_->Int.toString} tab(s) still open in this lane; this only ` ++
+          "released the screen. If you meant to close the pages, use closeTabs, " ++
+          "or destroyLane when you are done with the lane entirely.",
+    )
+
+  | "browserStatus" =>
+    let presenter = Present.select()
+    let (host, port) = Present.endpoint()
+    let up = await Browser.isUp()
+    let (openTabs, orphaned) = await Lanes.counts()
+    json(
+      JSON.Encode.object(
+        Dict.fromArray([
+          ("daemon", JSON.Encode.string(up ? "up" : "down")),
+          // How the window is being hidden, which decides whether it can be. The
+          // CLI's `status` reported this and nothing else did; ticket 057 moved
+          // it here rather than losing it, because a machine that resolved no
+          // nested backend starts Chrome *visible* and this is the only line that
+          // says so before somebody notices a browser on their desktop.
+          ("launch", JSON.Encode.string(Models.backendNameOf(Launch.select().name))),
+          ("presenter", JSON.Encode.string(Models.presenterNameOf(presenter.name))),
+          ("onScreen", JSON.Encode.string(presenter.presented() ? "True" : "False")),
+          ("profile", JSON.Encode.string(Config.profileDir())),
+          // Named so a black screen is diagnosable: a viewer attached while
+          // session reads "stale" is looking at a compositor with nothing in it.
+          (
+            "session",
+            JSON.Encode.string(Sessions.live()->Option.isSome ? "live" : "stale"),
+          ),
+          ("vnc", JSON.Encode.string(`${host}:${port->Int.toString}`)),
+          // The only number that reveals a lane you do not own. Without it
+          // nothing in this tool can show tabs piling up, since every listing is
+          // scoped to the caller. A count, deliberately: ids and owners would be
+          // a listing, and a lane's tabs are nobody else's business.
+          (
+            "tabs",
+            JSON.Encode.string(
+              `${openTabs->Int.toString} open, ${orphaned->Int.toString} orphan`,
+            ),
+          ),
+          // The one thing a tab count cannot show: a tab that is holding every
+          // attach open counts the same as a working one (ticket 042). Asked of
+          // every tab, so it costs a websocket round trip each -- this is a
+          // diagnostic, and a healthy tab answers in under 10ms.
+          (
+            "wedged",
+            JSON.Encode.string(up ? await Targets.stuckSummary() : "unknown"),
+          ),
+          (
+            "screenClaims",
+            JSON.Encode.string(Lanes.screenClaims()->Array.length->Int.toString),
+          ),
+        ]),
+      ),
+    )
+
   | other => Errors.fail(ScriptInvalid, `no tool named ${other}`)
   }
 
@@ -369,6 +574,21 @@ server->Mcp.setRequestHandler(Mcp.callToolRequest, async req =>
   }
 )
 
-let main = async () => await server->Mcp.connect(Mcp.stdio())
+// Two things run before the server and neither one starts it: the viewer
+// re-exec, and the human's `stop`. Both are argv checks, deliberately ahead of
+// anything that could write a byte to stdout -- which belongs to the protocol,
+// and which a stray line corrupts.
+@val @scope("process") external argv: array<string> = "argv"
+@val @scope("process") external exit: int => unit = "exit"
+
+let main = async () => {
+  let args = argv->Array.slice(~start=2, ~end=argv->Array.length)
+  if !Webserve.serveIfAsked(args) {
+    switch await Stop.ifAsked(args) {
+    | Some(status) => exit(status)
+    | None => await server->Mcp.connect(Mcp.stdio())
+    }
+  }
+}
 
 main()->Promise.ignore

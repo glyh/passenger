@@ -46,3 +46,6 @@ type cdp
 
 /// The per-call budget every Playwright operation inside a script inherits.
 @send external setDefaultTimeout: (page, int) => unit = "setDefaultTimeout"
+
+/// Raise a tab, so the human lands on the page the caller meant.
+@send external bringToFront: page => promise<unit> = "bringToFront"
