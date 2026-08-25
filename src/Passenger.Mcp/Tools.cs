@@ -354,6 +354,9 @@ public static class Tools
     [Description("""
         Release your claim on the screen, tucking the browser away if you were
         the last one holding it.
+
+        This closes nothing: your tabs stay open and your lane stays yours.
+        `closeTabs` closes pages, `destroyLane` ends the lane.
         """)]
     public static string HideBrowser(
         [Description("""
@@ -362,15 +365,36 @@ public static class Tools
             """)]
         string lane)
     {
-        Lanes.Require(lane);
+        // Sweeps before counting, so the tab count below is what Chrome really
+        // has and not what the db last heard: a tab the human closed during the
+        // handoff would otherwise be reported back as still open.
+        Housekeep(lane);
         Lanes.Touch(lane);
-        if (!Lanes.ReleaseScreen(lane))
+        bool gone = Lanes.ReleaseScreen(lane);
+        if (gone)
         {
-            return $"still shown: {Lanes.ScreenClaims().Count} other claim(s)";
+            Present.Select().Dismiss();
         }
 
-        Present.Select().Dismiss();
-        return "dismissed";
+        string screen = gone
+            ? "dismissed"
+            : $"still shown: {Lanes.ScreenClaims().Count} other claim(s)";
+
+        // Callers have reached for this one meaning "I am finished with the
+        // pages" and then walked away leaving the tabs open, because
+        // "hideBrowser" reads like the browser going away. It only ever took
+        // the *window* away; the lane and its tabs outlive it, and the only
+        // thing that ever closed them was a ttl sweep some minutes later. So
+        // when there is anything left open, the return says so and names the
+        // tools that do close it, rather than answering "dismissed" to a
+        // question the caller did not ask.
+        int open = Lanes.TabsOf(lane).Count;
+        return open == 0
+            ? screen
+            : $"{screen} -- {open} tab(s) still open in this lane; this only "
+              + "released the screen. If you meant to close the pages, use "
+              + "closeTabs, or destroyLane when you are done with the lane "
+              + "entirely.";
     }
 
     [McpServerTool(Name = "browserStatus")]

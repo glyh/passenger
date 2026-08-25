@@ -31,6 +31,11 @@ is a backstop for the calls you never got to make, not the plan.
 has called `hideBrowser`. So your `hideBrowser` cannot take the window away
 from someone else's human -- and theirs cannot take it from yours.
 
+It is a claim on the screen and nothing else. It closes no tab and ends no
+lane, whatever the name suggests: after `hideBrowser` your pages are still
+loaded and still yours. `closeTabs` is what closes pages, `destroyLane` what
+ends the lane.
+
 ## What crosses the glass, and what does not
 
 The human is looking at a VNC screen in a browser window, so what reaches the
