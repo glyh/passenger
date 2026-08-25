@@ -24,18 +24,19 @@ one:
 |---|---|
 | getting the text, the markdown, or the page's own JSON | `references/reading-a-page.md` |
 | a page whose content is photographs, menus or charts | `references/pictures.md` |
-| writing the C#: strings, `await`, types, what cannot cross back | `references/writing-scripts.md` |
+| writing the JavaScript: what is in scope, what cannot cross back | `references/writing-scripts.md` |
 | tabs piling up, a wedged browser, a shared screen, `orphan` | `references/tabs-and-lanes.md` |
 
 The recipes those files run -- `markdown.js`, `unstrip-asides.js`,
 `pictures.js` -- are in `scripts/`. What each tool *argument* means is in the
 tool schemas, and is repeated nowhere here.
 
-**The server runs on your machine, in your filesystem.** A script's `File.*`
-calls land on the same disk your other tools see, in both directions: read a
-recipe off its real path instead of pasting it into a script, and write bytes
-with `File.WriteAllBytesAsync` to a path you can then open yourself. A
-screenshot or a downloaded image does not have to cross back as JSON.
+**The server runs on your machine, in your filesystem.** A script gets `fs`
+(`node:fs/promises`) and it lands on the same disk your other tools see, in both
+directions: read a recipe off its real path instead of pasting it into a script,
+and `fs.writeFile` bytes to a path you can then open yourself. A screenshot or a
+downloaded image does not have to cross back as JSON. It is also how a file gets
+*into* a page -- `setInputFiles` takes a path on this same disk.
 
 ## Open a lane first
 
@@ -67,29 +68,31 @@ There is no `fetch`. `script` is the whole surface onto a page: it navigates,
 it drives, and it returns what you tell it to.
 
     script(lane, source: """
-        await Page.GotoAsync("https://example.com");
-        return await Page.InnerTextAsync("body");
+        await Page.goto("https://example.com");
+        return await Page.innerText("body");
     """)
 
-`Page` is a real Playwright `IPage`. Omit `tab` and you get a fresh one; pass a
-tab id from an earlier reply and you continue on it. Navigation, interaction
-and reading are all one call, so a page you know how to handle costs exactly
-one round trip.
+That is plain JavaScript, and `Page` is Playwright's own `Page` -- the API you
+already know, not a binding of it. Omit `tab` and you get a fresh one; pass a
+tab id from an earlier reply and you continue on it. Navigation, interaction and
+reading are all one call, so a page you know how to handle costs exactly one
+round trip.
 
-**Three things about the C# here**, and they account for nearly every first-try
+**Two things about the source**, and they account for nearly every first-try
 failure:
 
-- **`Page`, capitalised.** It is a member, so it follows C#'s convention like
-  everything else you will call on it. `page` does not compile.
-- **Everything is awaited.** Playwright .NET has no synchronous API, so
-  `Page.GotoAsync(url)` without `await` hands you a `Task`, not a page.
-- **`return` at the top level is fine.** No wrapper, no method, no class.
+- **`Page`, capitalised.** The one name this side introduces, and the one thing
+  in your script that is not ordinary JavaScript spelling. `page` is not
+  defined.
+- **`return` and top-level `await` both work.** Your source is wrapped in an
+  async function before it runs, so there is no module, no wrapper to write, and
+  no `(async () => {...})()` to add yourself.
 
-The ones that bite after it compiles -- verbatim strings for JavaScript, a
-nested `await` that will not build, the type argument that is not optional, the
-live handles that cannot cross back -- are in `references/writing-scripts.md`.
-**Trigger:** open it the moment a script fails to compile or a call throws
-something other than a wall or a timeout.
+The ones that bite afterwards -- `Page.evaluate` silently answering `undefined`
+when handed a string, the Node builtins that are *not* in scope, the live
+handles that cannot cross back -- are in `references/writing-scripts.md`.
+**Trigger:** open it the moment a script fails to parse, a call throws something
+other than a wall or a timeout, or an `evaluate` comes back `undefined`.
 
 **This server does not interpret pages.** It used to: there was a `fetch` with
 an `article` mode and a `dom` mode, and choosing between them was the caller's
@@ -102,14 +105,14 @@ and get out of the way.
 
 Start with the cheapest thing that answers your question.
 
-    return await Page.InnerTextAsync("body");                 // the text, and nothing else
-    return await Page.Locator("#results").InnerTextAsync();   // just the part you want
+    return await Page.innerText("body");                 // the text, and nothing else
+    return await Page.locator("#results").innerText();   // just the part you want
 
 Those two answer most questions, and the second costs you the least context:
 you know what you are looking for, and the page does not. Two more are worth
 knowing by name, both in `references/reading-a-page.md`:
 
-- **`Page.APIRequest`**, which often reaches the site's own JSON without
+- **`Page.request`**, which often reaches the site's own JSON without
   rendering the page at all -- a `__INITIAL_STATE__` blob, or a preload link in
   the `<head>` -- and is the cheapest and most structured read there is when a
   site has one. Look for it before writing selectors.
@@ -122,8 +125,8 @@ hand, or before assuming a page has no structured JSON of its own.
 **A short read comes back; a long one goes to disk.** A tool reply is JSON, so
 a returned page arrives quoted and escaped, on one line, and all of it is in
 your context whether you wanted it or not. Write it out with
-`File.WriteAllTextAsync` and return the path and the length instead -- the
-length being the thing you read against what you expected.
+`fs.writeFile` and return the path and the length instead -- the length being
+the thing you read against what you expected.
 
 ## The tool measures; you judge
 
@@ -136,9 +139,9 @@ above is yours to do.
 **A `script` reply carries what you returned, and nothing about the page except
 a wall.** It used to carry a measurement of the tab you ended on -- a character
 count, the picture geometry, the url and title -- and that is gone. Whatever
-you want to know about the page, return it: `Page.Url`,
-`await Page.TitleAsync()`, `(await Page.InnerTextAsync("body")).Length`. They
-cost you nothing extra, because your script is already there.
+you want to know about the page, return it: `Page.url()`,
+`await Page.title()`, `(await Page.innerText("body")).length`. They cost you
+nothing extra, because your script is already there.
 
 The consequence is worth stating plainly, because nothing else will state it:
 **a page that reads short will not tell you it was picture-borne**, and no
@@ -220,7 +223,7 @@ reading and driving are different kinds of act, not degrees of one.
 
 After a human has navigated -- during a handoff, or just in their own browser
 -- `script` against that tab costs nothing and is invisible to the site. So
-does `Page.APIRequest` against a URL. Synthetic clicks and fills are not: they
+does `Page.request` against a URL. Synthetic clicks and fills are not: they
 have no cursor path and no keystroke timing, and that is exactly what
 behavioural anti-bot systems score. Driving spends the reputation of a session
 whose entire value is that it has never done anything unusual.

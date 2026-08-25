@@ -38,10 +38,11 @@ try {
   console.log("pageFor a foreign tab:", Errors.rendered(e.code, e.message, e.detail));
 }
 
-// The other half of `Script_test.res`'s handle rule: the unit test pins the
-// rule against the shapes measured off these objects, and this pins that the
-// objects still have those shapes. Neither half is enough alone.
-const Script = await import("./src/Script.res.mjs");
+// Playwright's handles, serialised. There is no rule refusing them any more --
+// see the comment over `Script.crossable` -- and this is the measurement that
+// decision rests on: each one is small and says its own name, so a caller who
+// returns one by mistake gets something legible rather than a page of driver
+// internals.
 const handles = {
   page,
   context: s.context,
@@ -56,10 +57,12 @@ const handles = {
   jsHandle: await page.evaluateHandle(() => globalThis),
 };
 for (const [name, h] of Object.entries(handles)) {
-  const got = Script.handleName(h);
-  console.log("  handle", name.padEnd(14), got ? `refused as ${got}` : "CROSSED (wrong)");
+  let json;
+  try { json = JSON.stringify(h); } catch (e) { json = "THROWS " + e.constructor.name; }
+  const labelled = /"_(type|apiName)":/.test(json ?? "");
+  console.log("  handle", name.padEnd(14), String(json?.length ?? 0).padStart(5), "B",
+              labelled ? "| names itself" : "| UNLABELLED (the skill's advice would not help here)");
 }
-console.log("  a plain scrape crosses:", Script.handleName({ title: "x", rows: [1, 2] }) === undefined);
 
 await page.goto("about:blank");
 console.log("closeOthers closed:", await Session.closeOthers(s, lane, page));

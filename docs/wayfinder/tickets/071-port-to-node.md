@@ -289,15 +289,18 @@ against a live session.
   async IIFE **with no newline before the body** -- so line 1 stays line 1 in the
   stack trace, and both `return` and top-level `await` work. No Roslyn, and none
   of the flat ~40ms per compile.
-- *`Crossable` gets harder.* It did, and the measured answer beat the guess.
-  There is no type to test, so the rule was measured off live objects instead:
-  every Playwright handle is a ChannelOwner (a string `_guid`), a
-  `Locator`/`APIResponse` (a string `_apiName`, no `_guid`), or something like
-  `Keyboard` that is neither but holds one in a field. Three tests, the third one
-  level deep. Property reads rather than `instanceof`, which is load-bearing --
-  a vm context is its own realm. Pinned twice: the unit suite against stand-ins
-  carrying the measured shapes, and `live-session.mjs` against eleven real
-  handles.
+- *`Crossable` gets harder.* **It dissolved.** The first answer was a rule
+  measured off live objects -- `_guid`, `_apiName`, or an object holding one --
+  and the owner was right that it was a C# habit rather than a fact about this
+  runtime. On that side `System.Text.Json` walked a handle's live object graph
+  and emitted something large and answer-shaped, which is ticket 013's bug. Here
+  Playwright ships `toJSON`: all eleven handle kinds serialise to 64-945 bytes
+  and every one names itself (`_type`, `_apiName`), measured in
+  `live-session.mjs`. Nobody mistakes that for their data -- and the rule could
+  not be exact, so a site whose JSON carries a field called `_guid` would have
+  had its data refused. The boundary now refuses only what is genuinely not a
+  JSON document, a cycle or a BigInt, and the skill says what `_apiName` in a
+  reply means.
 - *The bindings.* As small as counted. Playwright is ~20 members, the MCP SDK is
   six externals, and neither needed `%raw` to start.
 - *The type system.* Kept, and in three places strengthened past what C# could

@@ -1,25 +1,12 @@
 // The passthrough door's core. Pure: no browser, no page.
 //
-// The oracle was `tests/Passenger.Tests/ScriptTests.cs`, and all thirteen of its
-// cases are here. Three had to change shape, in the opposite direction from the
-// C# port's own change.
+// The oracle was `tests/Passenger.Tests/ScriptTests.cs`. Nine of its thirteen
+// cases are here; the other four pinned a rule that no longer exists.
 //
-// That side could not *construct* a Playwright handle -- hand-implementing
-// ILocator would be a hundred members that break on every driver update -- so it
-// asserted its rule over `Type` objects. This side can construct one trivially,
-// but only with a browser attached, and a pure suite must not need one. So the
-// rule is pinned here against stand-ins carrying the shape that was measured off
-// live handles, and that the live objects still have that shape is pinned in
-// `live-session.mjs`, which does have a browser. Neither half is enough alone:
-// the unit test would not notice Playwright changing its internals, and the live
-// check would not notice the rule losing a case.
-
-// The three shapes, as measured against playwright-core 1.62. See the comment
-// over `Script.handleName` for what was found and how.
-let channelOwner = {"_type": "Page", "_guid": "page@79c7d4d0"}
-let locator = {"_apiName": "Locator", "_frame": {"_type": "Frame", "_guid": "frame@b94fca7c"}}
-let apiResponse = {"_apiName": "APIResponse", "_request": {"_guid": "request-context@2046b027"}}
-let keyboard = {"_page": {"_type": "Page", "_guid": "page@79c7d4d0"}}
+// That rule refused a live Playwright handle by name, and it was a C#
+// inheritance rather than a fact about this runtime -- see the comment over
+// `Script.crossable` for what was measured and why it went. What is left of the
+// boundary is the one case that is genuinely not JSON, and it is below.
 
 T.testAsync("a script returns a value", async () => {
   // `return` at the top level of the source, which a module cannot do. The
@@ -53,49 +40,10 @@ T.testAsync("a name nobody bound is not in scope", async () => {
   }
 })
 
-T.test("a type nobody listed is still a handle", () => {
-  // The bug the list had. `IAPIResponse` was not among the eight types named by
-  // hand on the C# side, so `return await Page.APIRequest.GetAsync(url)`
-  // serialised the driver's own headers and timings and handed them back as if
-  // they were the answer -- no error, and not the body the caller asked for.
-  // Found by writing the skill's picture recipe (ticket 049) and running it.
-  T.equal(Script.handleName(apiResponse), Some("APIResponse"))
-  // And the shape nothing would think to list at all: an object that is not a
-  // handle itself but holds one.
-  T.equal(Script.handleName(keyboard), Some("Playwright handle"))
-})
-
-T.test("a handle is refused by name", () => {
-  // Ticket 013: nearly every Playwright call hands back an object that cannot
-  // be JSON, so the error has to say what to return instead rather than
-  // surfacing a serialisation stack trace.
-  T.equal(Script.handleName(channelOwner), Some("Page"))
-  T.equal(Script.handleName(locator), Some("Locator"))
-})
-
-T.test("what a script is meant to return is not a handle", () => {
-  // The other side of the rule: a script's usual return -- text, a list of
-  // hrefs, a record of fields -- must not be caught by it.
-  T.equal(Script.handleName("text"->Obj.magic), None)
-  T.equal(Script.handleName(["a", "b"]->Obj.magic), None)
-  T.equal(Script.handleName({"title": "x", "href": "y"}->Obj.magic), None)
-  T.equal(Script.handleName(Nullable.null->Obj.magic), None)
-  T.equal(Script.handleName(7->Obj.magic), None)
-})
-
-T.test("the refusal says what to return instead", () => {
-  switch Script.crossable(locator) {
-  | _ => T.ok(false)
-  | exception Errors.Passenger({code, detail}) =>
-    T.equal(code, ScriptReturnNotJson)
-    T.ok(detail->Option.getOr("")->String.includes("return what you wanted"))
-  }
-})
-
-T.test("a value no rule could name is refused too", () => {
-  // The second half of the check, which catches what no shape test could: a
-  // cycle. `JSON.stringify` genuinely refuses it, where it would happily walk
-  // into a live handle -- which is why the shape test has to come first.
+T.test("a value that is not JSON is refused", () => {
+  // What the boundary is actually for. A cycle is not a JSON document and no
+  // amount of good intent makes it one, so this is a refusal rather than a
+  // guess about what the caller meant.
   let cycle = Dict.make()
   cycle->Dict.set("self", cycle->Obj.magic)
   switch Script.crossable(cycle) {
@@ -139,6 +87,10 @@ T.test("ordinary values cross", () => {
   T.equal(Script.crossable("text"), "text")
   T.equal(Script.crossable(["a", "b"]), ["a", "b"])
   T.equal(Script.crossable(Nullable.null), Nullable.null)
+  // And so does a caller's own data that happens to look like Playwright's.
+  // The rule this replaced would have refused it: a site whose JSON carries a
+  // field called `_guid` is a site, not a handle.
+  T.equal(Script.crossable({"_guid": "row-7", "title": "x"}), {"_guid": "row-7", "title": "x"})
 })
 
 T.test("the reported line is the caller's own text", () => {
@@ -146,4 +98,31 @@ T.test("the reported line is the caller's own text", () => {
   // ones they can see.
   T.equal(Script.lineOf("var a = 1;\nvar b = 2;\n", 2), "var b = 2;")
   T.equal(Script.lineOf("var a = 1;", 9), "")
+})
+
+// Annotated concretely: a `%raw` cannot carry a type variable, and the only
+// caller hands it a unit-returning thunk anyway.
+let captureStdout: (unit => promise<unit>) => promise<string> = %raw(`async (body) => {
+  const original = process.stdout.write.bind(process.stdout);
+  let captured = "";
+  process.stdout.write = (chunk) => { captured += chunk; return true; };
+  try { await body(); } finally { process.stdout.write = original; }
+  return captured;
+}`)
+
+T.testAsync("a script's console cannot reach stdout", async () => {
+  // stdout is the JSON-RPC transport. Handing a caller the real `console`
+  // looked right and was not -- `console.log` writes there, so one tracing line
+  // in a script corrupted the stream it was travelling on. Found by writing the
+  // skill, after the comment in `Script.res` had claimed stderr for a while.
+  //
+  // Asserted over every method rather than `log` alone: a script reaching for
+  // `console.table` must not be the one that breaks the wire.
+  let leaked = await captureStdout(async () => {
+    let _ = await Script.execute(
+      "console.log('a'); console.info('b'); console.warn('c'); console.table([{x:1}]); return 1;",
+      Nullable.null,
+    )
+  })
+  T.equal(leaked, "")
 })

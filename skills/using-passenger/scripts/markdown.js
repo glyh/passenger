@@ -7,7 +7,10 @@
 // the server when the server was the one running this.
 //
 // This file is one JavaScript expression -- an arrow function -- because that
-// is what `EvaluateAsync` takes. Nothing else may be at the top level.
+// is what `Page.evaluate` takes. Nothing else may be at the top level, and note
+// that it must be `eval`'d into a function before being passed: handed the text
+// as a string, `evaluate` evaluates the expression rather than calling it and
+// answers `undefined`.
 //
 // It stays JavaScript deliberately. Ticket 030 weighed rewriting it against a
 // `DOMSnapshot` and refused: its semantics *are* `innerText`,

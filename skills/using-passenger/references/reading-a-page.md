@@ -6,17 +6,18 @@ and the two ways a whole page should not come back to you.
 
 ## Just the part you want
 
-    return await Page.Locator("#results").InnerTextAsync();
+    return await Page.locator("#results").innerText();
 
-    return await Page.EvalOnSelectorAllAsync<string[]>(
-        "a[href]", "els => els.map(e => e.textContent.trim() + ' -> ' + e.href)");
+    return await Page.$$eval(
+        "a[href]", els => els.map(e => ({ text: e.textContent.trim(), href: e.href })));
 
-Usually the right answer, and the one that costs least context. **The type
-argument on `EvalOnSelectorAllAsync<T>` is required** -- see
-`writing-scripts.md`, along with why several fields per element want to be
-`JSON.stringify`d strings rather than objects.
+Usually the right answer, and the one that costs least context. Note the second
+argument is a **function**, not a string: hand `$$eval` or `evaluate` a string
+and Playwright evaluates it as an *expression* rather than calling it, so you
+get `undefined` back and no error. `writing-scripts.md` has the full shape of
+that trap, including the one case where a string *is* what you want.
 
-`InnerTextAsync("body")` stays the escape hatch for pages that defeat
+`innerText("body")` stays the escape hatch for pages that defeat
 everything else: 12306's ticket results render through their own templating and
 `InnerText` is the only thing that sees them.
 
@@ -28,9 +29,9 @@ or names it in a `<link rel=preload>` in the `<head>` that the browser is about
 to fetch anyway. `Page.APIRequest` reaches either through this Chrome, carrying
 this profile's cookies, with no navigation and no rendering:
 
-    var response = await Page.APIRequest.GetAsync(url);
-    var html = await response.TextAsync();
-    // then the state blob out of `html`, or the preload link's href and one more GetAsync
+    const response = await Page.request.get(url);
+    const html = await response.text();
+    // then the state blob out of `html`, or the preload link's href and one more get
 
 Worth looking for before you write a single selector. It is one round trip, it
 cannot be defeated by lazy rendering, and what comes back is *structured* --
@@ -39,8 +40,8 @@ that falls out of this is fetch, parse, filter, and render only the two or
 three items that survived.
 
 Two things to know: these responses are often hundreds of kilobytes, so write
-them to disk rather than returning them (below); and `GetAsync` hands back a
-live handle, so ask it for `TextAsync()` or `BodyAsync()` and return that
+them to disk rather than returning them (below); and `get` hands back a
+live handle, so ask it for `text()` or `body()` and return that
 (`writing-scripts.md`).
 
 ### When `APIRequest` cannot verify the certificate
@@ -49,17 +50,20 @@ live handle, so ask it for `TextAsync()` or `BodyAsync()` and return that
 browsing context beside it. A host that serves an incomplete certificate chain
 -- the leaf without the intermediate, which every real browser papers over by
 fetching the missing link itself -- fails here with `unable to verify the first
-certificate`, while `Page.GotoAsync` to the same origin loads fine.
+certificate`, while `Page.goto` to the same origin loads fine.
 
-That asymmetry is the tell: **if navigation works and `APIRequest` does not,
+That asymmetry is the tell: **if navigation works and `Page.request` does not,
 suspect the chain, not the site.** The fix is to make the request from inside
 the page, where the browsing context's own trust applies:
 
-    await Page.GotoAsync(origin);          // any page on that origin
-    var text = await Page.EvaluateAsync<string>(@"async (u) => {
+    await Page.goto(origin);               // any page on that origin
+    const text = await Page.evaluate(async (u) => {
         const r = await fetch(u);
         return await r.text();
-    }", url);
+    }, url);
+
+(That `fetch` is the *page's*, which is the point. There is none in your own
+scope -- see `writing-scripts.md`.)
 
 For bytes rather than text -- a PDF, an image, a font -- come back base64 and
 decode on this side. **Build the string in chunks:** spreading a whole file
@@ -67,22 +71,22 @@ into `String.fromCharCode(...)` passes one argument per byte and throws
 `RangeError: Maximum call stack size exceeded` somewhere in the low hundreds of
 kilobytes, which is under every PDF worth fetching this way.
 
-    var b64 = await Page.EvaluateAsync<string>(@"async (u) => {
+    const b64 = await Page.evaluate(async (u) => {
         const b = new Uint8Array(await (await fetch(u)).arrayBuffer());
         let s = '';
         for (let i = 0; i < b.length; i += 0x8000)
             s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-        return btoa(s);
-    }", url);
-    await File.WriteAllBytesAsync(path, Convert.FromBase64String(b64));
+        return btoa(s);                    // btoa is the page's; you have none
+    }, url);
+    await fs.writeFile(path, b64, "base64");   // fs decodes on the way out
 
 Base64 is four bytes out for every three in, and all of it crosses back through
 a tool reply, so check the size before you reach for this -- a large file wants
 a download, not an encoding.
 
-This costs a navigation that `APIRequest` would have saved, so reach for it
+This costs a navigation that `Page.request` would have saved, so reach for it
 only once the certificate error has actually appeared. Same-origin only: the
-page's `fetch` is subject to CORS, which `APIRequest` is not.
+page's `fetch` is subject to CORS, which `Page.request` is not.
 
 ⚠️ The certificate asymmetry is measured; **these two recipes are written from
 it and have not been run verbatim.** Print the length of what comes back and
@@ -97,8 +101,17 @@ click, no keystroke, nothing a behavioural system scores. Use it freely.
 runs on your machine, in your filesystem**, so read it off disk rather than
 pasting it into the script:
 
-    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/scripts/markdown.js");
-    return await Page.EvaluateAsync<string>(js);
+    const js = await fs.readFile("/path/to/skills/using-passenger/scripts/markdown.js", "utf8");
+    return await Page.evaluate(eval(js));
+
+**The `eval` is load-bearing**, and it is the one place a string will not do.
+The file is a single arrow-function expression, and `Page.evaluate` handed a
+*string* evaluates it as an expression rather than calling it -- so the page
+builds the function, cannot serialise it, and hands you back `undefined` with
+no error. Measured: the same file passed as a string returns `undefined`, and
+passed through `eval` returns 45,389 characters of PEP 8. `eval` turns the text
+into the function on this side; Playwright then sends its source to the page,
+which is what it does with any function you pass.
 
 Use the real path, built from the one you read this file from: these references
 and `scripts/` are siblings under the skill directory. Reading beats pasting for a reason sharper than convenience: a
@@ -116,7 +129,7 @@ resolves every `href` against the document, emits `[label](url)` inline, fences
 `pre` blocks, and tidies the result. It takes an optional
 `[stripSelector, rootSelectors]` if you want to override where it starts or
 what it discards. It runs in the page rather than on the server, which is why
-the C# port left it untouched.
+the C# port left it untouched, and the JavaScript one after it.
 
 It is not magic and it is not always right. Three known shapes:
 
@@ -143,10 +156,11 @@ the number you were told to read against expectation.
 asides as `section` so the strip list stops matching them, and returns how many
 it rescued:
 
-    var fix = await File.ReadAllTextAsync("/path/to/skills/using-passenger/scripts/unstrip-asides.js");
-    var js  = await File.ReadAllTextAsync("/path/to/skills/using-passenger/scripts/markdown.js");
-    var rescued  = await Page.EvaluateAsync<int>(fix);      // 7 on PEP 8
-    var markdown = await Page.EvaluateAsync<string>(js);
+    const dir = "/path/to/skills/using-passenger/scripts/";
+    const fix = await fs.readFile(dir + "unstrip-asides.js", "utf8");
+    const js  = await fs.readFile(dir + "markdown.js", "utf8");
+    const rescued  = await Page.evaluate(eval(fix));        // 7 on PEP 8
+    const markdown = await Page.evaluate(eval(js));
 
 It is a separate file because both of `aside`'s jobs are real -- on a news site
 it genuinely is a sidebar -- so this is yours to opt into where it is not. Run
@@ -159,12 +173,12 @@ and worth knowing about on a tab a human is working in.
 
 It is a single arrow-function expression in a file you already have on disk,
 deliberately literal so it can be understood in one pass. Nothing versions it
-or depends on its internals: no C# calls into it, the reply carries only what
+or depends on its internals: nothing on this side calls into it, the reply carries only what
 your script returned, and the two overrides it takes cover the common case
 rather than every case. So when the root heuristic picks a decoy, or the strip
 list discards what was carrying the content, editing the source you just read
 and evaluating *that* is a normal thing to do -- in the string you pass to
-`EvaluateAsync`, or in your own copy for a site you keep coming back to. That
+`Page.evaluate`, or in your own copy for a site you keep coming back to. That
 is best-effort by design, not a contract you are working around.
 
 ## A whole page goes to disk, not into the reply
@@ -173,10 +187,10 @@ A tool reply is JSON, so a returned page arrives quoted and escaped -- every
 newline as `\n`, on one line, and all of it in your context whether you wanted
 it or not. The filesystem is shared, so hand it to yourself as a file:
 
-    var js = await File.ReadAllTextAsync("/path/to/skills/using-passenger/scripts/markdown.js");
-    var markdown = await Page.EvaluateAsync<string>(js);
-    var path = "/tmp/pep8.md";              // yours to name; nothing here picks one
-    await File.WriteAllTextAsync(path, markdown);
+    const js = await fs.readFile("/path/to/skills/using-passenger/scripts/markdown.js", "utf8");
+    const markdown = await Page.evaluate(eval(js));
+    const path = "/tmp/pep8.md";            // yours to name; nothing here picks one
+    await fs.writeFile(path, markdown);
     return new Dictionary<string, object> { ["path"] = path, ["chars"] = markdown.Length };
 
 Now the markdown is text on disk, and `chars` is there to read against what you

@@ -10,10 +10,9 @@ not measure the pictures, nobody did.
 `scripts/pictures.js` sits beside `markdown.js`, and reads the same way -- off
 disk, since the server runs on your machine:
 
-    var pictures = await File.ReadAllTextAsync("/path/to/skills/using-passenger/scripts/pictures.js");
-    var seen = await Page.EvaluateAsync<JsonElement>(pictures);
-    var largest = seen.GetProperty("largest").GetDouble();
-    var src = seen.GetProperty("src").GetString();
+    const js = await fs.readFile("/path/to/skills/using-passenger/scripts/pictures.js", "utf8");
+    const seen = await Page.evaluate(eval(js));   // eval: see reading-a-page.md
+    const { largest, src } = seen;
 
 Take the fields out rather than returning `seen` itself: Playwright
 deserialises with reference handling on, so a `JsonElement` handed straight
@@ -38,12 +37,11 @@ not verdicts.
 ## Reach the picture
 
     // when `src` is a URL -- take the bytes, not the response
-    var response = await Page.APIRequest.GetAsync(src);
-    var bytes = await response.BodyAsync();
-    await File.WriteAllBytesAsync(path, bytes);   // then read it with your own tools
+    const response = await Page.request.get(src);
+    await fs.writeFile(path, await response.body());   // then read it with your own tools
 
     // when `src` is a CSS selector, which it is for an inline svg or a canvas
-    await Page.Locator(src).ScreenshotAsync(new() { Path = path });
+    await Page.locator(src).screenshot({ path });
 
 The file lands on the disk your other tools see, so an image does not have to
 cross back as JSON. **Do not return the response itself** -- see
@@ -57,7 +55,7 @@ cross back as JSON. **Do not return the response itself** -- see
   in the markup. Usually what you want; occasionally not the asset you meant to
   name.
 - **A protocol-relative URL needs a scheme.** xkcd serves `//imgs.xkcd.com/...`,
-  which `Page.APIRequest.GetAsync` will not take as-is.
+  which `Page.request.get` will not take as-is.
 - **A small picture can still be the whole content.** An xkcd comic measures
   0.06.
 

@@ -19,7 +19,7 @@
 // Returns { largest, count, src }: the biggest visible picture as a share of
 // the viewport, how many clear the threshold, and how to reach the biggest one
 // -- a URL where there is one, and a CSS selector where there is not, which
-// `Page.Locator(src).ScreenshotAsync()` takes (ticket 014).
+// `Page.locator(src).screenshot()` takes (ticket 014).
 //
 // Roughly: 0.0 on a docs page, 0.10 on an illustrated article, 0.27 on a
 // comic, 0.38 on a three-photo note, 1.92 on apple.com's hero. A small picture
@@ -27,8 +27,8 @@
 // why this is a number and not a verdict.
 (args) => {
   // The threshold lives here, the way markdown.js holds DEFAULT_STRIP and
-  // DEFAULT_ROOTS: it used to be a constant on the C# side passed in on every
-  // call, which is where a reader looked for it when the C# side was the only
+  // DEFAULT_ROOTS: it used to be a constant on the server side passed in on
+  // every call, which is where a reader looked for it when the server was the
   // caller. Now you are.
   //
   // Ten percent of the viewport, and measured rather than picked. At 5% the

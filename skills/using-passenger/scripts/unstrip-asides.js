@@ -3,10 +3,10 @@
 // Run this in the page *before* `markdown.js`, on the same tab. It hands back
 // how many elements it rescued; the markdown comes from the next call.
 //
-//     var fix = await File.ReadAllTextAsync(".../unstrip-asides.js");
-//     var js  = await File.ReadAllTextAsync(".../markdown.js");
-//     var rescued = await Page.EvaluateAsync<int>(fix);
-//     var markdown = await Page.EvaluateAsync<string>(js);
+//     const fix = await fs.readFile(".../unstrip-asides.js", "utf8");
+//     const js  = await fs.readFile(".../markdown.js", "utf8");
+//     const rescued  = await Page.evaluate(eval(fix));
+//     const markdown = await Page.evaluate(eval(js));
 //
 // Why this exists. `markdown.js` strips `aside` as furniture, beside `nav`,
 // `header` and `footer`. On a news site or a blog that is right -- an `aside`

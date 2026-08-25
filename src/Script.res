@@ -38,89 +38,46 @@ let notJson = what =>
     code: ScriptReturnNotJson,
     message: `a ${what} cannot cross the tool boundary`,
     detail: Some(
-      "return what you wanted from it instead -- Page.url(), " ++
-      "await locator.innerText(), a list of hrefs",
+      "a tool result is JSON, so a cycle or a BigInt cannot travel -- return " ++
+      "the part you wanted instead",
     ),
   })
 
 // --- what may cross ---------------------------------------------------------
 
-// A rule rather than a list, and the list is what it replaced on the C# side:
-// eight types were named by hand there and `IAPIResponse` was not among them, so
-// `return await Page.APIRequest.GetAsync(url)` serialised the driver's own
-// headers and timings and handed them back as if they were the answer.
-//
-// The rule there was "implements a Playwright interface". This runtime has no
-// interfaces, so the rule is measured off the objects instead. Every handle in
-// Playwright's client is one of three shapes, and all three were checked against
-// a live browser:
-//
-//   * a ChannelOwner -- Page, Frame, ElementHandle, JSHandle, BrowserContext,
-//     Browser, APIRequestContext, Tracing and the rest. It carries a string
-//     `_guid`, and it serialises to `{"_type":"Page","_guid":"page@..."}`, which
-//     is worse than a failure: it succeeds, and hands back Playwright's internal
-//     identity in the shape of an answer.
-//   * a Locator or an APIResponse, which are *not* ChannelOwners and carry no
-//     `_guid`. Both carry a string `_apiName`, and APIResponse serialises to its
-//     `_initializer` -- the exact failure the C# comment above describes.
-//   * a Keyboard, Mouse, Touchscreen, FrameLocator, Clock or Coverage, which
-//     carry neither but hold a ChannelOwner in a field of their own.
-//
-// Hence three tests, and the third is one level deep on purpose: a handle
-// cannot get inside a plain object except by a caller putting it there, which is
-// the same mistake one layer down, and a deeper walk would start refusing a
-// caller's own data for containing a string called `_guid`.
-//
-// Property reads rather than `instanceof`, and that is load-bearing: a vm
-// context is its own realm, so a value built inside a caller's script has a
-// different `Object` and `Array` than this module does. `typeof` and a field
-// read cross realms; a constructor check does not.
-let isObject: 'a => bool = %raw(`v => v !== null && typeof v === "object"`)
-let stringField: ('a, string) => option<string> = %raw(`(v, k) => {
-  const got = v[k];
-  return typeof got === "string" ? got : undefined;
-}`)
-let fields: 'a => array<'b> = %raw(`v => { try { return Object.values(v); } catch (e) { return []; } }`)
-
-/// The name to report a refused value by, when it is a handle. `None` if it is
-/// not one.
-let handleName = value =>
-  if !isObject(value) {
-    None
-  } else if stringField(value, "_guid")->Option.isSome {
-    // `constructor.name` is minified in the shipped bundle (`_Page`, `Browser2`),
-    // so the `_type` Playwright puts in its own serialisation is the more
-    // readable of the two names it offers, and the more stable.
-    Some(stringField(value, "_type")->Option.getOr("Playwright handle"))
-  } else if stringField(value, "_apiName")->Option.isSome {
-    stringField(value, "_apiName")
-  } else if
-    fields(value)->Array.some(f => isObject(f) && stringField(f, "_guid")->Option.isSome)
-  {
-    Some("Playwright handle")
-  } else {
-    None
-  }
-
-/// A tool result is JSON. Playwright hands back handles, which are not.
+/// A tool result is JSON, and that is the whole rule.
 ///
-/// Checked by shape before serialisation is attempted, because a handle is a
-/// live object that `JSON.stringify` will not refuse -- it would not throw, it
-/// would emit Playwright's guid or its initializer. That is the runtime-specific
-/// half of this check, and it is the same half the C# door had to write by hand.
+/// There used to be twenty-five lines here that refused a live Playwright handle
+/// by name, and they were a C# inheritance rather than a fact about this
+/// runtime. On that side `System.Text.Json` walked a handle's live object graph
+/// and emitted something large and answer-shaped -- the bug ticket 013 exists
+/// for, where `return await Page.APIRequest.GetAsync(url)` handed back the
+/// driver's own headers and timings as if they were the body. So the type had to
+/// be refused before serialisation was attempted.
+///
+/// Playwright's JavaScript client ships `toJSON` on those objects, so the same
+/// mistake is small and self-labelling here. Measured:
+///
+///     Page            64 B   {"_type":"Page","_guid":"page@a5f77e…"}
+///     Locator        117 B   {"_apiName":"Locator","_frame":{…},"_selector":"body"}
+///     ElementHandle   75 B   {"_type":"ElementHandle","_guid":"handle@b789b8…"}
+///     APIResponse    945 B   {"_apiName":"APIResponse","_request":{…},…}
+///
+/// Nobody mistakes `_apiName: APIResponse` for their data, and the rule that
+/// caught it could not be exact: it tested for a `_guid` or an `_apiName` on the
+/// value or one level inside it, so a site whose own JSON carries a field called
+/// `_guid` would have had its data refused instead. Guessing wrong about a
+/// caller's payload is the worse failure, and it is the one this side is least
+/// entitled to make -- the tool measures, the caller judges.
+///
+/// What is left is the failure that is genuinely not JSON: a cycle, a BigInt.
+/// `undefined` is not one of them -- a script with no `return` said nothing, and
+/// nothing crosses as null.
 let crossable = value => {
-  switch handleName(value) {
-  | Some(what) => throw(notJson(what))
-  | None => ()
-  }
-
-  // `undefined` is not an error: a script with no `return` said nothing, and
-  // nothing crosses as null.
   switch JSON.stringifyAny(value) {
   | _ => ()
   | exception _ => throw(notJson("value"))
   }
-
   value
 }
 
@@ -197,8 +154,12 @@ let raised = (e, source) => {
 /// the skill reaches for has to be put here by name.
 ///
 /// The list is what those recipes need and stops there. `console` because a
-/// script's own tracing has to go somewhere, and it goes to stderr where every
-/// other line of this process's chatter goes -- stdout is the protocol.
+/// script's own tracing has to go somewhere, and **it is rebuilt so that all of
+/// it goes to stderr**. Handing the real `console` over looked right and was
+/// not: `console.log` writes to stdout, which is the JSON-RPC transport, so one
+/// tracing line in a caller's script corrupted the stream it was travelling on.
+/// Measured after the fact -- the comment here claimed stderr for a while before
+/// the code did.
 /// `fs`/`path` for the same reason the C# door imported `System.IO`: the walker
 /// and the picture measurement are read off disk, and bytes that cannot cross
 /// back as JSON are written out. Timers because a script that needs to wait
@@ -212,7 +173,18 @@ let raised = (e, source) => {
 /// Deliberately not a sandbox, and not pretending to be one: a caller-supplied
 /// script runs in this process either way, and what is missing here is still
 /// reachable by other means.
-@val external console: 'a = "console"
+/// Every method on it, pointed at stderr. Not a subset: a script reaching for
+/// `console.table` or `console.dir` must not be the one that breaks the wire.
+let quietConsole: 'a = %raw(`(() => {
+  const out = {};
+  for (const name of Object.keys(console)) {
+    out[name] = typeof console[name] === "function"
+      ? (...args) => console.error(...args)
+      : console[name];
+  }
+  return out;
+})()`)
+
 @module("node:fs/promises") external fs: 'a = "default"
 @module("node:path") external path: 'a = "default"
 @val external setTimeout_: 'a = "setTimeout"
@@ -220,7 +192,7 @@ let raised = (e, source) => {
 
 let globals = page => {
   "Page": page,
-  "console": console,
+  "console": quietConsole,
   "fs": fs,
   "path": path,
   "setTimeout": setTimeout_,

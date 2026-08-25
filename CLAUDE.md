@@ -107,9 +107,11 @@ cleanup.
 - **What crosses that door is JavaScript, and what comes back is JSON.** A caller's source
   runs in a `node:vm` context with `Page` bound, plus the short list `Script.globals` names --
   and `fetch` is deliberately absent from it, because a second way onto the web that goes
-  around the browser is what ticket 046 deleted. `Script.handleName` refuses a live Playwright
-  handle by a rule measured off the objects, not a list of them; the list is what let an
-  `IAPIResponse` through on the C# side and serialised the driver's internals as an answer.
+  around the browser is what ticket 046 deleted. `Script.crossable` refuses only what is not a
+  JSON document -- a cycle, a BigInt. It does *not* refuse a live Playwright handle, and the
+  comment there says why the C# rule that did was an inheritance rather than a fact about this
+  runtime: Playwright's JavaScript client ships `toJSON`, so a returned handle is 64 bytes
+  that name themselves, and a rule that guessed at one would sooner refuse a site's own JSON.
 - **A lane owns its tabs.** One Chrome is shared by every agent on the machine; `openLane` is
   required rather than defaulted, because a caller isolated by accident cannot tell which lane
   it is in.
