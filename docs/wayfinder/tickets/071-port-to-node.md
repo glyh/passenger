@@ -3,7 +3,7 @@ id: 071
 title: Port the server to Node, in ReScript
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
