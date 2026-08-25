@@ -24,9 +24,6 @@ let desktop = {
     Proc.status("notify-send", ["-u", "critical", title, message])->ignore,
 }
 
-@val external fetch: (string, {..}) => promise<'res> = "fetch"
-@val external abortSignalTimeout: int => 'signal = "AbortSignal.timeout"
-
 /// POSTs to whatever PASSENGER_WEBHOOK points at -- ntfy, Slack, etc.
 ///
 /// This is what makes a headless deployment usable: the browser can be on a
@@ -35,15 +32,7 @@ let webhook = url => {
   notify: (title, message) => {
     let payload =
       JSON.stringifyAny({"title": title, "text": message, "message": message})->Option.getOr("{}")
-    fetch(
-      url,
-      {
-        "method": "POST",
-        "headers": {"content-type": "application/json"},
-        "body": payload,
-        "signal": abortSignalTimeout(webhookTimeoutMs),
-      },
-    )
+    Http.post(url, ~body=payload, ~timeoutMs=webhookTimeoutMs)
     ->Promise.catch(e => {
       let why = switch e {
       | JsExn(err) => JsExn.message(err)->Option.getOr("unknown")

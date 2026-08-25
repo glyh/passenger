@@ -23,19 +23,6 @@ let rec until = async (~times, ~everyMs, check) =>
     await until(~times=times - 1, ~everyMs, check)
   }
 
-/// The same, for a check that answers with a value rather than a verdict.
-let rec untilSome = async (~times, ~everyMs, check) =>
-  if times <= 0 {
-    None
-  } else {
-    switch await check() {
-    | Some(found) => Some(found)
-    | None =>
-      await Timers.sleep(everyMs)
-      await untilSome(~times=times - 1, ~everyMs, check)
-    }
-  }
-
 /// The first item a predicate accepts. `Array.find`, for a predicate that has to
 /// await -- which the stdlib's cannot take.
 let rec find = async (items, predicate, ~from=0) =>

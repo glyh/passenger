@@ -137,18 +137,10 @@ let summaryOf = (found: array<wedge>) =>
 
 // --- talking to the browser -------------------------------------------------
 
-@val external fetch: (string, {..}) => promise<'res> = "fetch"
-@send external text: 'res => promise<string> = "text"
-@get external ok: 'res => bool = "ok"
-@val external abortSignalTimeout: int => 'signal = "AbortSignal.timeout"
-
 /// Every target Chrome currently holds, browser UI and workers included.
 let listing = async () => {
-  let res = await fetch(
-    `${Config.cdpUrl()}/json/list`,
-    {"signal": abortSignalTimeout(5000)},
-  )
-  parse(await res->text)
+  let res = await Http.get(`${Config.cdpUrl()}/json/list`, ~timeoutMs=5000)
+  parse(await res->Http.text)
 }
 
 let pages = async () => (await listing())->Array.filter(isPage)
@@ -159,11 +151,8 @@ let pages = async () => (await listing())->Array.filter(isPage)
 /// bookkeeping must keep working when a renderer does not, and an attach that
 /// initialises every open tab is a strange price to pay for closing one.
 let close = async targetId =>
-  switch await fetch(
-    `${Config.cdpUrl()}/json/close/${targetId}`,
-    {"signal": abortSignalTimeout(5000)},
-  ) {
-  | res => res->ok
+  switch await Http.get(`${Config.cdpUrl()}/json/close/${targetId}`, ~timeoutMs=5000) {
+  | res => res->Http.ok
   | exception _ => false
   }
 
@@ -179,18 +168,15 @@ let close = async targetId =>
 /// milliseconds -- so a long deadline here buys nothing and costs the caller a
 /// stall on every call made while Chrome is down.
 let isUp = async () =>
-  switch await fetch(
-    `${Config.cdpUrl()}/json/version`,
-    {"signal": abortSignalTimeout(1000)},
-  ) {
-  | res => res->ok
+  switch await Http.get(`${Config.cdpUrl()}/json/version`, ~timeoutMs=1000) {
+  | res => res->Http.ok
   | exception _ => false
   }
 
 let browserSocket = async () =>
-  switch await fetch(`${Config.cdpUrl()}/json/version`, {"signal": abortSignalTimeout(5000)}) {
+  switch await Http.get(`${Config.cdpUrl()}/json/version`, ~timeoutMs=5000) {
   | res =>
-    (await res->text)
+    (await res->Http.text)
     ->JSON.parseOrThrow
     ->JSON.Decode.object
     ->Option.flatMap(o => o->Dict.get("webSocketDebuggerUrl"))
@@ -264,16 +250,22 @@ let diagnose = async (page, deadlineS) =>
 /// Every page that is holding the attach open, and which way it is doing it.
 ///
 /// Read-only: this is the half `status` can call.
+/// The listing is taken **once**. It used to be re-fetched inside the loop --
+/// twice per iteration, once for the bound and once for the item -- which was
+/// `2n+1` round trips where one would do, and worse than slow: a tab closing
+/// mid-loop shortened the list under an index that had already been taken from
+/// it, so `getUnsafe` read past the end and the rescue path died reading
+/// `websocketUrl` of nothing. This is the path that runs *because* the browser
+/// is already in trouble.
 let stuck = async (~deadlineS=probeDeadlineS) => {
   let found = []
-  for i in 0 to (await pages())->Array.length - 1 {
-    let page = (await pages())->Array.getUnsafe(i)
-    // Nothing to ask; Chrome withholds a socket for its own UI.
-    if page.websocketUrl != "" {
-      switch await diagnose(page, deadlineS) {
-      | Some(w) => found->Array.push((page, w))->ignore
-      | None => ()
-      }
+  // Nothing to ask a tab Chrome withholds a socket for; those are its own UI.
+  let askable = (await pages())->Array.filter(p => p.websocketUrl != "")
+  for i in 0 to askable->Array.length - 1 {
+    let page = askable->Array.getUnsafe(i)
+    switch await diagnose(page, deadlineS) {
+    | Some(w) => found->Array.push((page, w))->ignore
+    | None => ()
     }
   }
   found

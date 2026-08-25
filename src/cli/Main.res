@@ -442,9 +442,9 @@ let call = async (name, a) =>
     Lanes.claimScreen(lane)
     switch tab {
     | Some(tab) =>
-      let session = await Session.open_()
-      await Handoff.bringToFront(await Session.pageFor(session, lane, Some(tab)))
-      await Session.dispose(session)
+      await Session.use(async session =>
+        await Handoff.bringToFront(await Session.pageFor(session, lane, Some(tab)))
+      )
     | None => ()
     }
 
@@ -461,11 +461,12 @@ let call = async (name, a) =>
       let waited = switch (until, tab) {
       | (Models.Unblocked, None) => Some("cannot wait on a wall with no tab named")
       | (Models.Unblocked, Some(tab)) =>
-        let session = await Session.open_()
-        let page = await Session.pageFor(session, lane, Some(tab))
-        let answer = await Handoff.waitUntilUnblocked(page, ~timeoutS=waitSeconds)
-        await Session.dispose(session)
-        Some(answer)
+        Some(
+          await Session.use(async session => {
+            let page = await Session.pageFor(session, lane, Some(tab))
+            await Handoff.waitUntilUnblocked(page, ~timeoutS=waitSeconds)
+          }),
+        )
       | (Models.Closed, _) => Some(await Handoff.waitForDismissal(presenter, waitSeconds))
       }
       Lanes.touch(lane)

@@ -95,9 +95,16 @@ no reference -- the directories are for a reader, and the compiler does not care
 
     src/runtime/   other people's APIs, bound thinly. Nothing here is Passenger's.
       Fs Proc Posix Sqlite Timers WebSocket Node   what the BCL used to supply
+      Http                                         fetch, bound once
       Mcp Pw                                       the SDK and Playwright
-      Poll                                         the two waiting shapes the
-                                                   shell needs, said once
+      Poll                                         waiting, and async find
+
+**Never open a session by hand.** `Session.use` is `await using` from the C#
+side, which ReScript has no keyword for: it attaches, runs the body, and detaches
+on every exit including a throw. Before it existed, a `script` naming a tab the
+lane did not own leaked the attach -- `pageFor` refused, the refusal travelled
+past the `dispose` at the bottom, and the connection stayed open. Measured at
+3 -> 10 connections to Chrome over five failed calls.
 
 Two naming rules, both of them scar tissue. Every wire spelling is `<type>ToString`
 -- `Errors.codeToString`, `Models.kindToString` -- because those six functions had

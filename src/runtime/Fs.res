@@ -19,7 +19,6 @@ type dirent
 @module("node:fs") external chmodSync: (string, int) => unit = "chmodSync"
 @module("node:fs") external readlinkSync: string => string = "readlinkSync"
 @module("node:fs") external statSync: string => stats = "statSync"
-@module("node:fs") external rmSync: (string, {..}) => unit = "rmSync"
 @get external mode: stats => int = "mode"
 
 type mkdirOptions = {recursive: bool}
@@ -28,7 +27,6 @@ type mkdirOptions = {recursive: bool}
 @module("node:path") external join: (string, string) => string = "join"
 @module("node:path") external resolve: string => string = "resolve"
 @module("node:path") external extname: string => string = "extname"
-@module("node:path") external basename: string => string = "basename"
 @module("node:path") external dirname: string => string = "dirname"
 
 /// The error code a failed syscall carries -- "ENOENT", "EACCES" and the rest.

@@ -191,7 +191,10 @@ let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true)
   let _ = await Lanes.sweep()
   Lanes.require(lane)->ignore
   Lanes.touch(lane)
-  let session = await Session.open_()
+
+  // Everything below detaches on the way out, including the ways out that
+  // throw -- `pageFor` refusing a tab this lane does not own is the common one.
+  await Session.use(async session => {
   let page = await Session.pageFor(session, lane, named)
   // Every Playwright call inside the script inherits this, so a wait on a
   // selector that never appears ends the call instead of the session. A script
@@ -216,14 +219,12 @@ let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true)
   // A script may have opened tabs of its own -- window.open, or a link with
   // target="_blank". Attributing them to the lane that caused them is what keeps
   // them from becoming invisible and uncollectable.
-  let open_ = []
-  let pages = session.context->Pw.pages
-  for i in 0 to pages->Array.length - 1 {
-    open_->Array.push(await Session.targetId(session, pages->Array.getUnsafe(i)))
-  }
+  let open_ = await Promise.all(
+    session.context->Pw.pages->Array.map(p => Session.targetId(session, p)),
+  )
 
   Lanes.reconcile(open_, await Targets.openers())
   Lanes.touch(lane)
-  await Session.dispose(session)
   outcome
+  })
 }

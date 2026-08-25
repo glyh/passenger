@@ -133,21 +133,16 @@ let serve = (port, root) => {
 /// Is something already serving on that port?
 let listening = port => NestedSessions.isListening(Config.vncHost.contents, port)
 
-@val external fetch: (string, {..}) => promise<'res> = "fetch"
-@send external text: 'res => promise<string> = "text"
-@get external ok: 'res => bool = "ok"
-@val external abortSignalTimeout: int => 'signal = "AbortSignal.timeout"
-
 /// The body served at a path, or `None` if nothing usable came back.
 ///
 /// One short timeout: everything it talks to is on loopback and already up, so a
 /// request that takes seconds has already told us what we needed to know.
 let fetchPath = async (port, ~path="/") =>
-  switch await fetch(
+  switch await Http.get(
     `http://${Config.vncHost.contents}:${port->Int.toString}${path}`,
-    {"signal": abortSignalTimeout(2000)},
+    ~timeoutMs=2000,
   ) {
-  | res => res->ok ? Some(await res->text) : None
+  | res => res->Http.ok ? Some(await res->Http.text) : None
   | exception _ => None
   }
 

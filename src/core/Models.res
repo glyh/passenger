@@ -135,12 +135,6 @@ let backendNames = ["nested", "none"]
 /// What ends a `showBrowser` wait.
 type waitFor = Closed | Unblocked
 
-let waitForToString = w =>
-  switch w {
-  | Closed => "closed"
-  | Unblocked => "unblocked"
-  }
-
 let parseWaitFor = text =>
   switch text {
   | "closed" => Some(Closed)

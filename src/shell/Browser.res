@@ -46,11 +46,10 @@ let portTaken = () => NestedSessions.isListening("127.0.0.1", Config.cdpPort.con
 /// or no nested backend -- the state is read and nothing is written.
 let unfullscreen = async () =>
   if await isUp() {
-    switch await Session.open_() {
-    | session =>
+    switch await Session.use(async session =>
       switch session.context->Pw.pages->Array.get(0) {
       // No target to name a window by; nothing to fix.
-      | None => await Session.dispose(session)
+      | None => ()
       | Some(page) =>
         let targetId = await Session.targetId(session, page)
         let control = await session.browser->Pw.newBrowserCDPSession
@@ -78,8 +77,9 @@ let unfullscreen = async () =>
             {"windowId": windowId, "bounds": {"windowState": "normal"}},
           )
         }
-        await Session.dispose(session)
       }
+    ) {
+    | () => ()
     // The daemon is up and calls work; only the toolbar is missing. Raising here
     // would report a working browser as a failed start.
     | exception _ => ()

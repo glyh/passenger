@@ -122,7 +122,27 @@ let open_ = async () => {
   }
 
   let browser = await attach()
-  {browser, context: browser->Pw.contexts->Array.getUnsafe(0)}
+  switch browser->Pw.contexts->Array.get(0) {
+  | Some(context) => {browser, context}
+  | None =>
+    // `Contexts[0]` on the C# side, unchecked, and the port carried the index
+    // across. An attach with no context should not be possible -- a CDP connect
+    // adopts the browser's default one -- but "should not be possible" read as
+    // `undefined` here, and every later call died on a property of nothing
+    // rather than on the thing that was actually wrong.
+    // Detached by hand rather than through `dispose`, which wants the record
+    // this branch is the failure to build.
+    switch await browser->Pw.closeBrowser {
+    | () => ()
+    | exception _ => ()
+    }
+    Errors.fail(
+      DaemonNotRunning,
+      "chrome answered but exposed no browser context",
+      ~detail="the daemon is up and refusing to hand over its default context; " ++
+      "`browserStatus` says what is open, and restarting chrome is the remedy",
+    )
+  }
 }
 
 /// The tab's CDP id -- the handle a caller holds between calls.
@@ -214,3 +234,29 @@ let dispose = async session =>
   | () => ()
   | exception _ => ()
   }
+
+/// Attach, do something, and detach whatever happens.
+///
+/// **The C# side got this from the language and the port silently lost it.**
+/// There it was `await using Session session = await Session.OpenAsync()`, and
+/// `IAsyncDisposable` guaranteed the detach on every exit including a throw.
+/// ReScript has no `using`, so each caller was left to remember -- and the throw
+/// path is exactly the one nobody remembers.
+///
+/// Measured before this existed: five `script` calls naming a tab the lane does
+/// not own took the connection count to Chrome from 3 to 10. `pageFor` refuses
+/// with TAB_NOT_FOUND, the refusal travels past the `dispose` at the bottom of
+/// the caller, and the attach stays open forever. Every wrong tab id leaked one.
+///
+/// So the detach is not a line a caller writes any more; it is this function.
+let use = async body => {
+  let session = await open_()
+  switch await body(session) {
+  | result =>
+    await dispose(session)
+    result
+  | exception failure =>
+    await dispose(session)
+    throw(failure)
+  }
+}
