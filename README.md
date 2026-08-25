@@ -240,6 +240,15 @@ Selectable via `PASSENGER_WM`:
 | `web`   | the URL, to open wherever you are | for containers/servers with no display of their own |
 | `none`  | nothing           | honest about having no way to show it |
 
+**What crosses the glass:** keys, pointer, and clipboard text in both
+directions -- the clipboard read from the host each time the viewer window takes
+focus, since noVNC swallows the keystroke that would otherwise be a paste. Files
+do not: RFB has no file transfer, so a file dropped on the viewer is refused
+outright rather than left for the host browser to open in a window of its own.
+A file gets in through the page's own file input, whose chooser opens on the
+host desktop and can reach any path. And since nothing in the session composes,
+CJK goes in by pasting rather than typing.
+
 Both are the same page (`passenger/web/viewer.html`), a full-bleed noVNC
 screen. There is no native VNC client involved: noVNC asks for the framebuffer size its
 window needs and keeps asking as the window changes, which is something no

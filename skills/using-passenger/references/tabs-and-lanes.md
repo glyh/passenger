@@ -31,6 +31,33 @@ is a backstop for the calls you never got to make, not the plan.
 has called `hideBrowser`. So your `hideBrowser` cannot take the window away
 from someone else's human -- and theirs cannot take it from yours.
 
+## What crosses the glass, and what does not
+
+The human is looking at a VNC screen in a browser window, so what reaches the
+session is what RFB carries: keystrokes, pointer movement, and clipboard text.
+Two consequences are worth knowing before you ask someone for something.
+
+**The clipboard works, both ways, but only after a focus change.** The viewer
+reads the host clipboard when its window *gains* focus, so the sequence is copy
+on the host, click into the viewer, paste. Text copied while already inside the
+viewer does not cross until the window has been left and come back to. Say
+"copy it, then click the browser window" rather than just "paste it".
+
+This is also the only way CJK text gets in: nothing inside the session composes,
+so no IME is available there. **A human cannot type Chinese into the handed-over
+browser** -- they can paste it.
+
+**Files do not cross by dragging, and never will.** RFB has no file transfer, so
+dropping a file on the viewer does nothing at all -- deliberately, since the
+alternative was the *host* browser opening it in a window of its own. The way in
+is the page's own file input: clicking it opens a file chooser on the human's
+desktop, from which any path on the machine can be picked, and the file arrives
+in the nested page. So when a site wants an upload, say **"click the upload
+button and choose the file"**, and never "drag it in".
+
+Dragging *within* the page -- a slider, a reorder, an HTML5 drop target -- works
+normally, because that is only pointer movement.
+
 ## `orphan` is a junk drawer anyone may open
 
 Tabs a page opened by itself join the lane that caused them. But a tab a
