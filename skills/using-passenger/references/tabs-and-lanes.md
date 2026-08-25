@@ -43,12 +43,12 @@ on the host, click into the viewer, paste. Text copied while already inside the
 viewer does not cross until the window has been left and come back to. Say
 "copy it, then click the browser window" rather than just "paste it".
 
-**CJK can be typed, if the machine has an IME to lend.** The session asks the
-human's *already running* fcitx5 to serve its display too, so their usual input
-method and dictionaries are there and Ctrl+Space works as it does on their
-desktop. Where there is no fcitx5 -- or `PASSENGER_IME=none` --
-nothing in the session composes, and pasting is the only way Chinese gets in.
-Offer the paste route if someone says they cannot type.
+**CJK cannot be typed; it has to be pasted.** Nothing in the session composes,
+so no IME is available there -- a human cannot type Chinese into the browser they
+were just handed. The machinery to lend them the host's fcitx5 exists and is
+turned off, because attaching it segfaults the nested Chrome (ticket 067). So
+when someone says they cannot type, the answer is: copy it on your own machine,
+click the browser window, paste.
 
 **Files do not cross by dragging, and never will.** RFB has no file transfer, so
 dropping a file on the viewer does nothing at all -- deliberately, since the
