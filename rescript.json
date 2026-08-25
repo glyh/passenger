@@ -1,5 +1,5 @@
 {
-  "name": "passenger-node",
+  "name": "passenger",
   "sources": [
     {
       "dir": "src",

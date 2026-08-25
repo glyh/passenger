@@ -1,15 +1,18 @@
 // What the nested backend writes before anything starts.
 //
-// The oracle is `tests/Passenger.Tests/LaunchTests.cs`, all twelve cases. `plan`
+// The oracle was `tests/Passenger.Tests/LaunchTests.cs`, all twelve cases; that
+// tree is gone with ticket 071 and these are the cases now. `plan`
 // is the one part of the launch path that can be checked without a compositor:
 // it is a nearly-pure function from the Chrome argv to two generated files and an
 // argv, and everything it gets wrong is invisible until a real session comes up
 // wrong. Ticket 063 moved it from cage to sway, which split what used to be one
 // file into a config and a script that have to agree with each other.
 //
-// The thirteenth case is new, and belongs to the port rather than to the launch
-// path: the assets under `node/assets/` are copies of `src/Passenger/Assets/`,
-// and a copy that drifts is a session script and a sway config that disagree.
+// A thirteenth case lived here for as long as two trees did: the assets were
+// copied from the C# side's embedded ones, and it compared the copies so an edit
+// to one that missed the other failed rather than shipping a session script and
+// a sway config that disagree. It was written to delete itself when the C# tree
+// went, and ticket 071 took both.
 
 @module("node:fs") external mkdtempSync: string => string = "mkdtempSync"
 @module("node:os") external tmpdir: unit => string = "tmpdir"
@@ -142,19 +145,4 @@ T.testAsync("the session keeps a log", async () => {
 T.testAsync("the script is executable", async () => {
   let _ = await planned()
   T.ok(Launch.isExecutable(Launch.sessionSh()))
-})
-
-T.test("the copied assets have not drifted from the ones C# embeds", () => {
-  // The duplication this port carries until the C# tree goes. Skipped rather
-  // than failed where the sibling tree is absent, because an installed copy of
-  // this package has no `src/Passenger/` beside it and never will.
-  ["session/session.sh", "session/sway.conf", "session/ime.sh", "web/viewer.html"]->Array.forEach(
-    name => {
-      let embedded = Fs.readText(Fs.join("../src/Passenger/Assets", name))
-      switch embedded {
-      | Some(text) => T.equal(Assets.read(name), text)
-      | None => T.ok(true)
-      }
-    },
-  )
 })

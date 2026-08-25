@@ -4,19 +4,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-
-    # The MCP C# SDK, forked. Upstream's stdio transport writes the JSON-RPC
-    # envelope through a frozen JsonSerializerOptions whose encoder escapes
-    # every non-ASCII character (ticket 056, csharp-sdk#795); the fork adds the
-    # hook that lets a server choose the encoder. Pinned as a source input, not
-    # a flake, and built into nupkgs below.
-    mcp-csharp-sdk = {
-      url = "github:glyh/csharp-sdk/utf8-wire-encoding";
-      flake = false;
-    };
   };
 
-  outputs = { self, nixpkgs, flake-utils, mcp-csharp-sdk }:
+  # There was a third input here until ticket 071: the MCP C# SDK, forked,
+  # because upstream's stdio transport wrote the JSON-RPC envelope through a
+  # frozen JsonSerializerOptions whose encoder escaped every non-ASCII character
+  # (056, csharp-sdk#795). `JSON.stringify` escapes nothing, so the fork and the
+  # two lockfiles that fed it are gone rather than replaced.
+  outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
@@ -130,126 +125,103 @@
           default google-chrome-stable) so it keeps its own update cadence.
         '';
 
-        dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
-
-        # The forked SDK, packed as nupkgs rather than referenced as projects:
-        # passenger keeps a PackageReference, and this derivation is what that
-        # reference resolves against. `mcpSdkVersion` is the version those
-        # packages carry, and Passenger.Mcp.csproj must ask for exactly it.
-        mcpSdkVersion = "2.2.0-utf8wire.1";
-
-        mcpSdk = pkgs.buildDotnetModule {
-          pname = "ModelContextProtocol";
-          version = mcpSdkVersion;
-          src = mcp-csharp-sdk;
-
-          projectFile = [
-            "src/ModelContextProtocol.Core/ModelContextProtocol.Core.csproj"
-            "src/ModelContextProtocol/ModelContextProtocol.csproj"
-          ];
-
-          inherit dotnet-sdk;
-          nugetDeps = ./mcp-sdk-deps.json;
-
-          # Libraries, not an application: nothing to publish or wrap, and the
-          # nupkgs are the whole output.
-          dontPublish = true;
-          packNupkg = true;
-          executables = [ ];
-
-          # Without this the fixup hooks rewrite each packed nupkg down to its
-          # .nuspec, on the assumption that the only consumer is a nix build
-          # -- which gets the real contents from a fallback packages folder
-          # the hooks fill in separately. A `dotnet restore` run by hand has
-          # no such folder, and a nuspec-only package restores to a project
-          # that cannot see a single type in it. Keep the contents.
-          createInstallableNugetSource = true;
-
-          # buildDotnetModule derives -p:Version from the derivation's version
-          # by keeping only its numeric components, which would drop the
-          # prerelease tag that keeps these packages distinguishable from
-          # nuget.org's 2.2.0. Pack flags come last on the command line, so
-          # this is the version that lands in the nupkg.
-          dotnetPackFlags = [
-            "-p:Version=${mcpSdkVersion}"
-            # The baseline package this validates against is not in the
-            # offline source, and the fork's changes are additive anyway.
-            "-p:EnablePackageValidation=false"
-          ];
-        };
-
         # .git and the local build detritus are not inputs; without this filter
         # every write to any of them would invalidate the build.
         source = pkgs.lib.cleanSourceWith {
           src = ./.;
           filter = path: type:
             !(builtins.elem (baseNameOf (toString path)) [
-              ".direnv" ".git" "result"
+              ".direnv" ".git" "result" "node_modules" "lib"
             ]);
         };
 
-        # One published binary, since ticket 057 deleted the CLI. `projectFile`
-        # stays a list because the test project is built beside it, not because
-        # there is a second entry point any more.
-        passenger = pkgs.buildDotnetModule {
+        # The whole server, compiled from ReScript to ES modules and run by node.
+        #
+        # `buildNpmPackage` rather than a hand-rolled derivation because the only
+        # unusual thing here is the compiler, and it turned out not to be unusual:
+        # ReScript ships its binaries statically linked (`static-pie`, measured on
+        # @rescript/linux-x64), so there is nothing to patchelf and it runs in the
+        # sandbox as it comes off npm. Ticket 071 planned for worse.
+        passenger = pkgs.buildNpmPackage {
           pname = "passenger";
           version = "0.1.0";
           src = source;
 
-          projectFile = [ "src/Passenger.Mcp/Passenger.Mcp.csproj" ];
-          testProjectFile = "tests/Passenger.Tests/Passenger.Tests.csproj";
-          executables = [ "Passenger.Mcp" ];
+          npmDepsHash = "sha256-xd5FjF/oaP87eTcsFRrKStZLTq68FR69V6Q/iaVJ0e0=";
 
-          # Where the forked ModelContextProtocol packages come from: nupkgs
-          # in a build input, not nuget.org, so they are absent from deps.json.
-          projectReferences = [ mcpSdk ];
+          # `npm run build` is `rescript build`, which emits each module's
+          # JavaScript beside its source.
+          npmBuildScript = "build";
 
-          inherit dotnet-sdk;
-          nugetDeps = ./deps.json;
+          nativeBuildInputs = [ pkgs.makeWrapper ];
 
-          # None of the suite drives a real Chrome, so it needs no pinned
-          # browser the way a DOM-walker test would: it is unit tests over the
-          # pure core and over sockets/temp dirs the Sandbox fixture redirects
-          # first. Safe to run in the sandbox, and kept in the same derivation
-          # as the build rather than a separate `checks` output, because there
-          # is no browser dependency forcing them apart.
+          # None of the suite drives a real Chrome, so it needs no pinned browser:
+          # it is unit tests over the pure core, plus a handful that spawn
+          # `/bin/sh` and bind a loopback port, both of which the sandbox has.
+          # Kept in the same derivation as the build rather than a separate
+          # `checks` output, because there is no browser dependency forcing them
+          # apart.
           doCheck = true;
-
-          # Both entry points need the compositor on PATH and the viewer's
-          # JavaScript findable; neither can be discovered at runtime.
-          makeWrapperArgs = [
-            "--prefix" "PATH" ":" (pkgs.lib.makeBinPath runtimeDeps)
-            "--set-default" "PASSENGER_NOVNC" novncStatic
-          ];
-
-          # The Patchright NuGet package bundles its own Node -- the thing
-          # that actually drives Playwright's wire protocol -- as a
-          # platform-specific binary linked against
-          # /lib64/ld-linux-x86-64.so.2, which does not exist here.
-          # Substitute nixpkgs' own node for the bundled one rather than patch
-          # the ELF interpreter.
-          #
-          # nodejs-slim, which is the same interpreter without npm and corepack:
-          # what runs here is Playwright's driver, over a pipe, and it installs
-          # nothing. `pkgs.nodejs` would carry a package manager into a bundle
-          # whose whole job is to speak MCP on a machine that never builds.
-          postFixup = ''
-            for node in $out/lib/passenger/.playwright/node/*/node; do
-              rm "$node"
-              ln -s ${pkgs.lib.getExe pkgs.nodejs-slim} "$node"
-            done
+          checkPhase = ''
+            runHook preCheck
+            node --test test/*_test.res.mjs
+            runHook postCheck
           '';
 
-          meta.mainProgram = "Passenger.Mcp";
+          # Written out rather than left to the default, which packs an npm
+          # package and installs it globally. What ships here is four things --
+          # the emitted modules, the assets read beside them, the manifest, and
+          # the runtime dependencies -- and the compiler is not among them.
+          installPhase = ''
+            runHook preInstall
+
+            npm prune --omit=dev
+
+            # The compiler is a devDependency; its *runtime* is not, and they
+            # ship as separate npm packages. Emitted code imports
+            # `@rescript/runtime/lib/es6/*`, so a prune that took the runtime
+            # with the compiler left a binary that could not start -- measured,
+            # after moving `rescript` to devDependencies.
+            #
+            # What the emitted code never touches is that package's `lib/ocaml`,
+            # 18 MiB of stdlib .res/.cmi that exists for the compiler, and
+            # `lib/js`, which is the CommonJS half of a build that emits ES
+            # modules. Both go.
+            rm -rf node_modules/@rescript/runtime/lib/ocaml \
+                   node_modules/@rescript/runtime/lib/js
+
+            mkdir -p $out/lib/passenger
+            cp -r src assets node_modules package.json $out/lib/passenger/
+
+            # Both the server and the viewer's own re-exec need the compositor on
+            # PATH and noVNC findable; neither can be discovered at runtime.
+            makeWrapper ${pkgs.lib.getExe pkgs.nodejs-slim} $out/bin/passenger \
+              --add-flags $out/lib/passenger/src/Main.res.mjs \
+              --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
+              --set-default PASSENGER_NOVNC ${novncStatic}
+
+            runHook postInstall
+          '';
+
+          # nodejs-slim above, which is the same interpreter without npm and
+          # corepack. Nothing installs anything at runtime, and a package manager
+          # in a closure whose job is to speak MCP on a machine that never builds
+          # is 20 MiB of nothing.
+          #
+          # The C# build had a `postFixup` here that replaced the Node bundled
+          # inside the Playwright driver, because that binary was linked against
+          # an interpreter this system does not have. There is no bundled Node any
+          # more: playwright-core is a library in this process now, not a driver
+          # on the other end of a pipe.
+
+          meta.mainProgram = "passenger";
         };
       in
       {
         devShells.default = pkgs.mkShell {
-          packages = runtimeDeps ++ [ dotnet-sdk ];
-          # `dotnet build` outside the sandbox restores from nuget.org, which
-          # has never heard of the forked packages. Directory.Build.props adds
-          # this to the restore sources when it is set.
-          MCP_SDK_NUGET_SOURCE = "${mcpSdk}/share/nuget/source";
+          # `nodejs`, not `nodejs-slim`: a dev shell needs npm, where the
+          # runtime does not.
+          packages = runtimeDeps ++ [ pkgs.nodejs ];
           # Everything the hook prints goes to stderr. `nix develop --command`
           # forwards hook output to stdout, which would corrupt any program
           # speaking a protocol there -- the MCP server talks JSON-RPC on stdio.
@@ -261,16 +233,12 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: dotnet run --project src/Passenger.Mcp -- stop"
+              echo "run: node src/Main.res.mjs stop"
             } >&2
           '';
         };
 
         packages.default = passenger;
-
-        # Exposed so `nix run .#mcp-sdk.passthru.fetch-deps` can regenerate
-        # mcp-sdk-deps.json when the fork moves.
-        packages.mcp-sdk = mcpSdk;
 
         # One binary, one app, one name. `apps.mcp` was the address a client's
         # config named while `apps.default` pointed at the CLI; with the CLI gone
@@ -279,7 +247,7 @@
         # that still says `#mcp` needs its line changed to plain `nix run`.
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/Passenger.Mcp";
+          program = "${self.packages.${system}.default}/bin/passenger";
         };
       });
 }

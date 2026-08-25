@@ -1,6 +1,6 @@
 // Liveness classification. Pure: a fixture probe, no browser.
 //
-// The oracle is `tests/Passenger.Tests/DetectTests.cs`, and four of its five
+// The oracle was `tests/Passenger.Tests/DetectTests.cs`, and four of its five
 // cases are here by name. The fifth, `ASignatureWithNoConditionCannotBeBuilt`,
 // **cannot be written any more** -- `Models.signature` carries one condition
 // plus any others, so a signature with no condition is not a value this

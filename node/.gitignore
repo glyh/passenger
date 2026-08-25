@@ -1,6 +1,0 @@
-node_modules/
-lib/
-# ReScript emits its JavaScript beside the source. It is a build artefact --
-# readable, which is the point of the compiler, but not a second copy of the
-# program to keep in git.
-*.res.mjs

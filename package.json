@@ -1,17 +1,23 @@
 {
-  "name": "passenger-node",
+  "name": "passenger",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "An MCP server that hands agents web pages through a real, logged-in Chrome",
+  "bin": { "passenger": "src/Main.res.mjs" },
   "scripts": {
     "build": "rescript build",
     "watch": "rescript build -w",
     "clean": "rescript clean",
+    "start": "node src/Main.res.mjs",
     "test": "rescript build && node --test test/*_test.res.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "playwright-core": "^1.62.1",
+    "@rescript/runtime": "12.3.1",
+    "playwright-core": "^1.62.1"
+  },
+  "devDependencies": {
     "rescript": "^12.3.1"
   }
 }

@@ -1,6 +1,6 @@
 // Reading a scale out of two tools' output. Pure: recorded text, nothing spawned.
 //
-// The oracle is `tests/Passenger.Tests/GeometryTests.cs`. Its ten cases are
+// The oracle was `tests/Passenger.Tests/GeometryTests.cs`. Its ten cases are
 // here except two that no longer describe anything: `AConfiguredScaleWinsOver
 // TheProbe` and `NoConfiguredScaleMeansAskTheHost` read `Config.Settings`,
 // which is shell and has not been ported. `AScaleOfZeroCannotExist` survives

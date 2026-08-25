@@ -2,7 +2,7 @@
 id: 071
 title: Port the server to Node, in ReScript
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -243,25 +243,94 @@ no matched selectors and **every page read as clean** -- a wall reported as an
 open road, which is the shape ticket 042 removed from the attach message.
 `Probe.match` is a real function now.
 
-### What is left
+## Answer
 
-Not the tool. The two remaining pieces are the ones this ticket exists to
-decide:
+**Done.** The C# tree is deleted and the node tree is the repo: `src/*.res`,
+`test/*_test.res`, `assets/`, and one entry point at `src/Main.res.mjs`. Gone
+with it: `Passenger.slnx`, `Directory.Build.props`, `deps.json`,
+`mcp-sdk-deps.json`, the forked MCP SDK flake input, and the `MCP_SDK_NUGET_SOURCE`
+dance the dev shell needed to find it.
 
-1. **Packaging.** The flake still builds the C# server, `nix run .` still starts
-   it, and ReScript is not in nixpkgs -- the toolchain arrives through npm and
-   has to be packaged for a build that is currently nix all the way down. This
-   was named as a real task above and it still is.
-2. **Patchright.** Measured only as far as `connectOverCDP` against the running
-   Chrome. That it *behaves* identically driven directly rather than through the
-   .NET binding is still an assumption, and the ticket says to measure it
-   against a real wall rather than a smoke test. That is the acceptance set 069
-   records as missing, and it is the thing that should decide this rather than
-   any of the above.
+### Packaging turned out easier than this ticket feared
 
-Until both land, the two trees run side by side and nothing has been deleted.
-One duplication comes with that: the four assets -- `session.sh`, `sway.conf`,
-`ime.sh`, `viewer.html` -- exist in both trees, because the C# side embeds them
-in its assembly and the node side reads them off disk. A `Launch` case compares
-the two copies and fails on drift, skipping where the sibling tree is absent, so
-it deletes itself when the C# tree does.
+The worry above was that ReScript is not in nixpkgs, so the toolchain arrives
+through npm into a build that is nix all the way down. Measured: the compiler's
+npm binaries are **statically linked** (`static-pie`, on `@rescript/linux-x64`),
+so there is nothing to patchelf and `buildNpmPackage` runs `rescript build` in
+the sandbox as it comes. `npmDepsHash` locks the tree the way `deps.json` did.
+
+Two things had to be got right and both were found by running it, not reading:
+
+- **Flakes ignore untracked files.** Half the sources were moved with `mv`
+  rather than `git mv`, so the sandbox saw 11 files instead of 41 and the build
+  failed with "The module or file Config can't be found" -- which reads like a
+  `rescript.json` mistake and is not.
+- **The compiler is a devDependency; its runtime is not.** They are separate npm
+  packages, and `npm prune --omit=dev` took `@rescript/runtime` out with
+  `rescript`, leaving a binary that could not start. It is a direct dependency
+  now. What *can* go is that package's `lib/ocaml` -- 18 MiB of stdlib sources
+  the compiler reads and the emitted JavaScript never imports.
+
+### What it cost and what it bought, measured
+
+    closure   657.8 MiB  ->  588.6 MiB      (-69.2, against the -78.3 predicted)
+    src       5,968 lines of C#  ->  4,247 of ReScript
+    tests     1,739 lines  ->  1,633, and 107 cases -> 116
+    deps      2 NuGet lockfiles + a forked SDK  ->  package-lock.json
+
+The suite runs inside `nix build` as it did before (`doCheck`), and the built
+`result/bin/passenger` answers `tools/list` with all ten and `browserStatus`
+against a live session.
+
+### The four risks, and how they turned out
+
+- *Script line numbers.* Better than the C# door, not merely as good. A caller
+  writes `return`, which an ES module cannot do, so the source is wrapped in an
+  async IIFE **with no newline before the body** -- so line 1 stays line 1 in the
+  stack trace, and both `return` and top-level `await` work. No Roslyn, and none
+  of the flat ~40ms per compile.
+- *`Crossable` gets harder.* It did, and the measured answer beat the guess.
+  There is no type to test, so the rule was measured off live objects instead:
+  every Playwright handle is a ChannelOwner (a string `_guid`), a
+  `Locator`/`APIResponse` (a string `_apiName`, no `_guid`), or something like
+  `Keyboard` that is neither but holds one in a field. Three tests, the third one
+  level deep. Property reads rather than `instanceof`, which is load-bearing --
+  a vm context is its own realm. Pinned twice: the unit suite against stand-ins
+  carrying the measured shapes, and `live-session.mjs` against eleven real
+  handles.
+- *The bindings.* As small as counted. Playwright is ~20 members, the MCP SDK is
+  six externals, and neither needed `%raw` to start.
+- *The type system.* Kept, and in three places strengthened past what C# could
+  express -- a signature that carries one condition plus any others cannot be
+  written without one, `Scale.t` is abstract so a non-positive scale is not a
+  value, and `Errors.value` is exhaustive by the compiler rather than by a
+  `default` that throws.
+
+### Three signatures the runtime changed, all shell, none of them rules
+
+`Lanes.chromeTabs` is async where the C# interface reached the same endpoints
+through `.GetAwaiter().GetResult()`; `Session` has no driver process to restart,
+so a wedged attach is released by the deadline Playwright takes rather than by
+disposing a driver; and `Launch.plan` is async because the VNC port is claimed by
+scanning for a free one. Two got *shorter*: `Posix.kill` is a binding rather than
+a `DllImport`, and `Webserve`'s re-exec needs no special case for how the binary
+was built.
+
+### One bug the port found by running it
+
+Playwright .NET works out that a string like `sels => ...` is a function; this
+client decides by `typeof`, so the same string is evaluated as an expression,
+produces a function object in the page, and comes back as `undefined` with
+nothing thrown. The probe then carried no matched selectors and **every page read
+as clean** -- a wall reported as an open road, which is the shape ticket 042
+removed from the attach message. `Probe.match` is a real function now.
+
+### What this does not settle
+
+**Patchright.** Measured only as far as `connectOverCDP` against the running
+Chrome, plus one real round of the owner's `passenger-xiaohongshu` skill: search
+rendering, filter clicking, card extraction and a 14-note metadata batch all came
+back clean, and the skill's own baselines held except that note HTML has grown
+from ~40 KB to 94-155 KB. That it *behaves* identically against a real wall is
+still an assumption, and it is the acceptance set [069](069-powershell-instead-of-csharp.md)
+records as missing. Not a reason to keep two trees; a reason to build that set.

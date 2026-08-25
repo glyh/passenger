@@ -1,6 +1,6 @@
 // Parsing Chrome's target list. Pure: a recorded payload, no browser.
 //
-// The oracle is `tests/Passenger.Tests/TargetsTests.cs`, all 13 cases. The C#
+// The oracle was `tests/Passenger.Tests/TargetsTests.cs`, all 13 cases. The C#
 // suite reimplemented the counting half of `StuckSummary` inside the test file
 // because the real one needed a browser to find wedges in; here that half is
 // `Targets.summaryOf`, taking the wedges rather than a browser, so the test

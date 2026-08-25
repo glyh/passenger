@@ -17,7 +17,7 @@ you, you solve it by hand, and the profile keeps the result.
 **There is exactly one thing you ever type**, and only when Chrome has wedged
 badly enough that the tools cannot reach it:
 
-    Passenger.Mcp stop [--force]
+    passenger stop [--force]
 
 It restarts Chrome at the cost of the warm logged-in session, which is why no
 agent can call it and why it refuses while a lane still holds tabs or has the
@@ -35,7 +35,7 @@ return. The recipes for reading one, including the DOM walk that used to be
 
 ## As an MCP server
 
-    Passenger.Mcp        # stdio, and the only thing a client launches
+    passenger            # stdio, and the only thing a client launches
 
 The flake builds a real derivation, so the wrapper already carries sway and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
@@ -88,23 +88,27 @@ Functional core, imperative shell. The core is pure and testable without a
 browser; everything that touches Chrome, the disk, the clock, or a subprocess
 lives in the shell.
 
-    core    src/Passenger/Models.cs     every boundary shape, as frozen records
-            src/Passenger/Detect.cs     blocked-or-not, given a measurement
-            src/Passenger/Errors.cs     ErrorCode + structural errors
+    core    src/Models.res     every boundary shape, as records and variants
+            src/Detect.res     blocked-or-not, given a measurement
+            src/Errors.res     the codes, and the one structural exception
+            src/Geometry.res   the two parsers a scale is discovered through
+            src/Script.res     compiling a caller's JavaScript; what may cross back
 
-    shell   src/Passenger/Service.cs    the one script orchestration, shared by both frontends
-            src/Passenger/Browser.cs    Chrome daemon lifecycle, CDP attach
-            src/Passenger/Lanes.cs      which lane owns which tab, and when its time is up
-            src/Passenger/Targets.cs    Chrome's targets over CDP
-            src/Passenger/Probe.cs      measuring a live page into a PageProbe
-            src/Passenger/Handoff.cs    summon, notify, poll for a human
-            src/Passenger/Launch.cs     hide/show backends
-            src/Passenger/Present.cs    putting the hidden browser in front of a human
-            src/Passenger/Config.cs     the PASSENGER_* env boundary
-            src/Passenger/Script.cs     compiling and running a caller's script with Roslyn
-            src/Passenger.Mcp/Program.cs   the entry point: viewer re-exec, `stop`, then the server
-            src/Passenger.Mcp/Tools.cs     the ten tools, and the whole surface there is
-            src/Passenger.Mcp/Stop.cs      the one verb a human types
+    shell   src/Service.res    the one script orchestration
+            src/Session.res    attaching Playwright, and the rescue when a tab wedges it
+            src/Browser.res    Chrome daemon lifecycle
+            src/Lanes.res      which lane owns which tab, and when its time is up
+            src/Targets.res    Chrome's targets over CDP, going around Playwright
+            src/Probe.res      measuring a live page into a probe record
+            src/Handoff.res    summon, notify, poll for a human
+            src/Launch.res     how Chrome is started so it comes up hidden
+            src/Present.res    putting the hidden browser in front of a human
+            src/Sessions.res   which sway/wayvnc/viewer processes are ours
+            src/Webserve.res   serving the page a human takes the browser over in
+            src/Config.res     the PASSENGER_* env boundary
+
+    door    src/Main.res       the entry point, and the ten tools
+            src/Stop.res       the one verb a human types
 
     skill   skills/using-passenger/SKILL.md        how an agent operates this: the judgement
             skills/using-passenger/references/     the mechanics, read on demand
@@ -317,16 +321,15 @@ supports both ways.
 
 ### With nix
 
-    nix develop            # dev shell: sway, wayvnc, noVNC, the dotnet SDK
+    nix develop            # dev shell: sway, wayvnc, noVNC, node + npm
     nix run .              # run the MCP server (there is no other app)
 
-The flake pins everything except the browser and the .NET SDK itself --
-`deps.json` locks every NuGet package by hash (regenerate it with
-`nix build .#default.passthru.fetch-deps`), and `nix build` needs no network
-once that lockfile is current. The one NuGet-side patch: Patchright bundles its
-own Node to drive Playwright's wire protocol, built against
-`/lib64/ld-linux-x86-64.so.2`, which does not exist in the store -- the package
-substitutes nixpkgs' own `node` for it post-build instead. Chrome deliberately
+The flake pins everything except the browser. `package-lock.json` locks every
+npm package by hash and `npmDepsHash` in `flake.nix` locks the lot of them, so
+`nix build` needs no network once both are current -- change a dependency and
+nix will tell you the new hash to paste in. The ReScript compiler comes off npm
+like anything else and needs no patching: its binaries are statically linked
+(`static-pie`), so they run in the sandbox as they come. Chrome deliberately
 comes from the host (`PASSENGER_CHROME`, default
 `google-chrome-stable`): pinning it would freeze its version, and the version
 string is one of the most visible fingerprint fields there is -- a browser
@@ -378,42 +381,25 @@ anywhere else, say where with `PASSENGER_NOVNC`.
 There is no wrapper outside nix, so this is your PATH, not the package's. A
 client that launches servers with a stripped environment has to be told.
 
-**2. The .NET 10 SDK**, from your distribution or from Microsoft.
+**2. Node 22 or newer.** `node:sqlite` (the lane registry) and a global
+`WebSocket` (the CDP socket) are both builtins there, which is why neither is a
+dependency.
 
-**3. The MCP C# SDK, which is a fork and is not on nuget.org.** Upstream's
-stdio transport escapes every non-ASCII character on the wire (ticket 056,
-csharp-sdk#795); the fork adds the hook that lets a server choose the encoder.
-Clone it and pack it into a directory of your own:
+**3. Build it.**
 
-    git clone -b utf8-wire-encoding https://github.com/glyh/csharp-sdk
-    cd csharp-sdk
-    for p in src/ModelContextProtocol.Core src/ModelContextProtocol; do
-      dotnet pack $p -c Release -p:Version=2.2.0-utf8wire.1 \
-        -p:EnablePackageValidation=false -o ~/.local/share/passenger-nupkgs
-    done
+    npm install
+    npm run build          # rescript build, emitting src/*.res.mjs
+    npm test               # optional, and it builds first anyway
 
-One project per `dotnet pack` -- it takes exactly one and says so unhelpfully
-if given two. The version has to be *exactly* `2.2.0-utf8wire.1`, because that
-is what `src/Passenger.Mcp/Passenger.Mcp.csproj` asks for by name; if you bump
-one, bump both.
-
-**4. Build passenger against it.** `Directory.Build.props` adds
-`MCP_SDK_NUGET_SOURCE` to the restore sources when it is set, which is the
-whole mechanism -- the dev shell sets it to the flake's nupkgs, and here it is
-yours:
-
-    export MCP_SDK_NUGET_SOURCE=~/.local/share/passenger-nupkgs
-    dotnet publish src/Passenger.Mcp -c Release -o ~/.local/lib/passenger
-
-Then register the published binary instead of `nix run`:
+Then register the entry module instead of `nix run`:
 
     claude mcp add passenger --scope user \
       --env PASSENGER_NOVNC=/usr/share/novnc \
-      -- ~/.local/lib/passenger/Passenger.Mcp
+      -- node /path/to/passenger/src/Main.res.mjs
 
-One difference worth knowing, and it is in your favour: the published tree
-keeps Patchright's own bundled Node, which is linked against
-`/lib64/ld-linux-x86-64.so.2` and therefore works on an ordinary distribution.
+Nothing about that tree is nix-specific: `playwright-core` is a library in this
+process, not a driver on the other end of a pipe, so there is no bundled
+interpreter to be linked against the wrong loader.
 Substituting nixpkgs' node for it is a fix for a problem only the store has.
 
 ### Why not Docker
@@ -432,7 +418,7 @@ Nix isolates the dependency graph, which was the actual problem, and leaves the
 machine identity alone.
 
 Docker is still the right tool for a *headless server* deployment, where there
-is no host identity worth inheriting. `Present.cs` (web/noVNC) and `Notify.cs`
+is no host identity worth inheriting. `Present.res` (web/noVNC) and `Notify.res`
 (webhook) exist so that case works.
 
 Requires without nix: `sway wayvnc` (swaymsg ships with sway) and noVNC's

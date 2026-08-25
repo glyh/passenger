@@ -1,6 +1,6 @@
 // The passthrough door's core. Pure: no browser, no page.
 //
-// The oracle is `tests/Passenger.Tests/ScriptTests.cs`, and all thirteen of its
+// The oracle was `tests/Passenger.Tests/ScriptTests.cs`, and all thirteen of its
 // cases are here. Three had to change shape, in the opposite direction from the
 // C# port's own change.
 //

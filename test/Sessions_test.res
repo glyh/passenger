@@ -1,6 +1,6 @@
 // The session record and its process predicates.
 //
-// The oracle is `tests/Passenger.Tests/SessionTests.cs`, all fourteen cases.
+// The oracle was `tests/Passenger.Tests/SessionTests.cs`, all fourteen cases.
 // Every one of them is a scar. A stale `wayvnc` serving a dead compositor while
 // every status read healthy -- a black screen with nothing reporting a fault --
 // and two bugs surfaced by hand during that work: a liveness check counting

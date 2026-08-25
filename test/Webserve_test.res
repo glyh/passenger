@@ -1,6 +1,6 @@
 // What the viewer's server will and will not hand out. Pure: no socket bound.
 //
-// The oracle is `tests/Passenger.Tests/WebserveTests.cs`, all eight cases. The
+// The oracle was `tests/Passenger.Tests/WebserveTests.cs`, all eight cases. The
 // rule under test is the security-relevant half of that module. This process
 // exists to serve two things, and a static server that will read any file it can
 // reach is not something to leave listening on a socket, however local -- so `..`

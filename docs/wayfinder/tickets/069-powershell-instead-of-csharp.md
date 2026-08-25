@@ -2,7 +2,7 @@
 id: 069
 title: Would PowerShell be a better script language than C# for this door?
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee:
 blocked_by: []
 ---
@@ -94,3 +94,17 @@ Note also that this need not be exclusive. Nothing about `script` forbids a
 `language` parameter -- but ticket 004's "one door onto a page" is about not
 multiplying ways to do the same thing, and two languages is two doors wearing
 one name. If PowerShell wins, it should replace C#, not join it.
+
+## Answer
+
+**Moot, as this ticket said it would be.** [071](071-port-to-node.md) is closed:
+the server is ReScript on node and the caller's script is JavaScript, so there
+is no C# left for PowerShell to be better than.
+
+What survives is the question underneath, and 071 inherits it rather than
+answering it: **there is still no scripting-task acceptance set in this repo.**
+This ticket wanted one to compare two languages; 071 wanted one to prove
+patchright behaves the same driven directly as through the .NET binding. The
+same missing artefact blocked both, and the port went ahead on a narrower
+measurement -- one real round of a site skill -- rather than on it. Whoever
+builds that set should read this ticket's notes on what a fair one looks like.

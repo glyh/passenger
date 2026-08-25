@@ -1,7 +1,9 @@
 .direnv/
 result
+node_modules/
 
-# .NET build output
-[Bb]in/
-[Oo]bj/
-publish/
+# ReScript's build cache, and the JavaScript it emits beside each source. The
+# emitted code is readable on purpose -- that is what the compiler is for -- but
+# it is a build artefact, not a second copy of the program to keep in git.
+lib/
+*.res.mjs

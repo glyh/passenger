@@ -6,31 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `passenger` is an MCP server, and nothing else. It hands agents web pages through a real,
 logged-in Chrome that sites cannot distinguish from a human's daily driver, with a handoff to
-a human when a site puts up a captcha or a login. One binary: `Passenger.Mcp`, stdio.
+a human when a site puts up a captcha or a login. One entry point: `src/Main.res.mjs`, stdio.
 
 Read `README.md` first — it carries the design reasoning, the tool list, the `PASSENGER_*`
 environment surface, and why there is no `fetch` and no CLI any more.
 
 ## Build, test, run
 
-Everything happens inside the nix dev shell (direnv loads it on `cd`):
+The server is ReScript compiled to ES modules and run by node. Everything happens inside the
+nix dev shell (direnv loads it on `cd`):
 
     nix develop                       # or let .envrc do it
-    dotnet build Passenger.slnx
-    dotnet test tests/Passenger.Tests
-    dotnet test tests/Passenger.Tests --filter FullyQualifiedName~DetectTests
-    dotnet test tests/Passenger.Tests --filter "FullyQualifiedName~DetectTests.AKnownSignatureStillMatches"
-    dotnet run --project src/Passenger.Mcp -- stop [--force]
-    nix build                         # runs the test suite as part of the derivation (doCheck)
+    npm install                       # once, and after package.json moves
+    npm run build                     # rescript build -- emits src/*.res.mjs beside each source
+    npm run watch                     # the same, incrementally
+    npm test                          # build, then node --test over test/*_test.res.mjs
+    node --test test/Detect_test.res.mjs                     # one suite
+    node --test --test-name-pattern="a known signature" \
+         test/Detect_test.res.mjs                            # one case
+    node src/Main.res.mjs stop [--force]
+    nix build                         # runs the suite as part of the derivation (doCheck)
     nix run .                         # the server, as a client launches it
 
-`dotnet` outside the dev shell will fail to restore: the ModelContextProtocol packages are a
-local fork, and `Directory.Build.props` only finds them when `MCP_SDK_NUGET_SOURCE` is set,
-which the dev shell does. When NuGet deps move, regenerate the lockfiles with
-`nix build .#default.passthru.fetch-deps` (and `.#mcp-sdk.passthru.fetch-deps` for the fork).
+`npm test` builds first, deliberately: a stale `.res.mjs` that still passes while its `.res`
+no longer compiles is the failure mode an in-source build invites.
 
-`TreatWarningsAsErrors` is on with nullable reference types enabled — a warning fails the
-build, deliberately (`Directory.Build.props` says why).
+Warnings are errors here, set by `rescript.json`'s `compiler-flags` -- the same deliberate
+choice `Directory.Build.props` carried before ticket 071.
+
+**The emitted `.res.mjs` is a build artefact, not source.** It is readable on purpose, which
+makes it worth reading when a binding misbehaves, but it is gitignored and regenerated from
+the `.res` beside it. Never edit one.
+
+Some checks need a browser, a real noVNC, or a human, so they are not tests. They are scripts
+at the root, and each says at the top what it needs and why it cannot be one:
+
+    node probe.mjs          # the ten tools over stdio, needs Chrome on 9222
+    node live-session.mjs   # Session, and that Playwright's handles still match Script's rule
+    node live-webserve.mjs  # the viewer server's routes, needs a real noVNC
+    node live-handoff.mjs   # the whole handoff path, opening no window
 
 **Nothing in this process may write to stdout except the protocol.** The server speaks
 JSON-RPC on stdio. The flake's shellHook prints to stderr for that reason, and
@@ -42,26 +56,37 @@ registration uses `nix run`.
 Functional core, imperative shell. The core is pure and testable without a browser; anything
 touching Chrome, the disk, the clock or a subprocess is shell.
 
-    core   Models.cs    every boundary shape, as frozen records
-           Detect.cs    blocked-or-not, given a PageProbe measurement
-           Errors.cs    ErrorCode + structural errors
-           Script.cs    compiling a caller's C# with Roslyn; deciding what may cross back
+    core   Models.res    every boundary shape, as records and variants
+           Detect.res    blocked-or-not, given a probe measurement
+           Errors.res    the codes, and the one structural exception
+           Geometry.res  the two parsers a scale is discovered through
+           Script.res    compiling a caller's JavaScript; deciding what may cross back
 
-    shell  Service.cs   the one script orchestration
-           Browser.cs   Chrome daemon lifecycle, CDP attach
-           Lanes.cs     which lane owns which tab, and when its time is up
-           Targets.cs   Chrome's targets over CDP
-           Probe.cs     measuring a live page into a PageProbe
-           Handoff.cs / Present.cs / Launch.cs / NestedSessions.cs / Webserve.cs
-                        summoning a human: sway + wayvnc + the noVNC viewer page
+    shell  Service.res   the one script orchestration
+           Session.res   attaching Playwright, and the rescue when a tab wedges it
+           Browser.res   Chrome daemon lifecycle
+           Lanes.res     which lane owns which tab, and when its time is up
+           Targets.res   Chrome's targets over CDP, going around Playwright
+           Probe.res     measuring a live page into a probe record
+           Handoff.res / Present.res / Launch.res / Sessions.res / Webserve.res / Notify.res
+                         summoning a human: sway + wayvnc + the noVNC viewer page
+           Fs.res / Proc.res / Posix.res / Sqlite.res / Timers.res / WebSocket.res / Node.res
+                         the runtime, bound thinly -- what the BCL used to supply
 
-    mcp    Passenger.Mcp/Program.cs   viewer re-exec, `stop`, then the server
-           Passenger.Mcp/Tools.cs     the ten tools, and the whole surface there is
+    door   Main.res      the ten tools, the two argv checks, and the whole surface there is
+           Stop.res      the one verb a human types
+           Mcp.res / Pw.res   the SDK and Playwright, bound to what the shell touches
 
-Detection is pure because the shell measures first: `Probe.Run` tests candidate selectors
-against the live page into a `PageProbe`, so `Detect.Classify` is a function of that record
-alone. Blockers are a discriminated union (a base record with a `type` discriminator, since
-C# has none), so an unhandled case in a `switch` expression is a compile error.
+Detection is pure because the shell measures first: `Probe.measure` tests candidate selectors
+against the live page into a record, so `Detect.classify` is a function of that record alone.
+Blockers, error codes and wedges are real variants, so an unhandled case in a `switch` is a
+compile error -- which is the property the C# side had to spell as a base record with a `type`
+discriminator, and the reason ticket 071 required a *sound* compile-to-JS language rather than
+plain JS or TypeScript.
+
+**Until ticket 071 this was C#, and its test suite was the oracle for every module here.**
+Each file in `test/` names the `tests/Passenger.Tests/*.cs` it was ported from, case for case;
+that tree is gone, and those names are now history rather than a path.
 
 ## Load-bearing rules
 
@@ -79,6 +104,12 @@ cleanup.
 - **One door onto a page.** `script` — no tool per Playwright verb (ticket 004), no `fetch`
   (046). Adding a second way to do something already reachable through `script` needs a
   ticket's worth of justification.
+- **What crosses that door is JavaScript, and what comes back is JSON.** A caller's source
+  runs in a `node:vm` context with `Page` bound, plus the short list `Script.globals` names --
+  and `fetch` is deliberately absent from it, because a second way onto the web that goes
+  around the browser is what ticket 046 deleted. `Script.handleName` refuses a live Playwright
+  handle by a rule measured off the objects, not a list of them; the list is what let an
+  `IAPIResponse` through on the C# side and serialised the driver's internals as an answer.
 - **A lane owns its tabs.** One Chrome is shared by every agent on the machine; `openLane` is
   required rather than defaulted, because a caller isolated by accident cannot tell which lane
   it is in.

@@ -912,3 +912,23 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   reported; whether the page renders stays the human's judgement. See [A stale
   predecessor on the viewer port makes showBrowser hand out a
   404](tickets/058-stale-webserve-squats-the-port.md).
+
+- **The server is ReScript on node, and the caller's script is JavaScript.**
+  What a model writes well is not a language but a language paired with a
+  library, and the pair it knows best here -- Playwright's own JavaScript API --
+  was already in the build, unused as an API. Four of the door's documented
+  C# bites cease to exist, the forked MCP SDK goes with the encoder it existed
+  to reach, and the closure drops 69 MiB. The type system is kept rather than
+  traded: blockers, codes and wedges are real variants, and three invariants the
+  C# suite spent tests on became shapes the compiler holds. See [Port the server
+  to Node, in ReScript](tickets/071-port-to-node.md), and
+  [Would PowerShell be a better script language](tickets/069-powershell-instead-of-csharp.md),
+  which it made moot.
+
+- **A dragged file cannot reach the nested session, and does not need to.** RFB
+  carries pointer, keyboard, framebuffer and clipboard, so a drag onto the
+  viewer never leaves the host machine. The fix would buy nothing even if noVNC
+  shipped it -- the session shares this filesystem, so the file is already
+  there; what is missing is a gesture, not transport. `setInputFiles` hands a
+  host path straight to a file input with no viewer and no human. See [Getting a
+  file into the session](tickets/072-file-into-the-session.md).

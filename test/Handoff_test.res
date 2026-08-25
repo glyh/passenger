@@ -1,6 +1,6 @@
 // Waiting on a human, and the one presenter that cannot be waited on.
 //
-// The oracle is `tests/Passenger.Tests/HandoffTests.cs`, all three cases. The
+// The oracle was `tests/Passenger.Tests/HandoffTests.cs`, all three cases. The
 // scar is a design one, caught while building ticket 018 rather than in
 // production: `presented` is a real observation only for the local presenter.
 // The link and null presenters answer false unconditionally, because whether

@@ -1,6 +1,6 @@
 // Reading /proc/net/tcp: which process is holding a local port.
 //
-// The oracle is `tests/Passenger.Tests/PortsTests.cs`, all three cases. Only the
+// The oracle was `tests/Passenger.Tests/PortsTests.cs`, all three cases. Only the
 // column arithmetic is testable -- the fd scan needs a real process holding a
 // real socket -- and it is the half that is easy to get wrong, because the table
 // is hex throughout and the port is the tail of the local address rather than a

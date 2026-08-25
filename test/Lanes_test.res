@@ -5,7 +5,7 @@
 // adoption against a real popup, the screen refcount across two live
 // processes, and expiry actually closing tabs.
 //
-// The oracle is `tests/Passenger.Tests/LanesTests.cs`, all 26 cases. Two
+// The oracle was `tests/Passenger.Tests/LanesTests.cs`, all 26 cases. Two
 // differences, both recorded rather than smoothed over:
 //
 //   - `Config.stateDir` is pointed at a temp path here, as `Sandbox` does on
