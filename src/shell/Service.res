@@ -214,6 +214,21 @@ let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true)
       where: detail->Option.getOr(""),
       page: await look(page, checkWall),
     })
+  // Insurance, and it is worth saying that no probe could trigger it: nine
+  // adversarial scripts -- closing their own tab, killing the context, throwing
+  // a number, rejecting a bare string, a Playwright timeout, an unreachable URL
+  // -- all arrive above, because `Script.execute` wraps what the caller's code
+  // throws. What is left uncovered is this module's own Playwright calls, which
+  // could fail if a tab dies between `pageFor` and here. Cheap to catch, and the
+  // alternative is a caller losing a tab id to an MCP internal error.
+  | exception JsExn(e) =>
+    Failed({
+      tab,
+      code: ScriptRaised,
+      error: Script.described(e),
+      where: "",
+      page: await look(page, checkWall),
+    })
   }
 
   // A script may have opened tabs of its own -- window.open, or a link with

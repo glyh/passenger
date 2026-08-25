@@ -126,3 +126,25 @@ T.testAsync("a script's console cannot reach stdout", async () => {
   })
   T.equal(leaked, "")
 })
+
+T.testAsync("a throw with no message shows what was thrown", async () => {
+  // `throw` takes any value, and four common ways of using it carry neither
+  // `name` nor `message`. Reading those two and defaulting both produced
+  // "Error:" and nothing else, which told a caller nothing about their own
+  // script. Found by throwing all four at the door.
+  let cases = [
+    ("throw 42;", "threw 42"),
+    ("throw null;", "threw null"),
+    ("throw {why: 'no stack'};", `threw {"why":"no stack"}`),
+    ("await Promise.reject('bare string');", `threw "bare string"`),
+  ]
+  for i in 0 to cases->Array.length - 1 {
+    let (source, expected) = cases->Array.getUnsafe(i)
+    switch await Script.execute(source, Nullable.null) {
+    | _ => T.ok(false)
+    | exception Errors.Passenger({code, message}) =>
+      T.equal(code, ScriptRaised)
+      T.equal(message, expected)
+    }
+  }
+})

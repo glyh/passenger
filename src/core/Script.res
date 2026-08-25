@@ -136,15 +136,35 @@ let where = (stack, source) => {
   frames->Array.join("\n")
 }
 
-let raised = (e, source) => {
-  let name = JsExn.name(e)->Option.getOr("Error")
+/// Whatever was thrown, said in one line.
+///
+/// `throw` takes any value in JavaScript, and four ways of using it -- `throw 42`,
+/// `throw null`, `throw {why: '...'}`, `Promise.reject('boom')` -- carry no
+/// `name` and no `message`. Reading those two fields and defaulting both
+/// produced `"Error:"` and nothing else, which told a caller precisely nothing
+/// about their own script. So a value with no message is *shown* instead.
+///
+/// There is no stack on any of them either, so `where` is empty and honestly so:
+/// a value thrown without an Error never recorded where it came from.
+let described = e => {
   let message = JsExn.message(e)->Option.getOr("")
+  if message != "" {
+    `${JsExn.name(e)->Option.getOr("Error")}: ${message}`
+  } else {
+    switch JSON.stringifyAny(e) {
+    | Some(json) => `threw ${json}`
+    | None => `threw ${e->Obj.magic->String.make}`
+    | exception _ => `threw ${e->Obj.magic->String.make}`
+    }
+  }
+}
+
+let raised = (e, source) =>
   Errors.Passenger({
     code: ScriptRaised,
-    message: `${name}: ${message}`->String.split("\n")->Array.getUnsafe(0)->String.trimEnd,
+    message: described(e)->String.split("\n")->Array.getUnsafe(0)->String.trimEnd,
     detail: Some(where(JsExn.stack(e)->Option.getOr(""), source)),
   })
-}
 
 /// What a script sees.
 ///
