@@ -55,6 +55,22 @@ public class LaunchTests
     }
 
     [Fact]
+    public void TheCompositorBindsNoKeys()
+    {
+        (_, string config, _) = Planned();
+
+        // sway is here to composite and for nothing else: every key the human
+        // presses in a handoff belongs to the browser. sway has no bindings
+        // compiled in and `-c` keeps the distribution's config out, so the only
+        // way one arrives is someone adding it here.
+        foreach (string verb in new[] { "bindsym", "bindcode", "bindswitch",
+                                        "bindgesture", "floating_modifier" })
+        {
+            Assert.DoesNotContain(verb, config, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void ChromesArgvIsQuotedIntoTheScript()
     {
         (_, _, string script) = Planned();

@@ -68,15 +68,72 @@
     rfb.showDotCursor = false;  // wayvnc draws the real one into the frame
     rfb.background = '#1c1c1e';
 
-    rfb.addEventListener('connect', () => { status.hidden = true; });
+    // The clipboard, in both directions, because nothing else moves it.
+    //
+    // wayvnc has implemented both halves all along, and since ticket 063 the
+    // compositor offers the data-control protocol it needs -- but RFB's
+    // clipboard stops at this page. noVNC hands incoming text to a `clipboard`
+    // event and sends outgoing text only when something calls
+    // `clipboardPasteFrom`; this page did neither. So a human handed a browser
+    // to finish a login could not paste the password, and on a CJK machine
+    // could not enter the text at all, since nothing in the session composes.
+    //
+    // `mirrored` is what keeps the two directions from feeding each other: text
+    // that arrived from the session is never pushed back into it.
+    let mirrored = null;
+
+    rfb.addEventListener('clipboard', (e) => {
+      const text = e.detail.text;
+      if (text === mirrored) return;
+      mirrored = text;
+      navigator.clipboard.writeText(text).catch(() => {});
+    });
+
+    // The other direction cannot be a `paste` listener. noVNC calls
+    // preventDefault on every key it forwards, so Ctrl+V inside the screen
+    // never becomes a paste event here at all. The host clipboard is read when
+    // this window takes focus instead -- which is the moment after someone
+    // copied something elsewhere and came back to use it.
+    const pushHostClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || text === mirrored) return;
+        mirrored = text;
+        rfb.clipboardPasteFrom(text);
+      } catch (e) {
+        // Refused, or this document is not focused. Both are ordinary, and
+        // neither is worth a message: the handoff works without a shared
+        // clipboard, just less well.
+      }
+    };
+    window.addEventListener('focus', pushHostClipboard);
+
+    rfb.addEventListener('connect', () => {
+      status.hidden = true;
+      // Keys go where focus is. Until this line the canvas did not have it on
+      // open, so the first shortcut of a handoff landed on the *host* desktop
+      // -- Ctrl+N opening a window next to the viewer rather than inside it.
+      rfb.focus();
+      pushHostClipboard();
+    });
     rfb.addEventListener('disconnect', () => {
-      // The session outlives the window: cage and Chrome keep running while
-      // nobody is looking, so a dropped connection is worth retrying rather
-      // than reporting as the end of anything.
+      // The session outlives the window: the compositor and Chrome keep running
+      // while nobody is looking, so a dropped connection is worth retrying
+      // rather than reporting as the end of anything.
       status.hidden = false;
       status.textContent = 'reconnecting…';
       setTimeout(connect, 1000);
     });
+
+    // A file dropped on this page is a file dropped on an ordinary browser, and
+    // a browser's default for that is to navigate to it -- so dragging a log
+    // file onto the viewer opened it in a *host* window, having done nothing
+    // remote at all. RFB carries no file transfer and this is not the place to
+    // invent one: the session shares this filesystem, so its own file chooser
+    // already reaches any path on it.
+    for (const type of ['dragover', 'drop']) {
+      window.addEventListener(type, (e) => e.preventDefault());
+    }
 
     // A window dragged between screens of different density changes ratio
     // without changing its CSS size, which is the one resize noVNC cannot
