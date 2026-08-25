@@ -63,10 +63,20 @@ public class LaunchTests
         // presses in a handoff belongs to the browser. sway has no bindings
         // compiled in and `-c` keeps the distribution's config out, so the only
         // way one arrives is someone adding it here.
-        foreach (string verb in new[] { "bindsym", "bindcode", "bindswitch",
-                                        "bindgesture", "floating_modifier" })
+        // Directives only: a comment is free to name what it promises not to do,
+        // and the first version of this test caught the comment saying so.
+        IEnumerable<string> directives = config
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'));
+
+        foreach (string line in directives)
         {
-            Assert.DoesNotContain(verb, config, StringComparison.Ordinal);
+            foreach (string verb in new[] { "bindsym", "bindcode", "bindswitch",
+                                            "bindgesture", "floating_modifier" })
+            {
+                Assert.DoesNotContain(verb, line, StringComparison.Ordinal);
+            }
         }
     }
 
@@ -77,6 +87,40 @@ public class LaunchTests
 
         // A URL with a shell metacharacter in it is an ordinary URL.
         Assert.Contains("'chrome' 'about:blank' &", script);
+    }
+
+    [Fact]
+    public void TheImeGetsItsOwnBusAndItsOwnCopyOfTheConfig()
+    {
+        string section = Launch.ImeSection("fcitx5", available: true);
+
+        // Its own bus, because the human's desktop almost certainly has an
+        // fcitx5 holding org.fcitx.Fcitx5 already, and two on one bus fight.
+        Assert.Contains("dbus-run-session -- fcitx5", section);
+        // Its own config, copied from the host's: the dictionaries and layouts
+        // come along, and the running desktop's profile is never written to.
+        Assert.Contains("XDG_CONFIG_HOME=", section);
+        Assert.Contains("$HOME/.config/fcitx5", section);
+    }
+
+    [Fact]
+    public void NoImeIsAnOrdinaryOutcome()
+    {
+        // Asked for none, and none to be had: both are a session that simply
+        // cannot compose, which is what every session was before ticket 066.
+        Assert.DoesNotContain("dbus-run-session", Launch.ImeSection("none", available: true));
+        Assert.DoesNotContain("dbus-run-session", Launch.ImeSection("fcitx5", available: false));
+    }
+
+    [Fact]
+    public void TheImeIsTakenDownWithChrome()
+    {
+        (_, _, string script) = Planned();
+
+        // A daemon left behind would outlive the session that wanted it. It is
+        // also a Wayland client, so the compositor's exit would end it anyway --
+        // this is the belt to that pair of braces.
+        Assert.Contains("kill \"$ime_pid\"", script);
     }
 
     [Fact]

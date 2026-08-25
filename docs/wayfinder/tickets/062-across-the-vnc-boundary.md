@@ -118,9 +118,10 @@ now in `references/tabs-and-lanes.md`.
 **IME: reduced to the clipboard, and left there.** Nothing in the session
 composes and no IME can attach, so a human cannot *type* Chinese into the
 browser they are handed. They can paste it, which is what the clipboard fix
-bought and what the skill now says. An in-session IME remains unbuilt and
-unasked-for; sway offers `text-input-v3` and `input-method-v2`, so the door is
-open if anyone ever wants it.
+bought and what the skill now says. An in-session IME was left unbuilt here and
+built the same day: [066](066-an-ime-in-the-session.md) runs the host's own
+fcitx5 inside the session, so CJK is typed rather than pasted. The clipboard
+route stays as the answer for a machine with no IME to lend.
 
 **Drag: split in two, and both halves are settled.** Inside the page -- a
 slider, a reorder, an HTML5 drop target -- it works, tested by hand; wayvnc

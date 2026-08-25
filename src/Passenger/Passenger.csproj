@@ -14,7 +14,8 @@
 
 
   <!--
-    One embedded resource, and it is not code the caller could run. viewer.html
+    Embedded rather than installed beside the binary, and none of it is code the
+    caller could run. viewer.html
     is the page a human takes the browser over in, served by this process, so
     embedding it means a single-file publish still serves it and there is no
     path to get wrong when the tool is installed outside a source tree.
@@ -28,8 +29,17 @@
     markdown.js. The line this comment drew between them is gone; both are
     recipes the caller runs.
   -->
+  <!--
+    The session templates are files rather than string literals in Launch.cs, so
+    that a shell script is a shell script: highlighted, diffable, and something
+    shellcheck can be pointed at. They carry {braces} that Launch substitutes,
+    which is the one thing that keeps them from running as they stand.
+  -->
   <ItemGroup>
     <EmbeddedResource Include="Assets/web/viewer.html" LogicalName="Passenger.viewer.html" />
+    <EmbeddedResource Include="Assets/session/session.sh" LogicalName="Passenger.session.sh" />
+    <EmbeddedResource Include="Assets/session/ime.sh" LogicalName="Passenger.ime.sh" />
+    <EmbeddedResource Include="Assets/session/sway.conf" LogicalName="Passenger.sway.conf" />
   </ItemGroup>
 
 </Project>

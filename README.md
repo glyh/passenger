@@ -246,8 +246,8 @@ focus, since noVNC swallows the keystroke that would otherwise be a paste. Files
 do not: RFB has no file transfer, so a file dropped on the viewer is refused
 outright rather than left for the host browser to open in a window of its own.
 A file gets in through the page's own file input, whose chooser opens on the
-host desktop and can reach any path. And since nothing in the session composes,
-CJK goes in by pasting rather than typing.
+host desktop and can reach any path. CJK is typed rather than pasted, because
+the session runs the host's own IME inside itself -- see below.
 
 Both are the same page (`passenger/web/viewer.html`), a full-bleed noVNC
 screen. There is no native VNC client involved: noVNC asks for the framebuffer size its
@@ -268,12 +268,32 @@ were tried and removed. They break: Hyprland 0.56 dropped `hyprctl keyword` and
 moved dispatch to Lua, and did it while still exiting 0. Running Chrome in its
 own compositor sidesteps that whole class of breakage.
 
+## Typing in the nested browser
+
+The session runs **the host's own IME** inside itself -- `fcitx5` by default,
+found on PATH the same way Chrome is, and for the same reason: an input method
+is a person's configuration, dictionaries and habits, and pinning one in the
+closure would hand them somebody else's keyboard. Sway offers the `text-input`
+and `input-method` protocols cage never did, and Chrome already speaks them, so
+the whole mechanism is a daemon started beside the browser.
+
+Two things it does deliberately. It runs on a **private D-Bus**, because the
+human's desktop almost certainly has an fcitx5 holding `org.fcitx.Fcitx5`
+already and two instances on one bus fight over the name. And it runs against a
+**copy** of `~/.config/fcitx5`, refreshed at every start: the dictionaries and
+layouts come along, the running desktop's profile is never written to, and a
+setting changed inside the session is deliberately not kept.
+
+`PASSENGER_IME=none` turns it off; so does having no fcitx5 installed, in which
+case CJK goes in by pasting, which the viewer's clipboard supports both ways.
+
 ## Environment
 
     PASSENGER_STATE         state dir (default ~/.local/share/passenger)
     PASSENGER_PORT          CDP port (default 9222)
     PASSENGER_CHROME        chrome binary (default google-chrome-stable)
     PASSENGER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
+    PASSENGER_IME           input method for the session (default fcitx5; `none` for no IME)
     PASSENGER_WM            window backend
     PASSENGER_VNC_HOST/PORT default 127.0.0.1:5900 (websocket)
     PASSENGER_NOVNC_PORT    viewer page (default 6080)

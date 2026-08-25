@@ -86,6 +86,14 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [The session runs the host's own IME](tickets/066-an-ime-in-the-session.md)
+  — fcitx5 from the host's PATH, like the browser and for the same reason, on a
+  private D-Bus so it cannot fight the desktop's own instance and against a
+  refreshed copy of its config so it cannot write to one. Chrome needed no
+  argument; the missing piece was only that nothing in the session was being an
+  input method. `PASSENGER_IME=none`, or no fcitx5, is a session that cannot
+  compose — which is what every session was before it.
+
 - [Sway replaces cage as the nested compositor](tickets/063-sway-instead-of-cage.md)
   — cage was never the light one (33 MiB under sway on a 896 MiB closure) and
   cost three tickets: no data-control for wayvnc's clipboard, no input-method

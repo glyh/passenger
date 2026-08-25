@@ -44,6 +44,17 @@ public sealed record Settings
     /// </summary>
     public string? ViewerBrowser { get; init; }
 
+    /// <summary>
+    /// The input method the nested session runs, or `none` for no IME at all.
+    ///
+    /// The host's binary by default, for the same reason the browser is the
+    /// host's (ticket 023): an IME is the user's own configuration, dictionaries
+    /// and habits, and pinning one in the closure would hand a person somebody
+    /// else's keyboard. Absent from PATH means no IME, which is what the session
+    /// had before ticket 066 -- a browser a human could not type Chinese into.
+    /// </summary>
+    public string ImeCommand { get; init; } = "fcitx5";
+
     public PresenterName? Presenter { get; init; }
     public string? WebhookUrl { get; init; }
 
@@ -68,6 +79,7 @@ public sealed record Settings
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".local", "share", "passenger"),
             CdpPort = Int("PASSENGER_PORT", 9222, 1, 65535),
+            ImeCommand = Raw("PASSENGER_IME") ?? "fcitx5",
             ChromeBinary = Raw("PASSENGER_CHROME") ?? "google-chrome-stable",
             HandoffTimeoutS = Int("PASSENGER_HANDOFF_TIMEOUT", 300, 1, int.MaxValue),
             AttachTimeoutS = Int("PASSENGER_ATTACH_TIMEOUT", 15, 1, int.MaxValue),

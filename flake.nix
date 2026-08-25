@@ -42,6 +42,11 @@
         # headless outputs on request, and swaymsg to ask for any of it. `sway`
         # brings swaymsg with it, which the session script needs.
         #
+        # dbus is here for `dbus-run-session`, which the session's IME runs on so
+        # that its bus name cannot collide with the fcitx5 the human's own
+        # desktop is already running (ticket 066). The IME binary itself is the
+        # host's, like the browser.
+        #
         # No VNC client: the viewer is a page in the host's own browser (see
         # Present.cs). That is not only lighter than every native client that
         # would do, it is the only one that sizes itself correctly -- noVNC
@@ -52,7 +57,7 @@
         # wlr-randr and wayland-utils remain for the one thing a viewer cannot
         # ask for: the output scale, which decides the density the nested
         # Chrome renders at.
-        runtimeDeps = with pkgs; [ sway wayvnc wlr-randr wayland-utils ];
+        runtimeDeps = with pkgs; [ sway wayvnc wlr-randr wayland-utils dbus ];
 
         # Deliberately NOT pinned here: Chrome is taken from the host.
         #
