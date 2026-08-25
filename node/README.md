@@ -33,13 +33,40 @@ encoder and [070](../docs/wayfinder/tickets/070-astral-still-escapes.md)'s
 emoji come back as emoji. The forked MCP SDK exists only to reach that
 encoder, so it goes too.
 
+## What is ported
+
+The pure core, against the C# suite as the oracle -- `dotnet test` on both
+`DetectTests` and `GeometryTests` is green today, and every case that still
+describes something is here.
+
+    npm test        # 24 passing
+
+- `Errors.res` -- the codes, with `value` a switch the compiler checks.
+- `Models.res` -- `signature`, `probe`, `blocker`, and `condition`.
+- `Detect.res` -- the builtin table, `selectorsOf`, `matches`, `classify`.
+- `Geometry.res` -- `number` and `firstBlock`, the two parsers a scale is
+  discovered through, and `Scale` as an abstract type.
+
+Three invariants stopped being tests and became shapes, which is the same move
+`DetectTests.cs` records for ticket 021 ("structural rather than tested"):
+
+- A signature carries one condition plus any others, so the condition-less
+  signature `Validated()` threw on cannot be written.
+- `Scale.t` is abstract with `make: float => option<t>`, so a zero or negative
+  scale is not a value that exists rather than one that throws when checked.
+- `Errors.value` is exhaustive by the compiler rather than by a `default` that
+  throws.
+
+One behaviour deliberately differs: `number(".")` answers `None` where C#
+reached `double.Parse(".")` and would have thrown. No recorded output has
+produced it, but nothing prevented it either.
+
 ## What is deliberately missing
 
-Everything else. No lanes, so a script gets a fresh page and the skeleton
-closes it rather than leaving a tab in a browser other callers share. No
-`blocked` detection, no handoff, no nested session, no `stop`, no config, no
-tests. `Detect`, `Models`, `Errors` and `Geometry` are the pure core and port
-next, with the C# suite as the oracle.
+Everything with a side effect. No lanes, so a script gets a fresh page and the
+skeleton closes it rather than leaving a tab in a browser other callers share.
+No `blocked` detection wired to a probe, no handoff, no nested session, no
+`stop`, no config. Geometry's half that spawns `wlr-randr` is not here either.
 
 ## Running it
 
