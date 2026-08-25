@@ -147,7 +147,7 @@
           version = "0.1.0";
           src = source;
 
-          npmDepsHash = "sha256-xd5FjF/oaP87eTcsFRrKStZLTq68FR69V6Q/iaVJ0e0=";
+          npmDepsHash = "sha256-8OJne2FkIZjJFeLc9pt10T2X/LwmdTQY0oWHtBgNhb0=";
 
           # `npm run build` is `rescript build`, which emits each module's
           # JavaScript beside its source.
@@ -196,7 +196,7 @@
             # Both the server and the viewer's own re-exec need the compositor on
             # PATH and noVNC findable; neither can be discovered at runtime.
             makeWrapper ${pkgs.lib.getExe pkgs.nodejs-slim} $out/bin/passenger \
-              --add-flags $out/lib/passenger/src/Main.res.mjs \
+              --add-flags $out/lib/passenger/src/cli/Main.res.mjs \
               --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
               --set-default PASSENGER_NOVNC ${novncStatic}
 
@@ -233,7 +233,7 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: node src/Main.res.mjs stop"
+              echo "run: node src/cli/Main.res.mjs serve   (or: stop [--force])"
             } >&2
           '';
         };

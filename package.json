@@ -4,12 +4,12 @@
   "private": true,
   "type": "module",
   "description": "An MCP server that hands agents web pages through a real, logged-in Chrome",
-  "bin": { "passenger": "src/Main.res.mjs" },
+  "bin": { "passenger": "src/cli/Main.res.mjs" },
   "scripts": {
     "build": "rescript build",
     "watch": "rescript build -w",
     "clean": "rescript clean",
-    "start": "node src/Main.res.mjs",
+    "start": "node src/cli/Main.res.mjs",
     "test": "rescript build && node --test test/*_test.res.mjs"
   },
   "dependencies": {

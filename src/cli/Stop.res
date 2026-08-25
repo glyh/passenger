@@ -18,12 +18,6 @@
 // here means no server was started and none will be: the process says one thing
 // and exits.
 
-let verb = "stop"
-let forceFlag = "--force"
-
-let usage = `usage: passenger                 speak MCP over stdio (what a client runs)
-       passenger stop [--force]  stop chrome, losing the warm session`
-
 /// What is about to be lost, before it is lost.
 ///
 /// Both halves are said because they fail differently. A screen claim means a
@@ -53,46 +47,30 @@ let refusal = (claims, occupied) => {
   }
 
   lines->Array.push(
-    `stopping loses the warm logged-in session; \`passenger stop ${forceFlag}\` does it anyway`,
+    "stopping loses the warm logged-in session; `passenger stop --force` does it anyway",
   )
   lines->Array.join("\n")
 }
 
-/// Handle a human's argv, or say why it was not one. `None` means the caller
-/// passed nothing and the server should start normally.
-let ifAsked = async args =>
-  switch args->Array.get(0) {
-  | None => None
-  | Some(first) =>
-    // Anything else is a mistake, and the worst way to report it would be to
-    // start a server: a person who typed `--help` would watch a process sit on a
-    // pipe nobody is reading and conclude it had hung.
-    let malformed =
-      first != verb ||
-      args->Array.length > 2 ||
-      (args->Array.length == 2 && args->Array.get(1)->Option.getOr("") != forceFlag)
-    if malformed {
-      Console.error(usage)
-      Some(2)
-    } else {
-      let force = args->Array.length == 2
-      let _ = await Lanes.sweep()
+/// Stop the browser, or refuse and say what would have been lost. Returns the
+/// exit status.
+let run = async (~force) => {
+  let _ = await Lanes.sweep()
 
-      // Only a running browser has anything to lose, and only it can be asked.
-      // `occupied` reaches Chrome and returns empty when it cannot, but
-      // `screenClaims` is sqlite alone: a Chrome that died leaves its claim rows
-      // behind until the next start drops the tables, and refusing on those would
-      // wedge the one command that clears a wedge.
-      let up = await Browser.isUp()
-      let claims = up ? Lanes.screenClaims() : []
-      let occupied = up ? await Lanes.occupied() : []
+  // Only a running browser has anything to lose, and only it can be asked.
+  // `occupied` reaches Chrome and returns empty when it cannot, but
+  // `screenClaims` is sqlite alone: a Chrome that died leaves its claim rows
+  // behind until the next start drops the tables, and refusing on those would
+  // wedge the one command that clears a wedge.
+  let up = await Browser.isUp()
+  let claims = up ? Lanes.screenClaims() : []
+  let occupied = up ? await Lanes.occupied() : []
 
-      if !force && (claims->Array.length > 0 || occupied->Array.length > 0) {
-        Console.error(refusal(claims, occupied))
-        Some(1)
-      } else {
-        Console.log((await Browser.stop())->Option.getOr("stopped"))
-        Some(0)
-      }
-    }
+  if !force && (claims->Array.length > 0 || occupied->Array.length > 0) {
+    Console.error(refusal(claims, occupied))
+    1
+  } else {
+    Console.log((await Browser.stop())->Option.getOr("stopped"))
+    0
   }
+}

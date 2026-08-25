@@ -574,19 +574,36 @@ server->Mcp.setRequestHandler(Mcp.callToolRequest, async req =>
   }
 )
 
-// Two things run before the server and neither one starts it: the viewer
-// re-exec, and the human's `stop`. Both are argv checks, deliberately ahead of
-// anything that could write a byte to stdout -- which belongs to the protocol,
-// and which a stray line corrupts.
+// Nothing here may write to stdout except the protocol, so every branch that
+// says something to a person says it on stderr and exits -- and the one that
+// serves says nothing at all.
 @val @scope("process") external argv: array<string> = "argv"
 @val @scope("process") external exit: int => unit = "exit"
 
+let serve = async () => await server->Mcp.connect(Mcp.stdio())
+
 let main = async () => {
   let args = argv->Array.slice(~start=2, ~end=argv->Array.length)
+
+  // Ahead of the parser, not inside it: this is the viewer server re-execing
+  // this same module, never something a person types, and it takes a port
+  // rather than the flags a command takes. Keeping it out of `Cli.commands`
+  // keeps it out of the usage text, which is where it belongs.
   if !Webserve.serveIfAsked(args) {
-    switch await Stop.ifAsked(args) {
-    | Some(status) => exit(status)
-    | None => await server->Mcp.connect(Mcp.stdio())
+    switch Cli.parse(args) {
+    | Some(invocation) =>
+      switch invocation.command.name {
+      | "serve" => await serve()
+      | "stop" => exit(await Stop.run(~force=invocation->Cli.flag("force")))
+      | _ => exit(2)
+      }
+    | None =>
+      // No command, an unknown one, or a flag it does not take. Reporting it by
+      // *starting a server* would be the worst of the options: a person who
+      // typed `--help` would watch a process sit on a pipe nobody is reading and
+      // conclude it had hung.
+      Console.error(Cli.usage())
+      exit(2)
     }
   }
 }

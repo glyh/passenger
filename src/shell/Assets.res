@@ -17,7 +17,31 @@
 
 @val @scope("import.meta") external dirname: string = "dirname"
 
-let root = () => Fs.join(Fs.join(dirname, ".."), "assets")
+/// Where `assets/` is, found rather than counted.
+///
+/// The obvious spelling is a fixed number of `..` from this module, and it was
+/// wrong within a day of being written: the sources moved from one flat `src/`
+/// into `src/core`, `src/shell` and the rest, and a hard-coded depth would have
+/// gone on resolving to a directory that no longer holds anything. So it walks
+/// up instead, which is what a reader would do.
+let root = () => {
+  let found = ref(None)
+  let at = ref(dirname)
+  for _ in 0 to 4 {
+    if found.contents->Option.isNone {
+      let candidate = Fs.join(at.contents, "assets")
+      if Fs.existsSync(candidate) {
+        found := Some(candidate)
+      } else {
+        at := Fs.dirname(at.contents)
+      }
+    }
+  }
+  switch found.contents {
+  | Some(dir) => dir
+  | None => throw(Failure("no assets directory above " ++ dirname))
+  }
+}
 
 /// An asset, by its path under `assets/`.
 ///

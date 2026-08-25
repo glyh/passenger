@@ -19,3 +19,5 @@ external script: (string, {"filename": string}) => script = "Script"
 @send external runInContext: (script, vmContext) => promise<'a> = "runInContext"
 
 let wrap = source => "(async()=>{" ++ source ++ "\n})()"
+
+@val @scope("process") external cwd: unit => string = "cwd"

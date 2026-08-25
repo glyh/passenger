@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `passenger` is an MCP server, and nothing else. It hands agents web pages through a real,
 logged-in Chrome that sites cannot distinguish from a human's daily driver, with a handoff to
-a human when a site puts up a captcha or a login. One entry point: `src/Main.res.mjs`, stdio.
+a human when a site puts up a captcha or a login. One entry point: `src/cli/Main.res.mjs`, stdio.
 
 Read `README.md` first — it carries the design reasoning, the tool list, the `PASSENGER_*`
 environment surface, and why there is no `fetch` and no CLI any more.
@@ -24,7 +24,8 @@ nix dev shell (direnv loads it on `cd`):
     node --test test/Detect_test.res.mjs                     # one suite
     node --test --test-name-pattern="a known signature" \
          test/Detect_test.res.mjs                            # one case
-    node src/Main.res.mjs stop [--force]
+    node src/cli/Main.res.mjs serve       # what a client launches
+    node src/cli/Main.res.mjs stop [--force]
     nix build                         # runs the suite as part of the derivation (doCheck)
     nix run .                         # the server, as a client launches it
 
@@ -38,13 +39,21 @@ choice `Directory.Build.props` carried before ticket 071.
 makes it worth reading when a binding misbehaves, but it is gitignored and regenerated from
 the `.res` beside it. Never edit one.
 
-Some checks need a browser, a real noVNC, or a human, so they are not tests. They are scripts
-at the root, and each says at the top what it needs and why it cannot be one:
+Some checks need a browser, a real noVNC, or a human, so they are not tests. They live in
+`live/`, they are **ReScript like everything else**, and each says at the top what it needs
+and why it cannot be a test:
 
-    node probe.mjs          # the ten tools over stdio, needs Chrome on 9222
-    node live-session.mjs   # Session, and that Playwright's handles still match Script's rule
-    node live-webserve.mjs  # the viewer server's routes, needs a real noVNC
-    node live-handoff.mjs   # the whole handoff path, opening no window
+    node live/LiveDoor.res.mjs      # the ten tools over stdio, needs Chrome on 9222
+    node live/LiveSession.res.mjs   # attaching, lane-scoped tabs, what handles serialise to
+    node live/LiveTargets.res.mjs   # Targets and the live lane seam
+    node live/LiveWebserve.res.mjs  # the viewer server's routes, needs a real noVNC
+    node live/LiveHandoff.res.mjs   # the whole handoff path, opening no window
+
+They were hand-written `.mjs` at the root until they were not, and the reason is worth
+keeping: a `.mjs` that imports `src/**/X.res.mjs` is reaching into a build artefact, so it
+binds itself to the compiler's calling convention -- optional arguments as trailing
+`undefined`, exceptions as `{RE_EXN_ID}` -- and gets no types for any of it. Nothing outside
+`live/` and `test/` should import a `.res.mjs`.
 
 **Nothing in this process may write to stdout except the protocol.** The server speaks
 JSON-RPC on stdio. The flake's shellHook prints to stderr for that reason, and
@@ -56,26 +65,53 @@ registration uses `nix run`.
 Functional core, imperative shell. The core is pure and testable without a browser; anything
 touching Chrome, the disk, the clock or a subprocess is shell.
 
-    core   Models.res    every boundary shape, as records and variants
-           Detect.res    blocked-or-not, given a probe measurement
-           Errors.res    the codes, and the one structural exception
-           Geometry.res  the two parsers a scale is discovered through
-           Script.res    compiling a caller's JavaScript; deciding what may cross back
+The four directories under `src/` are that split, made a directory each. ReScript's
+module namespace is flat regardless, so a move between them changes no `import` and
+no reference -- the directories are for a reader, and the compiler does not care.
 
-    shell  Service.res   the one script orchestration
-           Session.res   attaching Playwright, and the rescue when a tab wedges it
-           Browser.res   Chrome daemon lifecycle
-           Lanes.res     which lane owns which tab, and when its time is up
-           Targets.res   Chrome's targets over CDP, going around Playwright
-           Probe.res     measuring a live page into a probe record
-           Handoff.res / Present.res / Launch.res / Sessions.res / Webserve.res / Notify.res
-                         summoning a human: sway + wayvnc + the noVNC viewer page
-           Fs.res / Proc.res / Posix.res / Sqlite.res / Timers.res / WebSocket.res / Node.res
-                         the runtime, bound thinly -- what the BCL used to supply
+    src/core/      pure. No browser, no disk, no clock, no subprocess.
+      Models.res     every boundary shape, as records and variants
+      Detect.res     blocked-or-not, given a probe measurement
+      Errors.res     the codes, and the one structural exception
+      Script.res     compiling a caller's JavaScript; deciding what may cross back
 
-    door   Main.res      the ten tools, the two argv checks, and the whole surface there is
-           Stop.res      the one verb a human types
-           Mcp.res / Pw.res   the SDK and Playwright, bound to what the shell touches
+    src/shell/     everything that touches the world.
+      Service.res    the one script orchestration
+      Session.res    attaching Playwright, and the rescue when a tab wedges it
+      Browser.res    Chrome daemon lifecycle
+      Lanes.res      which lane owns which tab, and when its time is up
+      Targets.res    Chrome's targets over CDP, going around Playwright
+      Probe.res      measuring a live page into a probe record
+      Geometry.res   at what density the nested browser renders
+      Config.res     the PASSENGER_* env boundary
+      Assets.res     the four files read from `assets/`
+      Handoff.res Present.res Launch.res Sessions.res Webserve.res Notify.res
+                     summoning a human: sway + wayvnc + the noVNC viewer page
+
+    src/cli/       the entry point and its two subcommands.
+      Cli.res        argument parsing, on `node:util.parseArgs`
+      Main.res       `serve`: the ten tools, and the MCP server behind them
+      Stop.res       `stop`: the one destructive thing, and the refusal guarding it
+
+    src/runtime/   other people's APIs, bound thinly. Nothing here is Passenger's.
+      Fs Proc Posix Sqlite Timers WebSocket Node   what the BCL used to supply
+      Mcp Pw                                       the SDK and Playwright
+
+Two placements are worth the sentence, because the obvious reading of each is
+the other one.
+
+`Geometry.res` is shell even though the half a test reaches -- `number` and
+`firstBlock`, the two parsers a scale is discovered through -- is pure. The
+module spawns `wlr-randr` and `wayland-info` for its own purposes, and a
+directory that says "no subprocess" has to mean it. The parsers stay at the top
+of the file where the tests find them.
+
+`Script.res` is core even though it imports `node:vm` and hands a caller `fs`.
+It touches no browser, no network and no disk *of its own*: what it does with
+those bindings is pass them through to somebody else's code, and every decision
+it makes -- what a line number is, what may cross back -- is a function of its
+arguments. Its own header says "functional core, almost", which is the honest
+hedge and is why it is worth reading before changing.
 
 Detection is pure because the shell measures first: `Probe.measure` tests candidate selectors
 against the live page into a record, so `Detect.classify` is a function of that record alone.

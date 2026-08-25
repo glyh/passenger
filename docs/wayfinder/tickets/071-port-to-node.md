@@ -246,7 +246,7 @@ open road, which is the shape ticket 042 removed from the attach message.
 ## Answer
 
 **Done.** The C# tree is deleted and the node tree is the repo: `src/*.res`,
-`test/*_test.res`, `assets/`, and one entry point at `src/Main.res.mjs`. Gone
+`test/*_test.res`, `assets/`, and one entry point at `src/cli/Main.res.mjs`. Gone
 with it: `Passenger.slnx`, `Directory.Build.props`, `deps.json`,
 `mcp-sdk-deps.json`, the forked MCP SDK flake input, and the `MCP_SDK_NUGET_SOURCE`
 dance the dev shell needed to find it.

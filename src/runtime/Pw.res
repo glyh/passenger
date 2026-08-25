@@ -49,3 +49,10 @@ type cdp
 
 /// Raise a tab, so the human lands on the page the caller meant.
 @send external bringToFront: page => promise<unit> = "bringToFront"
+
+// Reached only by the live checks, which measure what these serialise to.
+@send external locator: (page, string) => 'locator = "locator"
+@send external frameLocator: (page, string) => 'frameLocator = "frameLocator"
+@get external request: page => 'apiRequest = "request"
+@get external keyboard: page => 'keyboard = "keyboard"
+@get external mouse: page => 'mouse = "mouse"

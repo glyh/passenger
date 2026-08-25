@@ -8,7 +8,7 @@ It is an MCP server and nothing else. Register it with Claude Code for every
 project:
 
     claude mcp add passenger --scope user -- \
-      nix run /path/to/passenger
+      nix run /path/to/passenger -- serve
 
 Then ask for a page. The first call starts the Chrome daemon itself; when a
 site puts up a login or a captcha, `showBrowser` puts the window in front of
@@ -35,7 +35,7 @@ return. The recipes for reading one, including the DOM walk that used to be
 
 ## As an MCP server
 
-    passenger            # stdio, and the only thing a client launches
+    passenger serve      # stdio, and the only thing a client launches
 
 The flake builds a real derivation, so the wrapper already carries sway and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
@@ -88,27 +88,36 @@ Functional core, imperative shell. The core is pure and testable without a
 browser; everything that touches Chrome, the disk, the clock, or a subprocess
 lives in the shell.
 
-    core    src/Models.res     every boundary shape, as records and variants
-            src/Detect.res     blocked-or-not, given a measurement
-            src/Errors.res     the codes, and the one structural exception
-            src/Geometry.res   the two parsers a scale is discovered through
-            src/Script.res     compiling a caller's JavaScript; what may cross back
+    src/core/       pure: no browser, no disk, no clock, no subprocess
+      Models.res      every boundary shape, as records and variants
+      Detect.res      blocked-or-not, given a measurement
+      Errors.res      the codes, and the one structural exception
+      Script.res      compiling a caller's JavaScript; what may cross back
 
-    shell   src/Service.res    the one script orchestration
-            src/Session.res    attaching Playwright, and the rescue when a tab wedges it
-            src/Browser.res    Chrome daemon lifecycle
-            src/Lanes.res      which lane owns which tab, and when its time is up
-            src/Targets.res    Chrome's targets over CDP, going around Playwright
-            src/Probe.res      measuring a live page into a probe record
-            src/Handoff.res    summon, notify, poll for a human
-            src/Launch.res     how Chrome is started so it comes up hidden
-            src/Present.res    putting the hidden browser in front of a human
-            src/Sessions.res   which sway/wayvnc/viewer processes are ours
-            src/Webserve.res   serving the page a human takes the browser over in
-            src/Config.res     the PASSENGER_* env boundary
+    src/shell/      everything that touches the world
+      Service.res     the one script orchestration
+      Session.res     attaching Playwright, and the rescue when a tab wedges it
+      Browser.res     Chrome daemon lifecycle
+      Lanes.res       which lane owns which tab, and when its time is up
+      Targets.res     Chrome's targets over CDP, going around Playwright
+      Probe.res       measuring a live page into a probe record
+      Geometry.res    at what density the nested browser renders
+      Handoff.res     summon, notify, poll for a human
+      Launch.res      how Chrome is started so it comes up hidden
+      Present.res     putting the hidden browser in front of a human
+      Sessions.res    which sway/wayvnc/viewer processes are ours
+      Webserve.res    serving the page a human takes the browser over in
+      Config.res      the PASSENGER_* env boundary
+      Assets.res      the four files read from assets/
 
-    door    src/Main.res       the entry point, and the ten tools
-            src/Stop.res       the one verb a human types
+    src/cli/        the entry point and its two subcommands
+      Cli.res         argument parsing, on node:util.parseArgs
+      Main.res        serve: the ten tools, and the MCP server behind them
+      Stop.res        stop: the one destructive thing, and its refusal
+
+    src/runtime/    other people's APIs, bound thinly -- nothing here is ours
+      Fs Proc Posix Sqlite Timers WebSocket Node    what the BCL used to supply
+      Mcp Pw                                        the SDK and Playwright
 
     skill   skills/using-passenger/SKILL.md        how an agent operates this: the judgement
             skills/using-passenger/references/     the mechanics, read on demand
@@ -322,7 +331,8 @@ supports both ways.
 ### With nix
 
     nix develop            # dev shell: sway, wayvnc, noVNC, node + npm
-    nix run .              # run the MCP server (there is no other app)
+    nix run . -- serve     # run the MCP server
+    nix run . -- stop      # the one verb a human types
 
 The flake pins everything except the browser. `package-lock.json` locks every
 npm package by hash and `npmDepsHash` in `flake.nix` locks the lot of them, so
@@ -395,7 +405,7 @@ Then register the entry module instead of `nix run`:
 
     claude mcp add passenger --scope user \
       --env PASSENGER_NOVNC=/usr/share/novnc \
-      -- node /path/to/passenger/src/Main.res.mjs
+      -- node /path/to/passenger/src/cli/Main.res.mjs serve
 
 Nothing about that tree is nix-specific: `playwright-core` is a library in this
 process, not a driver on the other end of a pipe, so there is no bundled

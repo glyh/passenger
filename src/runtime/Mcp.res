@@ -22,3 +22,21 @@ external callToolRequest: schema = "CallToolRequestSchema"
   "setRequestHandler"
 
 @send external connect: (server, transport) => promise<unit> = "connect"
+
+// The client half, for the live checks. They drive this server the way a real
+// client does -- over stdio, as a subprocess -- rather than calling into it,
+// which is the only way to exercise the transport and the schemas at all.
+type client
+type clientTransport
+
+@module("@modelcontextprotocol/sdk/client/index.js") @new
+external client: {..} => client = "Client"
+
+@module("@modelcontextprotocol/sdk/client/stdio.js") @new
+external stdioClient: {..} => clientTransport = "StdioClientTransport"
+
+@send external connectClient: (client, clientTransport) => promise<unit> = "connect"
+@send external closeClient: client => promise<unit> = "close"
+@send external listTools: client => promise<{"tools": array<{"name": string}>}> = "listTools"
+@send
+external callTool: (client, {..}) => promise<{"content": array<{"text": string}>}> = "callTool"
