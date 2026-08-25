@@ -6,7 +6,8 @@
   "scripts": {
     "build": "rescript build",
     "watch": "rescript build -w",
-    "clean": "rescript clean"
+    "clean": "rescript clean",
+    "test": "rescript build && node --test test/*_test.res.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
