@@ -1,6 +1,6 @@
 ---
 id: 071
-title: Port the server to Node, in plain JavaScript
+title: Port the server to Node, in a sound compile-to-JS language
 labels: [wayfinder:research]
 status: open
 assignee:
@@ -28,8 +28,48 @@ That is `patchright-core` 1.62.1 (`.playwright/package/index.mjs`) doing
 `node v24.19.0`. The JS Playwright ships here already, because the .NET
 binding is a client of it over a pipe.
 
+### Which language, given it is not TypeScript
+
+Two language choices hide in this ticket and only one is open. **The caller's
+script stays JavaScript** -- that is the entire point of the move, and no
+server language changes it. What the *server* is written in is the question.
+
 The owner's call, recorded so a later session does not re-litigate it:
-**plain JavaScript, not TypeScript.** The reason given is the type system.
+**not TypeScript, because the type system is unsound** -- `any` leaks and the
+compiler will lie to you. That rules out the cheap answer of JSDoc annotations
+checked by `tsc --checkJs` as well, since it inherits the same system, and it
+points at a *sound* language compiling to JS rather than at plain JS.
+
+Which matters more here than it first looks, because it directly answers the
+type-system cost below. This repo is functional core, imperative shell: the
+core (`Detect`, `Models`, `Errors`, `Geometry`) has **no JS interop at all**,
+and it is exactly where an unhandled case must stay a compile error. The
+shell is where the bindings tax falls and is the half that needs the types
+least. A sound language buys the most where it costs the least.
+
+Every candidate pays that same bindings tax -- nobody has written bindings for
+Playwright or the MCP SDK in any of them -- so it does not discriminate
+between them. The type system and how much of it a model can write do.
+
+- **F# via Fable** -- the recommendation. The existing code moves sideways
+  rather than being re-conceived, and `CLAUDE.md`'s union workaround ("a base
+  record with a `type` discriminator, since C# has none") stops being a
+  workaround: F# has real unions with exhaustiveness checking, so the port
+  *gains* the guarantee the plain-JS version would have lost. `fable` 5.13.0
+  is in nixpkgs, and the .NET SDK stays a build-time tool only -- the runtime
+  still leaves the closure. Unknown to establish: how Fable's `promise`
+  interop feels against an API as async as Playwright's, and that models are
+  weak at Fable's own interop attributes even where they are fine at F#.
+- **ReScript** -- soundest of the three, best JS interop ergonomics, emits
+  readable JS. Not a top-level nixpkgs package, so the toolchain arrives
+  through npm. Models write much less of it than F#.
+- **OCaml via Melange** -- the same shape with a larger language behind it,
+  and `ocamlPackages.melange` 7.0.1 is packaged. Worth weighing given the
+  owner already works in OCaml.
+- **Ruled out:** Gleam and PureScript (fluency near zero, and interop fights
+  an async-heavy API); Scala.js and Kotlin/JS (drag a JVM into the build,
+  cancelling the closure win that is half this ticket's case); ClojureScript
+  (dynamic, so a worse type position than C# is today).
 
 ### What the port would win
 
@@ -65,13 +105,11 @@ The owner's call, recorded so a later session does not re-litigate it:
 - **The type system, and this is the real price.** `CLAUDE.md` names it as
   load-bearing: blockers are a discriminated union "so an unhandled case in a
   `switch` expression is a compile error", nullable reference types are on, and
-  `TreatWarningsAsErrors` is deliberate. Plain JS cannot replace that in kind
-  -- and TypeScript, which could, is ruled out above. What can stand in is
-  weaker and should be chosen knowingly: an `assertNever`-style default that
-  throws at runtime, `Object.freeze` for the frozen records, and tests carrying
-  the weight the compiler carries now. **Decide this before starting, not
-  halfway through.** If the answer is "the tests can carry it", say so in this
-  ticket first.
+  `TreatWarningsAsErrors` is deliberate. This is a cost only if the server is
+  written in JavaScript or TypeScript -- a sound compile-to-JS language keeps
+  the guarantee, and F# strengthens it. It is listed here because it is the
+  thing to protect, and because a port that quietly ends up in plain JS for
+  expedience has given away the property this codebase is built on.
 - **Script line numbers.** [023](023-rewriting-into-csharp.md)
   bought a runtime line number for a caller's script with a file path and
   emitted debug information. The Node equivalent is parsing a stack trace from
