@@ -26,7 +26,8 @@ because C# bites. Splitting its entries by whose fault they are:
   here-string (`@'...'@`) is literal with no doubling at all, which is a
   strictly better shape for the thing every script does most.
 - The nested `await` that will not compile at the top level.
-- `JsonSerializer`'s ASCII-escaping default, per [068](068-json-encoder-in-scope.md).
+- `JsonSerializer`'s ASCII-escaping default, per
+  [068](068-json-encoder-in-scope.md).
   `ConvertTo-Json` on PowerShell 7 is believed not to ASCII-escape -- verify,
   do not assume.
 - Local functions having to precede the `return`.
@@ -66,10 +67,18 @@ So roughly four of nine, and the four are the smaller ones.
 
 **The question underneath all of it** is not which language is nicer but which
 one a model writes correctly on the first try against Playwright .NET, which is
-a measurement, not an opinion. `docs/wayfinder/assets/044-acceptance-set.md`
-already exists for exactly this kind of comparison: run the same set through a
-PowerShell door and count first-try successes against the C# baseline. Anything
-short of that is preference.
+a measurement, not an opinion. **There is nothing in this repo to measure it
+with, and that is this ticket's first job.** An earlier draft of these lines
+pointed at `docs/wayfinder/assets/044-acceptance-set.md`; that is five web
+pages with extraction diagnostics, and it tests whether a reading recipe
+survives a comments rail -- not whether a script compiles and runs first try.
+What is needed instead is a set of *scripting tasks* with known-good answers
+(fetch a JSON endpoint and pull three fields, scroll a feed to a count, click
+through to a detail page, screenshot a region), run through both doors and
+scored on first-try success. Building that set is most of the work here, and
+it is worth having whatever the answer turns out to be: `writing-scripts.md`
+grew from nine bites to eleven while this ticket was being written, entirely
+from failures caught by hand.
 
 Note also that this need not be exclusive. Nothing about `script` forbids a
 `language` parameter -- but ticket 004's "one door onto a page" is about not
