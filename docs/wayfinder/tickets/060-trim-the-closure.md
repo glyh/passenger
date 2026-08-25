@@ -3,7 +3,7 @@ id: 060
 title: The bundle carries a Python nothing runs
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
