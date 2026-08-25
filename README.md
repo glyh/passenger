@@ -290,9 +290,13 @@ An earlier version started a private fcitx5 on a private bus against a *copy* of
 asked out loud: why run a second one? The copy also turned out to be a symlink
 back to the original, so the isolation it claimed was never real.
 
-`PASSENGER_IME=none` turns it off, and so does an fcitx5 that is not running, in
-which case CJK goes in by pasting -- which the viewer's clipboard supports both
-ways.
+**It is off by default, because it crashes Chrome.** `PASSENGER_IME=fcitx5`
+turns it on; measured on fresh profiles one variable apart, the browser runs a
+clean minute without it and segfaults within a second with it. A separate fcitx5
+attached by hand crashes it the same way, so the fault is an input method being
+present rather than this reuse. Ticket 067 has the measurements and the places
+to look. Until then CJK goes in by pasting, which the viewer's clipboard
+supports both ways.
 
 ## Environment
 
@@ -300,8 +304,8 @@ ways.
     PASSENGER_PORT          CDP port (default 9222)
     PASSENGER_CHROME        chrome binary (default google-chrome-stable)
     PASSENGER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
-    PASSENGER_IME           `fcitx5` (default) asks the running one to serve the
-                            session; `none` asks for no IME at all
+    PASSENGER_IME           `none` (default; see ticket 067) or `fcitx5`, which
+                            asks the running one to serve the session too
     PASSENGER_WM            window backend
     PASSENGER_VNC_HOST/PORT default 127.0.0.1:5900 (websocket)
     PASSENGER_NOVNC_PORT    viewer page (default 6080)

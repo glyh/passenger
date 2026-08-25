@@ -45,15 +45,21 @@ public sealed record Settings
     public string? ViewerBrowser { get; init; }
 
     /// <summary>
-    /// The input method the nested session runs, or `none` for no IME at all.
+    /// Whether the session asks the human's IME to serve it: `fcitx5`, or `none`.
     ///
-    /// The host's binary by default, for the same reason the browser is the
-    /// host's (ticket 023): an IME is the user's own configuration, dictionaries
-    /// and habits, and pinning one in the closure would hand a person somebody
-    /// else's keyboard. Absent from PATH means no IME, which is what the session
-    /// had before ticket 066 -- a browser a human could not type Chinese into.
+    /// **Defaults to `none`, because it crashes Chrome** (ticket 067). Measured
+    /// twice on fresh profiles, one variable apart: with no IME the browser ran
+    /// out a full minute clean, and with the IME attached it segfaulted within a
+    /// second. Attaching a separate fcitx5 instance by hand crashed it the same
+    /// way, so this is about an input method being present at all rather than
+    /// about reusing the human's one.
+    ///
+    /// The mechanism stays, off, because it is one D-Bus call and it demonstrably
+    /// works as an input method -- typed into, by hand, before it was wired in.
+    /// What is not understood is why Chrome dies, and shipping a browser that
+    /// does not start is worse than shipping one that cannot compose.
     /// </summary>
-    public string ImeCommand { get; init; } = "fcitx5";
+    public string ImeCommand { get; init; } = "none";
 
     public PresenterName? Presenter { get; init; }
     public string? WebhookUrl { get; init; }
@@ -79,7 +85,7 @@ public sealed record Settings
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".local", "share", "passenger"),
             CdpPort = Int("PASSENGER_PORT", 9222, 1, 65535),
-            ImeCommand = Raw("PASSENGER_IME") ?? "fcitx5",
+            ImeCommand = Raw("PASSENGER_IME") ?? "none",
             ChromeBinary = Raw("PASSENGER_CHROME") ?? "google-chrome-stable",
             HandoffTimeoutS = Int("PASSENGER_HANDOFF_TIMEOUT", 300, 1, int.MaxValue),
             AttachTimeoutS = Int("PASSENGER_ATTACH_TIMEOUT", 15, 1, int.MaxValue),
