@@ -49,7 +49,10 @@ least. A sound language buys the most where it costs the least.
 
 Every candidate pays that same bindings tax -- nobody has written bindings for
 Playwright or the MCP SDK in any of them -- so it does not discriminate
-between them. The type system and how much of it a model can write do.
+between them. The type system and how much of it a model can write do. So
+does who would still be maintaining it in five years: none of the three has a
+company behind it, and the question is what survives if the maintainers stop
+-- a language with an owner and other backends, or nothing.
 
 - **F# via Fable** -- the recommendation. The existing code moves sideways
   rather than being re-conceived, and `CLAUDE.md`'s union workaround ("a base
@@ -62,7 +65,17 @@ between them. The type system and how much of it a model can write do.
   weak at Fable's own interop attributes even where they are fine at F#.
 - **ReScript** -- soundest of the three, best JS interop ergonomics, emits
   readable JS. Not a top-level nixpkgs package, so the toolchain arrives
-  through npm. Models write much less of it than F#.
+  through npm. Models write much less of it than F#. And the maintainer
+  question cuts hardest here: measured on the repo 2026-08-26, Hongbo Zhang
+  -- who wrote BuckleScript and turned it into ReScript, 8,637 commits --
+  last committed in **November 2022** and has moved to building MoonBit;
+  Patrick Ecker last committed October 2023. Of the most recent 100 commits,
+  Christoph Knittel has 29 and Cristiano Calcagno 25, with everyone else in
+  single digits. The project is alive and shipping (v12.3.1 on 2026-08-24,
+  a commit the day after), and the ReScript Association is a non-profit with
+  no single corporate owner -- but a bus factor near two on a language whose
+  *language is the project* is a different risk from the same number on
+  Fable, where F# would outlive the backend.
 - **OCaml via Melange** -- the same shape with a larger language behind it,
   and `ocamlPackages.melange` 7.0.1 is packaged. Worth weighing given the
   owner already works in OCaml.
