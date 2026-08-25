@@ -100,9 +100,10 @@ public static class Present
     /// Two things a human needs that a hidden browser does not. The output takes
     /// the host screen's density -- only the density: the size belongs to the
     /// viewer, which asks for it over RFB as soon as it connects and again
-    /// whenever its window changes. And Chrome comes out of the fullscreen cage
-    /// put it in, which is what hid its address bar and back button from the
-    /// person being asked to use them.
+    /// whenever its window changes. And Chrome is put back into a window if
+    /// anything has fullscreened it -- which cage used to do to every session,
+    /// and which a page or an F11 can still do -- since fullscreen is what hides
+    /// the address bar and back button from the person being asked to use them.
     ///
     /// Done here rather than only at startup so that a session started before
     /// this existed, or one somehow re-fullscreened, is still handed over with

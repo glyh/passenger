@@ -42,7 +42,7 @@ internal static class Syscall
         }
         catch (DllNotFoundException)
         {
-            // Not Linux. Nothing here works off Linux anyway -- cage and wayvnc
+            // Not Linux. Nothing here works off Linux anyway -- sway and wayvnc
             // are Wayland -- so this is a courtesy rather than a fallback.
         }
         catch (EntryPointNotFoundException)

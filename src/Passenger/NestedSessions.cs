@@ -1,6 +1,6 @@
-// Imperative shell: which cage/wayvnc/viewer processes are *ours*.
+// Imperative shell: which sway/wayvnc/viewer processes are *ours*.
 //
-// Every process this tool starts is nested one inside another -- cage holds
+// Every process this tool starts is nested one inside another -- sway holds
 // wayvnc and Chrome, and a viewer connects to that wayvnc from outside. Nothing
 // in the process table says which of them belong together, so this module keeps
 // the one record that does.
@@ -13,19 +13,20 @@
 // every such process on the machine, so this tool tore down sessions and remote
 // desktops that were never its own.
 //
-// The record is written by the session script itself, from inside cage, because
+// The record is written by the session script itself, from inside the session,
+// because
 // that is the only place that can observe what actually came up: the display it
-// got, and the pids of the processes cage really started.
+// got, and the pids of the processes it really started.
 
 using System.Globalization;
 using System.Net.Sockets;
 
 namespace Passenger;
 
-/// <summary>One live cage session, as reported from inside it.</summary>
+/// <summary>One live nested session, as reported from inside it.</summary>
 public sealed record NestedSession
 {
-    public required int CagePid { get; init; }
+    public required int CompositorPid { get; init; }
     public required int ChromePid { get; init; }
     public required int VncPid { get; init; }
     public required string VncHost { get; init; }
@@ -34,11 +35,14 @@ public sealed record NestedSession
     public required string WaylandDisplay { get; init; }
 
     /// <summary>
-    /// Chrome is the session: cage exists only to hold it.
+    /// Chrome is the session: the compositor exists only to hold it.
     ///
-    /// Keyed on Chrome rather than on cage because cage outliving a dead
-    /// Chrome is exactly the stale state this record has to detect -- that is
-    /// the shape the black screen came in.
+    /// Keyed on Chrome rather than on the compositor because a compositor
+    /// outliving a dead Chrome is exactly the stale state this record has to
+    /// detect -- that is the shape the black screen came in. Under cage that
+    /// state arrived only by accident, since cage exited with its child; sway
+    /// does not, which is why the session script kills it deliberately
+    /// (Launch.SessionScript) and why this check matters more than it did.
     /// </summary>
     public bool Alive => Sessions.IsAlive(ChromePid);
 }
@@ -67,7 +71,7 @@ public static class Sessions
     /// <summary>
     /// Is this pid a running process?
     ///
-    /// A zombie does not count. Chrome dying inside cage leaves an unreaped child
+    /// A zombie does not count. Chrome dying inside the session leaves an unreaped child
     /// whose pid still answers signal 0, so a liveness check built on kill(2)
     /// alone reports a dead session as live -- which is the state that had a
     /// viewer showing a black screen with everything claiming to be fine.
@@ -144,7 +148,7 @@ public static class Sessions
 
             return new NestedSession
             {
-                CagePid = int.Parse(fields["cage_pid"]),
+                CompositorPid = int.Parse(CompositorPidOf(fields)),
                 ChromePid = int.Parse(fields["chrome_pid"]),
                 VncPid = int.Parse(fields["vnc_pid"]),
                 VncHost = fields["vnc_host"],
@@ -159,6 +163,18 @@ public static class Sessions
             return null;
         }
     }
+
+    /// <summary>
+    /// The compositor's pid, under either name.
+    ///
+    /// `cage_pid` was the key until ticket 063 swapped the compositor for sway.
+    /// A record on disk outlives the upgrade that renamed it, and the session it
+    /// names is a real cage still holding the port and the profile -- so the old
+    /// key is still read, purely so that session can be torn down rather than
+    /// orphaned. Nothing writes it any more.
+    /// </summary>
+    private static string CompositorPidOf(IReadOnlyDictionary<string, string> fields) =>
+        fields.TryGetValue("compositor_pid", out string? pid) ? pid : fields["cage_pid"];
 
     /// <summary>The recorded session, or null if there is no readable one.</summary>
     public static NestedSession? Current()
@@ -429,7 +445,7 @@ public static class Sessions
     {
         // Deduplicated so a record that names one process twice cannot report it
         // twice in the note.
-        List<int> pids = new[] { session.VncPid, session.CagePid }.Distinct().ToList();
+        List<int> pids = new[] { session.VncPid, session.CompositorPid }.Distinct().ToList();
         foreach (int pid in pids)
         {
             Syscall.Kill(pid, Syscall.Sigterm);

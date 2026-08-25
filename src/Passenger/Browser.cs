@@ -65,7 +65,7 @@ public static class Browser
                 $"{Config.ChromeBin} not found on PATH");
         }
 
-        // A previous session whose Chrome died leaves cage and wayvnc behind,
+        // A previous session whose Chrome died leaves the compositor and wayvnc behind,
         // still holding the VNC port. Left alone, the session starting here cannot
         // claim that port and the stale server keeps answering viewers with the
         // empty compositor it is still attached to.
@@ -92,7 +92,7 @@ public static class Browser
             // tool, and the caller would never know. Make them say so explicitly.
             throw new DaemonException(ErrorCode.CannotHide,
                 "asked to start hidden, but nothing here can hide a window",
-                "install cage + wayvnc (or `nix develop`), "
+                "install sway + wayvnc (or `nix develop`), "
                 + "or start it with --visible to accept a visible window");
         }
 
@@ -172,7 +172,7 @@ public static class Browser
         if (detach)
         {
             // Drain to /dev/null rather than leaving the pipes to fill: a child
-            // whose stdout buffer fills blocks, and cage's stderr is chatty.
+            // whose stdout buffer fills blocks, and a compositor's stderr is chatty.
             spawned.BeginOutputReadLine();
             spawned.BeginErrorReadLine();
         }
@@ -181,13 +181,19 @@ public static class Browser
     /// <summary>
     /// Give Chrome its own toolbar back, by taking it out of fullscreen.
     ///
-    /// cage is a kiosk compositor: it fullscreens the client it starts, and a
-    /// fullscreen Chrome hides its tab strip and toolbar. Nothing chose that --
-    /// it fell out of the mechanism picked for hiding the window -- and it landed
-    /// on the one moment the window is looked at. A human handed the browser to
-    /// solve a captcha or finish a login could click inside the page and nothing
-    /// else: no address bar to read or type into, no back button out of a
-    /// redirect, no tabs.
+    /// This existed because cage was a kiosk compositor: it fullscreened the
+    /// client it started, and a fullscreen Chrome hides its tab strip and
+    /// toolbar. Nothing chose that -- it fell out of the mechanism picked for
+    /// hiding the window -- and it landed on the one moment the window is looked
+    /// at. A human handed the browser to solve a captcha or finish a login could
+    /// click inside the page and nothing else: no address bar to read or type
+    /// into, no back button out of a redirect, no tabs.
+    ///
+    /// Ticket 063 removed that cause: sway does not fullscreen what it starts, so
+    /// on a fresh session there is now nothing here to undo. It is kept anyway,
+    /// and stops being a workaround: a *page* can call the Fullscreen API, and a
+    /// human can press F11, so "the browser a person is handed is windowed" is an
+    /// invariant worth holding rather than a side effect worth cancelling.
     ///
     /// Windowed is also the more ordinary of the two shapes for a real browser to
     /// be in: a fullscreen window reports outerHeight equal to the screen with no

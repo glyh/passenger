@@ -2,7 +2,7 @@
 //
 // The *size* of the nested output is no longer decided here. The viewer asks for
 // it: noVNC sends the RFB `SetDesktopSize` its window needs, wayvnc answers it
-// through cage's wlr-output-management, and the framebuffer follows the window
+// through the compositor's wlr-output-management, and the framebuffer follows the window
 // continuously -- including while it is being dragged to a new size. Everything
 // this module used to do to guess that size went with it, along with the race it
 // could never win: wayvnc advertises a resize to clients some time after

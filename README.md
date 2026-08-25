@@ -37,7 +37,7 @@ return. The recipes for reading one, including the DOM walk that used to be
 
     Passenger.Mcp        # stdio, and the only thing a client launches
 
-The flake builds a real derivation, so the wrapper already carries cage and
+The flake builds a real derivation, so the wrapper already carries sway and
 wayvnc on its PATH. That matters more than it looks: without them Chrome
 resolves only if they happen to be installed system-wide, and a machine
 without them would start Chrome *visible*.
@@ -200,22 +200,35 @@ regardless of who is calling.
 
 ## Hiding the window
 
-Chrome runs inside its own nested **cage** compositor. Your host compositor
-never sees a window, so this works identically on any Wayland compositor, or
-over SSH — and survives switching between them. `show` attaches a VNC
-viewer to that session; a challenge handoff does it automatically and re-hides
-afterwards.
+Chrome runs inside its own nested **sway** compositor, started headless with a
+config this tool writes on every launch — no bar, no keybindings, no
+decorations. Your host compositor never sees a window, so this works identically
+on any Wayland compositor, or over SSH — and survives switching between them.
+`show` attaches a VNC viewer to that session; a challenge handoff does it
+automatically and re-hides afterwards.
 
-cage is a kiosk compositor: it fullscreens what it starts, and a fullscreen
-Chrome hides its own tab strip and toolbar — so the browser you were handed to
-solve a captcha had no address bar, no back button and no tabs. It is taken
-back out of fullscreen at start, and again before every handoff, so what you
-take over is an ordinary browser window.
+**It was cage until ticket 063**, and cage is a kiosk: one output, one
+fullscreened window, nothing to ask. Three things were paying for that. wayvnc
+implements the clipboard in both directions and cage offered no data-control
+protocol for it to talk to, so nothing pasted across the glass. There was no
+`text-input` or `input-method`, so no IME could run in the session at all —
+which on a CJK machine means the browser you are handed cannot be typed into.
+And one output forever means two humans can never be handed two screens
+(`docs/wayfinder/tickets/041-multiple-display-windows.md`). sway costs 33 MiB
+more in a 896 MiB closure, answers on a socket, and offers all three.
+
+The fullscreen is gone with cage: sway does not fullscreen what it starts, so
+the browser is windowed from the start. Chrome is still put back into a window
+before every handoff, because a *page* can call the Fullscreen API and a human
+can press F11 — and a fullscreen Chrome hides its own tab strip and toolbar, so
+whoever is solving the captcha would have no address bar, no back button and no
+tabs.
 
 Hardware GL survives the move (the session uses `/dev/dri/renderD128`), so the
-fingerprint is unchanged. The one delta is `screen: 1280x720`, cage's default
-headless output — plausible but fixed. Swap cage for `sway --headless` if you
-need to control it (`swaymsg output HEADLESS-1 resolution 1920x1080`).
+fingerprint is unchanged. The one delta is `screen: 1280x720`, which is now set
+in the generated config rather than inherited from a compositor default —
+change it there, or at runtime with
+`swaymsg output HEADLESS-1 resolution 1920x1080`.
 
 Selectable via `PASSENGER_WM`:
 
@@ -238,8 +251,8 @@ and freeze that aspect at connect time, and the one that does resize costs
 
 | value    | mechanism               | notes |
 |----------|-------------------------|-------|
-| `nested` | cage + wayvnc (default) | the only real mechanism; portable everywhere |
-| `none`   | no-op                   | fallback when cage/wayvnc are missing — the window stays visible |
+| `nested` | sway + wayvnc (default) | the only real mechanism; portable everywhere |
+| `none`   | no-op                   | fallback when sway/wayvnc are missing — the window stays visible |
 
 Compositor-specific backends (hyprctl special workspaces, `wlrctl` minimize)
 were tried and removed. They break: Hyprland 0.56 dropped `hyprctl keyword` and
@@ -261,7 +274,7 @@ own compositor sidesteps that whole class of breakage.
 
 ## Install
 
-    nix develop            # dev shell: cage, wayvnc, noVNC, the dotnet SDK
+    nix develop            # dev shell: sway, wayvnc, noVNC, the dotnet SDK
     nix run .              # run the MCP server (there is no other app)
 
 The flake pins everything except the browser and the .NET SDK itself --
@@ -277,7 +290,7 @@ string is one of the most visible fingerprint fields there is -- a browser
 months behind what real users run is a tell in itself, and stops getting
 security updates.
 
-Without nix, install the equivalents yourself: `cage wayvnc` plus a copy of
+Without nix, install the equivalents yourself: `sway wayvnc` plus a copy of
 noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
 
 ### Why not Docker
@@ -299,7 +312,8 @@ Docker is still the right tool for a *headless server* deployment, where there
 is no host identity worth inheriting. `Present.cs` (web/noVNC) and `Notify.cs`
 (webhook) exist so that case works.
 
-Requires without nix: `cage wayvnc` and noVNC's static files. wayvnc serves the
+Requires without nix: `sway wayvnc` (swaymsg ships with sway) and noVNC's
+static files. wayvnc serves the
 websocket itself, so nothing else has to run; if the page cannot be served the
 tool prints the address so you can point your own noVNC at it, from another
 machine or a phone.

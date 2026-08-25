@@ -53,7 +53,7 @@ touching Chrome, the disk, the clock or a subprocess is shell.
            Targets.cs   Chrome's targets over CDP
            Probe.cs     measuring a live page into a PageProbe
            Handoff.cs / Present.cs / Launch.cs / NestedSessions.cs / Webserve.cs
-                        summoning a human: cage + wayvnc + the noVNC viewer page
+                        summoning a human: sway + wayvnc + the noVNC viewer page
 
     mcp    Passenger.Mcp/Program.cs   viewer re-exec, `stop`, then the server
            Passenger.Mcp/Tools.cs     the ten tools, and the whole surface there is

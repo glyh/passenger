@@ -10,7 +10,7 @@
 // These run against real processes rather than fixture text. `ReadProcState`
 // reads `/proc/<pid>/stat`, so the thing under test is the actual read and the
 // actual parse, not a seam holding a string somebody typed. `sh` and `sleep` are
-// not cage, wayvnc and Chrome: nothing here starts the real stack.
+// not sway, wayvnc and Chrome: nothing here starts the real stack.
 //
 // **Nothing here runs python.** The Python suite reached for it freely, and the
 // first draft of this file inherited the habit -- which would have left a port
@@ -111,7 +111,7 @@ public class SessionTests : IDisposable
     }
 
     /// <summary>
-    /// A pid that is exited-but-unreaped, which is what Chrome leaves in cage.
+    /// A pid that is exited-but-unreaped, which is what Chrome leaves in the session.
     ///
     /// Three approaches, and only the third survives contact.
     ///
@@ -175,13 +175,13 @@ public class SessionTests : IDisposable
         return child.Id;
     }
 
-    private static NestedSession Record(int? chromePid = null, int? cagePid = null,
+    private static NestedSession Record(int? chromePid = null, int? compositorPid = null,
                                         int? vncPid = null)
     {
         int self = Environment.ProcessId;
         return new NestedSession
         {
-            CagePid = cagePid ?? self,
+            CompositorPid = compositorPid ?? self,
             ChromePid = chromePid ?? self,
             VncPid = vncPid ?? self,
             VncHost = Config.Settings.VncHost,
@@ -191,12 +191,26 @@ public class SessionTests : IDisposable
         };
     }
 
+    [Fact]
+    public void ARecordLeftByACageSessionStillParses()
+    {
+        // Ticket 063 renamed the key. A session that was already running when the
+        // binary was upgraded is a real compositor still holding the port and the
+        // profile, and the only thing that can tear it down is this record.
+        NestedSession? session = Sessions.SessionOf(Sessions.ParseRecord(
+            "cage_pid=4242\nchrome_pid=1\nvnc_pid=2\nvnc_host=127.0.0.1\n"
+            + "vnc_port=5900\nctl_socket=/tmp/x.sock\nwayland_display=wayland-9"));
+
+        Assert.NotNull(session);
+        Assert.Equal(4242, session.CompositorPid);
+    }
+
     private static void Write(NestedSession record)
     {
         Directory.CreateDirectory(Config.StateDir);
         File.WriteAllText(Sessions.SessionFile, string.Join("\n",
         [
-            $"cage_pid={record.CagePid}",
+            $"compositor_pid={record.CompositorPid}",
             $"chrome_pid={record.ChromePid}",
             $"vnc_pid={record.VncPid}",
             $"vnc_host={record.VncHost}",
@@ -285,7 +299,7 @@ public class SessionTests : IDisposable
         // mechanism the port was only ever the symptom of.
         Process slow = Sh(SlowScript);
         var clock = Stopwatch.StartNew();
-        Sessions.StopAll(Record(cagePid: slow.Id, vncPid: slow.Id));
+        Sessions.StopAll(Record(compositorPid: slow.Id, vncPid: slow.Id));
         clock.Stop();
 
         Assert.False(Sessions.ReadProcState(slow.Id));
@@ -303,9 +317,9 @@ public class SessionTests : IDisposable
         // after it either. It needs only a wayvnc that takes longer than two
         // seconds to die.
         Process child = Sh(StubbornScript);
-        Write(Record(cagePid: child.Id, vncPid: child.Id));
+        Write(Record(compositorPid: child.Id, vncPid: child.Id));
 
-        Assert.Null(Sessions.StopAll(Record(cagePid: child.Id, vncPid: child.Id)));
+        Assert.Null(Sessions.StopAll(Record(compositorPid: child.Id, vncPid: child.Id)));
         Assert.False(Sessions.ReadProcState(child.Id));
         Assert.Null(Sessions.Current());
     }
@@ -322,8 +336,8 @@ public class SessionTests : IDisposable
         // that keeps the port attributable to a session someone can name.
         int running = Running();
         Sessions.Alive = _ => true;
-        Write(Record(cagePid: running, vncPid: running));
-        string? note = Sessions.StopAll(Record(cagePid: running, vncPid: running));
+        Write(Record(compositorPid: running, vncPid: running));
+        string? note = Sessions.StopAll(Record(compositorPid: running, vncPid: running));
         Assert.NotNull(note);
         Assert.Contains(running.ToString(), note, StringComparison.Ordinal);
         Assert.NotNull(Sessions.Current());
@@ -337,18 +351,19 @@ public class SessionTests : IDisposable
         // The caller's next move is to start a fresh session either way, so a
         // half-written record must not raise on the way past.
         Directory.CreateDirectory(Config.StateDir);
-        File.WriteAllText(Sessions.SessionFile, "cage_pid=1\nnot a pair\nvnc_port=");
+        File.WriteAllText(Sessions.SessionFile, "compositor_pid=1\nnot a pair\nvnc_port=");
         Assert.Null(Sessions.Current());
     }
 
     [Fact]
     public void ASessionWhoseChromeIsGoneIsNotLive()
     {
-        // The black screen, exactly: cage and wayvnc still up, Chrome dead.
-        // `Alive` is keyed on Chrome because cage outliving it is the stale state
+        // The black screen, exactly: the compositor and wayvnc still up, Chrome
+        // dead. `Alive` is keyed on Chrome because a compositor outliving it is the
+        // stale state
         // the record exists to detect.
         int zombie = Zombie(), running = Running();
-        Write(Record(chromePid: zombie, cagePid: running, vncPid: running));
+        Write(Record(chromePid: zombie, compositorPid: running, vncPid: running));
         Assert.NotNull(Sessions.Current());
         Assert.Null(Sessions.Live());
     }

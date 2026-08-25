@@ -7,7 +7,7 @@
 // and building that means copying noVNC out of the store at runtime.
 //
 // The process is detached and outlives the command that started it, the same way
-// cage and wayvnc do, because `show` returns while the window stays open.
+// sway and wayvnc do, because `show` returns while the window stays open.
 
 using System.Diagnostics;
 using System.Net;

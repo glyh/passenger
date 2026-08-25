@@ -34,6 +34,14 @@
         # The nested compositor and its VNC server. These are the packages you
         # would otherwise install with a system package manager.
         #
+        # sway rather than cage since ticket 063, and the swap costs 33 MiB on a
+        # 896 MiB closure -- cage was never the light one, since wlroots, Xwayland
+        # and mesa dominate either way. What the 33 MiB buys is a data-control
+        # protocol (so wayvnc's clipboard has something to talk to), text-input
+        # and input-method (so an IME can exist in the session at all), several
+        # headless outputs on request, and swaymsg to ask for any of it. `sway`
+        # brings swaymsg with it, which the session script needs.
+        #
         # No VNC client: the viewer is a page in the host's own browser (see
         # Present.cs). That is not only lighter than every native client that
         # would do, it is the only one that sizes itself correctly -- noVNC
@@ -44,7 +52,7 @@
         # wlr-randr and wayland-utils remain for the one thing a viewer cannot
         # ask for: the output scale, which decides the density the nested
         # Chrome renders at.
-        runtimeDeps = with pkgs; [ cage wayvnc wlr-randr wayland-utils ];
+        runtimeDeps = with pkgs; [ sway wayvnc wlr-randr wayland-utils ];
 
         # Deliberately NOT pinned here: Chrome is taken from the host.
         #
