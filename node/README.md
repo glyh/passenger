@@ -1,6 +1,7 @@
 # The Node side, in ReScript
 
-**This is not the port. It is the walking skeleton for
+**This is not the port yet, but it is no longer the skeleton either: the door
+works end to end.** It began as the walking skeleton for
 [071](../docs/wayfinder/tickets/071-port-to-node.md)**, which exists to prove
 the four things that could have stopped the port before 5,800 lines were spent
 finding out. All four are proved, against the Chrome that was already running:
@@ -39,7 +40,7 @@ The pure core, against the C# suite as the oracle -- `dotnet test` on both
 `DetectTests` and `GeometryTests` is green today, and every case that still
 describes something is here.
 
-    npm test        # 63 passing
+    npm test        # 76 passing
 
 - `Errors.res` -- the codes, with `value` a switch the compiler checks.
 - `Models.res` -- `signature`, `probe`, `blocker`, and `condition`.
@@ -56,6 +57,14 @@ describes something is here.
 - `Session.res` -- attaching Playwright to the running Chrome, the rescue when a
   wedged tab holds the attach open, and lane-scoped tabs (`page`, `pageFor`,
   `targetId`, `closeOthers`).
+- `Script.res` -- the door's core, all 13 C# cases: compiling a caller's source,
+  reporting a throw against their own line, and deciding what may cross back.
+- `Probe.res` -- measuring a live page into the record `Detect` judges.
+- `Service.res` -- the one orchestration, and the outcome unions. The C# side
+  spelled those as a base record with a `type` discriminator and wrote out every
+  JSON property name, because C# has no unions; here they are unions and the
+  wire shape is written once, in `encode`, to the same bytes.
+- `Main.res` -- seven of the ten tools, over stdio.
 
 Three invariants stopped being tests and became shapes, which is the same move
 `DetectTests.cs` records for ticket 021 ("structural rather than tested"):
@@ -122,11 +131,14 @@ stays as the thing that guarantees the call returns.
 
 ## What is deliberately missing
 
-`Browser`, `NestedSessions`, `Probe`, `Service`, `Handoff`, `Present`,
-`Launch`, `Webserve`, `Script`'s crossing checks, and nine of the ten tools.
-`Main.res` is still the skeleton: it opens a page directly and closes it, rather
-than going through the registry and the session that are now sitting there
-ported. Geometry's half that spawns `wlr-randr` is not here either.
+`Browser`, `NestedSessions`, `Handoff`, `Present`, `Launch` and `Webserve` --
+which is to say everything about *showing a human the browser*, plus starting
+the daemon. The three tools that need them (`showBrowser`, `hideBrowser`,
+`browserStatus`) are absent from `tools/list` rather than present and failing,
+so a caller sees what this server can actually do. Until `Browser` lands, a
+caller who finds Chrome down is told so plainly instead of being handed a
+failure from four layers in. Geometry's half that spawns `wlr-randr` is not
+here either.
 
 ## Two seams, and why they are different
 
@@ -136,8 +148,43 @@ other end of an HTTP endpoint, which is the line tickets 001 and 034 drew.
 the C# suite bought the same coverage with `Thread.Sleep(1100)` twice. It is
 2.2 seconds cheaper per run and does not turn a slow machine into a flake.
 
+## One bug the port found by running it
+
+`Probe.match` is a real function where the C# side passed JavaScript as a
+string. Playwright .NET works out that a string like `sels => ...` is a
+function; this client decides by `typeof`, so the same string is evaluated as an
+*expression*. That produces a function object in the page, which is not
+serialisable, which comes back as `undefined` -- and nothing throws. The probe
+then carries no matched selectors and every page reads as clean: a wall reported
+as an open road, which is the exact shape ticket 042 removed from the attach
+message. Found by driving the door, not by review, which is twice now for this
+kind (ticket 049 was the other).
+
 ## Running it
 
     npm install
     npx rescript build
     node probe.mjs          # drives the server over stdio, needs Chrome on 9222
+    node live-session.mjs   # Session and the handle rule, against a real browser
+
+`probe.mjs` opens a lane, runs a page, continues on the same tab, provokes each
+of the three failures, and takes the lane away again:
+
+    tools: script, openLane, setTtl, listTabs, closeTabs, closeAllTabs, destroyLane
+    openLane -> ef8f9bfce4fea487
+    script -> {"type":"ran","tab":"B912...","returned":{"title":"中国新闻网_梳理天下新闻",
+               "emoji":"😀 腾冲","n":676},"page":null}
+    script -> {"type":"failed","code":"SCRIPT_RAISED","error":"Error: deliberate, line 2",
+               "where":"line 2: throw new Error('deliberate, line 2');"}
+    script -> {"type":"failed","code":"SCRIPT_INVALID","error":"Unexpected token ';' (line 2)"}
+    script -> {"type":"failed","code":"SCRIPT_RETURN_NOT_JSON",
+               "error":"a Locator cannot cross the tool boundary"}
+    script !! [TAB_NOT_FOUND] no tab B912... in lane 31b1... -- this lane has no tabs
+    script !! [LANE_NOT_FOUND] no lane ef8f... -- it expired, or never existed
+
+The emoji and the CJK are unescaped in both directions, which is
+[056](../docs/wayfinder/tickets/056-utf8-escape-regression.md) and
+[070](../docs/wayfinder/tickets/070-astral-still-escapes.md) not existing rather
+than being fixed. The last two lines are ticket 057's finding held: the code and
+the remedy reach the caller, because `Errors.rendered` puts both in the one
+string the SDK reports.

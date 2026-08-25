@@ -38,6 +38,29 @@ try {
   console.log("pageFor a foreign tab:", Errors.rendered(e.code, e.message, e.detail));
 }
 
+// The other half of `Script_test.res`'s handle rule: the unit test pins the
+// rule against the shapes measured off these objects, and this pins that the
+// objects still have those shapes. Neither half is enough alone.
+const Script = await import("./src/Script.res.mjs");
+const handles = {
+  page,
+  context: s.context,
+  browser: s.browser,
+  locator: page.locator("body"),
+  elementHandle: await page.$("html"),
+  request: page.request,
+  apiResponse: await page.request.get("http://127.0.0.1:9222/json/version"),
+  keyboard: page.keyboard,
+  mouse: page.mouse,
+  frameLocator: page.frameLocator("iframe"),
+  jsHandle: await page.evaluateHandle(() => globalThis),
+};
+for (const [name, h] of Object.entries(handles)) {
+  const got = Script.handleName(h);
+  console.log("  handle", name.padEnd(14), got ? `refused as ${got}` : "CROSSED (wrong)");
+}
+console.log("  a plain scrape crosses:", Script.handleName({ title: "x", rows: [1, 2] }) === undefined);
+
 await page.goto("about:blank");
 console.log("closeOthers closed:", await Session.closeOthers(s, lane, page));
 console.log("closed on destroy:", await Lanes.closeTabs(lane, Lanes.tabsOf(lane)));

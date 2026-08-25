@@ -26,6 +26,15 @@ type signature = {
 
 let conditions = s => [s.first]->Array.concat(s.rest)
 
+/// The wire spelling of a kind, written out for the reason `Errors.value` is:
+/// a caller may be branching on it.
+let kindName = kind =>
+  switch kind {
+  | Challenge => "challenge"
+  | Login => "login"
+  | Unknown => "unknown"
+  }
+
 /// What the shell measured, and all `Detect` is allowed to see.
 type probe = {
   url: string,

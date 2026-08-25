@@ -35,3 +35,14 @@ type cdp
 @send external newBrowserCDPSession: browser => promise<cdp> = "newBrowserCDPSession"
 @send external send: (cdp, string) => promise<JSON.t> = "send"
 @send external sendWith: (cdp, string, {..}) => promise<JSON.t> = "send"
+
+/// Evaluate in the page. The `'arg` is structured-cloned in, which is what lets
+/// `Probe` send the whole selector table in one round trip.
+///
+/// `'fn`, not `string`: this client decides what to do with the first argument
+/// by `typeof`, and a function passed as a string is run as an expression rather
+/// than called. See the comment over `Probe.match`.
+@send external evaluate: (page, 'fn, 'arg) => promise<'r> = "evaluate"
+
+/// The per-call budget every Playwright operation inside a script inherits.
+@send external setDefaultTimeout: (page, int) => unit = "setDefaultTimeout"
