@@ -39,13 +39,15 @@ The pure core, against the C# suite as the oracle -- `dotnet test` on both
 `DetectTests` and `GeometryTests` is green today, and every case that still
 describes something is here.
 
-    npm test        # 24 passing
+    npm test        # 50 passing
 
 - `Errors.res` -- the codes, with `value` a switch the compiler checks.
 - `Models.res` -- `signature`, `probe`, `blocker`, and `condition`.
 - `Detect.res` -- the builtin table, `selectorsOf`, `matches`, `classify`.
 - `Geometry.res` -- `number` and `firstBlock`, the two parsers a scale is
   discovered through, and `Scale` as an abstract type.
+- `Lanes.res` -- the registry, all 26 C# cases, on `node:sqlite` rather than a
+  package. `Config.res` and `Sqlite.res` come with it.
 
 Three invariants stopped being tests and became shapes, which is the same move
 `DetectTests.cs` records for ticket 021 ("structural rather than tested"):
@@ -63,10 +65,22 @@ produced it, but nothing prevented it either.
 
 ## What is deliberately missing
 
-Everything with a side effect. No lanes, so a script gets a fresh page and the
-skeleton closes it rather than leaving a tab in a browser other callers share.
-No `blocked` detection wired to a probe, no handoff, no nested session, no
-`stop`, no config. Geometry's half that spawns `wlr-randr` is not here either.
+`Targets` -- so `Lanes.chrome` starts as a seam that raises, which every rule in
+`Lanes` already treats as "no daemon, nothing to reconcile", the same path a
+wedged browser takes. Until it ports, the registry is fully tested and not yet
+wired to `Main.res`, which still opens a page directly and closes it.
+
+Then: `Browser`, `NestedSessions`, `Probe`, `Handoff`, `Present`, `Launch`,
+`Webserve`, `Script`'s crossing checks, and nine of the ten tools. Geometry's
+half that spawns `wlr-randr` is not here either.
+
+## Two seams, and why they are different
+
+`Lanes.chrome` is a process boundary: what it swaps out is a browser on the
+other end of an HTTP endpoint, which is the line tickets 001 and 034 drew.
+`Lanes.clock` is not -- it is a clock a test can move, and it exists because
+the C# suite bought the same coverage with `Thread.Sleep(1100)` twice. It is
+2.2 seconds cheaper per run and does not turn a slow machine into a flake.
 
 ## Running it
 
