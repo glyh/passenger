@@ -26,7 +26,7 @@ let fake = {ids: [], closed: [], wedged: false}
 let seam: Lanes.chromeTabs = {
   liveTabs: async () =>
     fake.wedged
-      ? throw(Errors.Passenger({code: DaemonNotRunning, message: "no daemon"}))
+      ? throw(Errors.Passenger({code: DaemonNotRunning, message: "no daemon", detail: None}))
       : fake.ids,
   close: async tab => {
     fake.closed = fake.closed->Array.concat([tab])

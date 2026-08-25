@@ -167,6 +167,26 @@ let close = async targetId =>
   | exception _ => false
   }
 
+/// Whether the browser is answering at all.
+///
+/// Lives here rather than in `Browser` (where the C# side had it) because it is
+/// the same HTTP endpoint every other function in this module talks to, and
+/// because `Session` needs it: ReScript has no circular module dependencies, so
+/// the question has to sit below both of its askers rather than beside one.
+///
+/// One second, not the five the rest of this module allows. This is asked at the
+/// top of every entry point, and a browser that is up answers it in single-digit
+/// milliseconds -- so a long deadline here buys nothing and costs the caller a
+/// stall on every call made while Chrome is down.
+let isUp = async () =>
+  switch await fetch(
+    `${Config.cdpUrl()}/json/version`,
+    {"signal": abortSignalTimeout(1000)},
+  ) {
+  | res => res->ok
+  | exception _ => false
+  }
+
 let browserSocket = async () =>
   switch await fetch(`${Config.cdpUrl()}/json/version`, {"signal": abortSignalTimeout(5000)}) {
   | res =>

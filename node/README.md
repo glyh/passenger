@@ -51,6 +51,11 @@ describes something is here.
 - `Targets.res` -- Chrome's targets over the CDP HTTP endpoint and a page's own
   socket, all 13 C# cases. `WebSocket.res` binds the runtime's own global, so
   the CDP socket costs no dependency either.
+- `Config.res` -- every `PASSENGER_*` variable, read once, each its own `ref` so
+  a suite can point the state directory at a temp path.
+- `Session.res` -- attaching Playwright to the running Chrome, the rescue when a
+  wedged tab holds the attach open, and lane-scoped tabs (`page`, `pageFor`,
+  `targetId`, `closeOthers`).
 
 Three invariants stopped being tests and became shapes, which is the same move
 `DetectTests.cs` records for ticket 021 ("structural rather than tested"):
@@ -62,13 +67,22 @@ Three invariants stopped being tests and became shapes, which is the same move
 - `Errors.value` is exhaustive by the compiler rather than by a `default` that
   throws.
 
+`Errors.res` grew the half the skeleton did not need: `detail`, and the named
+constructors that fix the wording of a failure in one place. The C# side needed
+a class hierarchy -- `DaemonException`, `ScriptException`, `TabNotFoundException`
+-- so that a `catch` could name a family; here the code *is* the discriminator
+and a `switch` on it is exhaustive, so the hierarchy collapses into one
+exception carrying three fields.
+
 One behaviour deliberately differs: `number(".")` answers `None` where C#
 reached `double.Parse(".")` and would have thrown. No recorded output has
 produced it, but nothing prevented it either.
 
-## The one place the runtime changed a signature
+## Where the runtime changed a signature
 
-`Lanes.chromeTabs` is async here where the C# interface was synchronous. That
+Two so far, and both are the runtime rather than the design.
+
+The first is `Lanes.chromeTabs`, async here where the C# interface was synchronous. That
 side reached the same endpoints through `.GetAwaiter().GetResult()`; JavaScript
 has no such move, so the promise travels and the four rules that ask Chrome
 anything -- `occupied`, `closeTabs`, `sweep`, `counts` -- are async with it. The
@@ -84,13 +98,35 @@ directory at a temp path so it cannot touch a real registry):
     counts through the live seam: open=2 orphaned=0
     sweep collected: [] | orphan now holds 2
 
+The second is in `Session`: there is no driver process. .NET's Playwright talks
+to a Node driver it spawns, so a wedged attach could be cleared by disposing the
+driver and making a new one; here Playwright *is* the process, so
+`RestartDriverAsync` has nothing to restart. What has to be released instead is
+the abandoned attach itself, and the only handle on it is the deadline
+Playwright takes -- which is worth passing here where ticket 012 measured it not
+being honoured there, because in this runtime it is a `progress.race` in the
+same process with cleanup that closes the CDP transport. That is a reading of
+the library rather than a measurement against a wedged tab, so our own race
+stays as the thing that guarantees the call returns.
+
+`Session` too is checked against the live browser (`node live-session.mjs`):
+
+    isUp: true
+    lane: 47672a094d0c0bac
+    tab: B9FCA16A0ACF939770B9A70144C64CBA | owner: 47672a094d0c0bac
+    pageFor returned the same tab: true
+    blank tab reused: true
+    pageFor a foreign tab: [TAB_NOT_FOUND] no tab deadbeef in lane 47672a...
+      -- open in this lane: B9FCA16A0ACF939770B9A70144C64CBA
+    detached; chrome still up: true
+
 ## What is deliberately missing
 
-`Browser`, `NestedSessions`, `Probe`, `Handoff`, `Present`, `Launch`,
-`Webserve`, `Script`'s crossing checks, and nine of the ten tools. `Main.res` is
-still the skeleton: it opens a page directly and closes it, rather than going
-through the registry that is now sitting there ported. Geometry's half that
-spawns `wlr-randr` is not here either.
+`Browser`, `NestedSessions`, `Probe`, `Service`, `Handoff`, `Present`,
+`Launch`, `Webserve`, `Script`'s crossing checks, and nine of the ten tools.
+`Main.res` is still the skeleton: it opens a page directly and closes it, rather
+than going through the registry and the session that are now sitting there
+ported. Geometry's half that spawns `wlr-randr` is not here either.
 
 ## Two seams, and why they are different
 

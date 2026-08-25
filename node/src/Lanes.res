@@ -175,7 +175,7 @@ let require = id =>
     switch rows->Array.get(0) {
     | Some(r) => {id: r.id, ttlS: r.ttl_s, touchedAt: r.touched_at}
     | None =>
-      throw(Errors.Passenger({code: LaneNotFound, message: `no such lane: ${id}`}))
+      throw(Errors.laneNotFound(id))
     }
   })
 
@@ -434,3 +434,23 @@ let counts = async () =>
   | live => (live->Array.length, tabsOf(orphan)->Array.filter(t => live->Array.includes(t))->Array.length)
   | exception _ => (0, 0)
   }
+
+/// Which lanes these tabs belong to, for saying whose work was touched.
+///
+/// `Browser.LanesOf` on the C# side. It is a question about lanes and it reads
+/// the registry, so here it lives with the registry -- which also keeps
+/// `Session`, its only caller, from having to depend on `Browser` at all.
+let lanesOf = (pages: array<Models.target>) => {
+  let owners = []
+  pages->Array.forEach(p => {
+    let who = switch owner(p.id) {
+    | Some(lane) => lane
+    | None => orphan
+    }
+    if !(owners->Array.includes(who)) {
+      owners->Array.push(who)
+    }
+  })
+  owners->Array.sort(String.compare)
+  owners->Array.length > 0 ? "lane " ++ owners->Array.join(", ") : "no lane"
+}

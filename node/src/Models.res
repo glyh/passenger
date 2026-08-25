@@ -77,3 +77,48 @@ type target = {
 
 /// Tabs only. Chrome also lists its own UI, workers and extensions.
 let isPage = t => t.type_ == "page"
+
+/// How Chrome is launched.
+type backendName = Nested | NoBackend
+
+/// How a human is given a look at the hidden browser.
+type presenterName = Local | Web | NoPresenter
+
+// The wire spellings, written out for the same reason `Errors.value` is: a
+// session record on disk or an agent's saved string is holding one of these,
+// so it is a contract rather than a rendering of a constructor name. The
+// constructors read `NoBackend` / `NoPresenter` rather than `None` twice over,
+// because ReScript has one constructor namespace per type but `None` is already
+// the option's, and shadowing it inside this module would be a trap for every
+// later reader.
+let backendNameOf = name =>
+  switch name {
+  | Nested => "nested"
+  | NoBackend => "none"
+  }
+
+let presenterNameOf = name =>
+  switch name {
+  | Local => "local"
+  | Web => "web"
+  | NoPresenter => "none"
+  }
+
+/// Parse a backend name as the environment spells it.
+let parseBackend = text =>
+  switch text {
+  | "nested" => Some(Nested)
+  | "none" => Some(NoBackend)
+  | _ => None
+  }
+
+/// Parse a presenter name as the environment spells it.
+let parsePresenter = text =>
+  switch text {
+  | "local" => Some(Local)
+  | "web" => Some(Web)
+  | "none" => Some(NoPresenter)
+  | _ => None
+  }
+
+let backendNames = ["nested", "none"]

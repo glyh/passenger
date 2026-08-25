@@ -19,3 +19,19 @@ type chromium
 @send external title: page => promise<string> = "title"
 @send external url: page => string = "url"
 @send external closePage: page => promise<unit> = "close"
+
+/// Attaching, with the driver's own deadline as well as ours (see `Session`).
+type connectOptions = {timeout: int}
+@send
+external connectOverCDPWith: (chromium, string, connectOptions) => promise<browser> =
+  "connectOverCDP"
+
+// CDP through Playwright, for the questions only an attached session can ask:
+// which target a page *is*, and where the browser is putting its window. The
+// unattached half of the same protocol lives in `Targets`, and the split is not
+// arbitrary -- that half exists for when this half cannot be reached at all.
+type cdp
+@send external newCDPSession: (context, page) => promise<cdp> = "newCDPSession"
+@send external newBrowserCDPSession: browser => promise<cdp> = "newBrowserCDPSession"
+@send external send: (cdp, string) => promise<JSON.t> = "send"
+@send external sendWith: (cdp, string, {..}) => promise<JSON.t> = "send"
