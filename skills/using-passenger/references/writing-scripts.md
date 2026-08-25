@@ -56,20 +56,22 @@ the `tab` from the previous reply when you are continuing one. The opposite
 mistake is loud: a tab that has since been closed throws `TargetClosedError`,
 and the fix is to navigate again without it.
 
-**`JsonSerializer.Serialize` escapes every non-ASCII character by default.**
-Each Chinese (or other non-Latin) character comes back as a 6-byte `\uXXXX`
-escape instead of itself -- multiplying the size of the JSON for no reason,
-which on a page full of CJK text is most of the payload. Pass an encoder that
-doesn't do this:
+**Return the value, not JSON of it.** What you return crosses as JSON either
+way, and the server writes those bytes with an encoder that leaves non-ASCII
+alone -- so `return results;` hands back a list or a dictionary as itself.
+Serialising it first buys nothing and costs twice: the caller gets JSON inside
+a JSON string to unwrap, and `JsonSerializer`'s default encoder escapes every
+non-Latin character to a 6-byte `\uXXXX`, which on a page full of CJK is most
+of the payload. A string the *page* built with `JSON.stringify` is safe to
+return as it stands -- JS does not escape non-ASCII.
+
+The one place you serialise yourself is a JSON *file*. Those bytes are yours
+and nothing downstream re-encodes them, so pass the encoder there:
 
     var opts = new JsonSerializerOptions {
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    return JsonSerializer.Serialize(results, opts);
-
-"Unsafe" here refers to HTML-injection contexts (`<`, `>`, `&` pass through
-unescaped); a tool result read back as data, never rendered as HTML, is
-exactly the case it's safe for.
+    await File.WriteAllTextAsync(path, JsonSerializer.Serialize(results, opts));
 
 ## What cannot cross back
 
