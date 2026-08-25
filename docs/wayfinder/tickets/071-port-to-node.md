@@ -194,3 +194,74 @@ than a language comparison was.
 If this goes ahead, 069 is moot -- PowerShell was the cheaper answer to a
 question this supersedes. Leave it open until this one is decided, then close
 it against whichever way this goes.
+
+## What was built
+
+The port is done and lives in `node/`. Every module has crossed, all ten tools
+answer over stdio, and the C# suite was the oracle throughout: `dotnet test`
+107/107 and `npm test` 117/117 on the same day. `node/README.md` carries the
+detail; this is what the ticket needs to know.
+
+**The four risks were measured before the work, and three of them dissolved.**
+
+- *Script line numbers.* Better than the C# door, not merely as good. A caller
+  writes `return`, which an ES module cannot do, so the source is wrapped in an
+  async IIFE **with no newline before the body** -- so line 1 stays line 1 in
+  the stack trace, and both `return` and top-level `await` work. No Roslyn, and
+  none of the flat ~40ms per compile.
+- *`Crossable` gets harder.* It did, and the answer measured better than the
+  guess. There is no type to test, so the rule was measured off live objects
+  instead: every Playwright handle is a ChannelOwner (a string `_guid`), a
+  `Locator`/`APIResponse` (a string `_apiName`, no `_guid`), or something like
+  `Keyboard` that is neither but holds one in a field. Three tests, the third
+  one level deep. Property reads rather than `instanceof`, which is
+  load-bearing -- a vm context is its own realm. Pinned twice: the unit suite
+  against stand-ins carrying the measured shapes, and `live-session.mjs`
+  against eleven real handles.
+- *The bindings.* As small as counted. Playwright is ~20 members, the MCP SDK
+  is six externals, and neither needed `%raw` to start.
+- *The type system.* Kept, and in three places strengthened past what C# could
+  express -- a signature that carries one condition plus any others cannot be
+  written without one, `Scale.t` is abstract so a non-positive scale is not a
+  value, and `Errors.value` is exhaustive by the compiler rather than by a
+  `default` that throws.
+
+**Three signatures the runtime changed, all of them shell, none of them rules.**
+`Lanes.chromeTabs` is async where the C# interface reached the same endpoints
+through `.GetAwaiter().GetResult()`; `Session` has no driver process to restart,
+so a wedged attach is released by the deadline Playwright takes rather than by
+disposing a driver; and `Launch.plan` is async because the VNC port is claimed
+by scanning for a free one. Two got *shorter*: `Posix.kill` is a binding rather
+than a `DllImport`, and `Webserve`'s re-exec needs no special case for how the
+binary was built.
+
+**One bug the port found by running it.** Playwright .NET works out that a
+string like `sels => ...` is a function; this client decides by `typeof`, so the
+same string is evaluated as an expression, produces a function object in the
+page, and comes back as `undefined` with nothing thrown. The probe then carried
+no matched selectors and **every page read as clean** -- a wall reported as an
+open road, which is the shape ticket 042 removed from the attach message.
+`Probe.match` is a real function now.
+
+### What is left
+
+Not the tool. The two remaining pieces are the ones this ticket exists to
+decide:
+
+1. **Packaging.** The flake still builds the C# server, `nix run .` still starts
+   it, and ReScript is not in nixpkgs -- the toolchain arrives through npm and
+   has to be packaged for a build that is currently nix all the way down. This
+   was named as a real task above and it still is.
+2. **Patchright.** Measured only as far as `connectOverCDP` against the running
+   Chrome. That it *behaves* identically driven directly rather than through the
+   .NET binding is still an assumption, and the ticket says to measure it
+   against a real wall rather than a smoke test. That is the acceptance set 069
+   records as missing, and it is the thing that should decide this rather than
+   any of the above.
+
+Until both land, the two trees run side by side and nothing has been deleted.
+One duplication comes with that: the four assets -- `session.sh`, `sway.conf`,
+`ime.sh`, `viewer.html` -- exist in both trees, because the C# side embeds them
+in its assembly and the node side reads them off disk. A `Launch` case compares
+the two copies and fails on drift, skipping where the sibling tree is absent, so
+it deletes itself when the C# tree does.
