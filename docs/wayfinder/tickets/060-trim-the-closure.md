@@ -82,7 +82,10 @@ That makes this a portability bug that predates the bundle and was only visible
 through it. The fix points the same way as the trim: `Launch.cs` already knows
 it is launching Chrome into a cage Wayland session, so it should pass
 `--ozone-platform=wayland` itself rather than inherit the question from whoever
-happens to own the machine. Once it does, Xwayland and gtk+3 can leave together.
+happens to own the machine. Once it does, Xwayland and gtk+3 can leave together. That half is now its own
+ticket: [The nested browser's display platform comes from the host's
+dotfile](061-chrome-platform-from-a-dotfile.md), which has to close before the
+Xwayland trim can be attempted.
 
 Two things to check before that lands, since it changes what the browser is
 rather than what ships beside it: that the handoff window still behaves (ticket
