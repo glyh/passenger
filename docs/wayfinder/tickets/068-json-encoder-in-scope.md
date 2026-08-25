@@ -2,7 +2,7 @@
 id: 068
 title: Does a script need a JSON encoder in scope, or is returning the value enough?
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -75,3 +75,55 @@ Worth answering with a measurement rather than taste: how often does a script
 actually write a JSON file? If the answer is "the skill recommends disk for
 long text and pictures, and neither of those is JSON", the affordance is for a
 case that does not happen and the prose is enough.
+
+## Answer
+
+**No encoder in scope. The encoder was never the problem.**
+
+Two of the three things tangled together here turned out not to be bugs at
+all, and the one that was is somewhere else entirely.
+
+**What the owner was actually seeing.** Not our escaping: the site's. Baidu's
+tieba search API answers with its non-ASCII written escaped -- a normal,
+valid way to spell 中文 -- and the scripts hitting it were pulling fields out
+of the raw body with `Regex.Matches` rather than parsing it. A regex hands
+back the spelling; a JSON parser hands back the characters. Confirmed both
+ways against the live endpoint: the same request read with `JsonDocument` and
+`GetString()` returns `["Wei：对我来说，打野就像美食节目一样", ...]`, clean.
+The tell in the original script was a hand-rolled `Regex.Unescape` on a
+captured field.
+
+Nothing on this side can fix that and nothing on this side should try: a
+returned string is the caller's payload, and a tool that quietly decodes what
+looks like an escape is interpreting it -- the line this repo does not cross,
+and it would corrupt any string legitimately containing a backslash-u.
+
+**So the fix is a rule, not a feature.** `writing-scripts.md` gained "parse a
+site's JSON -- do not fish text out of it with a regex", with the parse shown
+and both tells named (`Regex.Unescape`, and `RootElement.ToString()`, which
+re-escapes on the way out). One claim was cut from that entry before it
+shipped because it did not survive being run: `Regex.Unescape` does *not*
+throw on `\/`, which JSON allows -- it returns `a/b`. What replaced it is a
+real and verified failure that has nothing to do with escaping at all, which
+is that `"title":"(.*?)"` truncates silently at the first escaped quote
+inside the field.
+
+The disk footnote stays a footnote, per the owner: kept, scoped to writing a
+JSON file, and not promoted into `SKILL.md`.
+
+**And `ScriptGlobals` gains nothing.** The case it would have served -- a
+script serialising to disk -- is still one no recipe in this repo performs,
+and it is now clear it was never the case anyone was hitting. Ticket 004's
+one-name surface stays one name.
+
+**One real bug fell out of checking the claims**, and it is [070](070-astral-still-escapes.md):
+056's encoder leaves ordinary CJK alone but still escapes anything above
+`U+FFFF`, so emoji and rare Han (the kind that appear in Chinese names and
+place names) come back as `\uD83D\uDE00` even when returned directly. That is ours,
+it is not the SDK, and it is filed rather than fixed here.
+
+Also corrected while here: an earlier line of this ticket claimed
+`044-acceptance-set.md` could serve as a scripting-task benchmark for
+[069](069-powershell-instead-of-csharp.md). It cannot -- it is five web pages
+with extraction diagnostics. 069 now says so and carries building a real task
+set as its first job.

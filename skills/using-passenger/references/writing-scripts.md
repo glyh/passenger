@@ -56,9 +56,36 @@ the `tab` from the previous reply when you are continuing one. The opposite
 mistake is loud: a tab that has since been closed throws `TargetClosedError`,
 and the fix is to navigate again without it.
 
+**Parse a site's JSON -- do not fish text out of it with a regex.** A site may
+write its non-ASCII escaped, and that is normal and valid: Baidu's tieba
+search API answers `"title":"Wei\uff1a\u5bf9\u6211..."`, which *is*
+`Wei：对我...` spelled the long way. A JSON parser undoes that spelling and a
+regex does not, so a script that runs `Regex.Matches(body, "(.*?)")` over the
+body and returns the captures hands back `\uXXXX` verbatim -- and this side
+will not undo it, because a returned string is your payload, not something it
+re-encodes. Parse instead:
+
+    var doc = JsonDocument.Parse(await response.TextAsync());
+    var title = doc.RootElement.GetProperty("data")
+        .GetProperty("post_list")[0].GetProperty("title").GetString();
+
+`GetString()` gives you the characters; the regex gave you their spelling.
+Two tells that this went wrong: reaching for `Regex.Unescape` on a captured
+field, and `RootElement.ToString()`, which re-emits escaped and puts you back
+where you started. The regex is also lossy in a way that has nothing to do with
+escaping -- `(.*?)` up to the next quote truncates any field containing an
+escaped quote, silently, keeping the half before it.
+
+**No `using var` at the top level.** `using var doc = JsonDocument.Parse(t);`
+fails to compile with `; expected`, which reads like a typo and is not: a using
+*declaration* is not allowed in a script submission. Plain `var doc = ...`
+works, and the script's process tears down anyway.
+
 **Return the value, not JSON of it.** What you return crosses as JSON either
-way, and the server writes those bytes with an encoder that leaves non-ASCII
-alone -- so `return results;` hands back a list or a dictionary as itself.
+way, and the server writes those bytes with an encoder that leaves ordinary
+non-ASCII alone -- so `return results;` hands back a list or a dictionary as
+itself. (Emoji and rare Han above U+FFFF are still escaped on the way out,
+which is the tool's own doing and nothing a script can change.)
 Serialising it first buys nothing and costs twice: the caller gets JSON inside
 a JSON string to unwrap, and `JsonSerializer`'s default encoder escapes every
 non-Latin character to a 6-byte `\uXXXX`, which on a page full of CJK is most

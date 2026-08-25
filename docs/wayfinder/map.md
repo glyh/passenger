@@ -86,6 +86,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [A script does not need a JSON encoder in scope](tickets/068-json-encoder-in-scope.md)
+  — the escaping people kept seeing was the *site's*: Baidu answers escaped
+  JSON, and a `Regex.Matches` over the raw body returns the spelling where
+  `JsonDocument` returns the characters. The fix is a rule in
+  `writing-scripts.md` ("parse it, do not fish text out of it"), not a second
+  name beside `Page`. Checking the claims turned up
+  [070](tickets/070-astral-still-escapes.md): 056's encoder still escapes
+  everything above `U+FFFF`.
+
 - [The closure carried a Python nothing runs](tickets/060-trim-the-closure.md)
   — 896 MiB down to 658, and the `toArx` bundle 302 MB down to 222. libinput's
   `dev` output no longer propagates its `bin` output (`propagatedBuildOutputs`),
