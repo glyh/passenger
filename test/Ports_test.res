@@ -16,20 +16,20 @@ let table = [
 ]
 
 T.test("the listener on a port is found by its inode", () =>
-  T.equal(Sessions.listeningInode(table, 6080), Some(913874.0))
+  T.equal(NestedSessions.listeningInode(table, 6080), Some(913874.0))
 )
 
 T.test("a connection to that port is not a listener on it", () => {
   // The last row is a client talking *to* 6080, state 01 rather than 0A. Taking
   // it for the listener would name the browser as the squatter.
   T.equal(
-    Sessions.listeningInode([table->Array.getUnsafe(3), table->Array.getUnsafe(1)], 6080),
+    NestedSessions.listeningInode([table->Array.getUnsafe(3), table->Array.getUnsafe(1)], 6080),
     Some(913874.0),
   )
   T.equal(
-    Sessions.listeningInode([table->Array.getUnsafe(0), table->Array.getUnsafe(3)], 6080),
+    NestedSessions.listeningInode([table->Array.getUnsafe(0), table->Array.getUnsafe(3)], 6080),
     None,
   )
 })
 
-T.test("a port nobody holds has no inode", () => T.equal(Sessions.listeningInode(table, 6081), None))
+T.test("a port nobody holds has no inode", () => T.equal(NestedSessions.listeningInode(table, 6081), None))

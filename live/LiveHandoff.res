@@ -49,7 +49,7 @@ let main = async () => {
   let _ = await call("hideBrowser", {"lane": lane})
   let _ = await call("destroyLane", {"lane": lane})
 
-  switch Sessions.listenerOn(port) {
+  switch NestedSessions.listenerOn(port) {
   | Some((pid, command)) =>
     Console.log(`viewer server: ${command}`)
     kill(pid, "SIGTERM")

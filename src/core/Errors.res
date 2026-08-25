@@ -35,10 +35,15 @@ type code =
   | TabNotFound
   | LaneNotFound
 
+// `codeToString`, not `value`: the latter was `ErrorCodeNames.Value(this
+// ErrorCode)` on the C# side, an extension-method name that means nothing here.
+// Every wire spelling in this codebase is `<type>ToString` now, which is what
+// the ReScript stdlib calls the same act (`Int.toString`).
+//
 // A `switch` with a case missing is a compile error here, which is what
 // `CLAUDE.md` says the C# side bought by making blockers a base record with a
 // discriminator. ReScript gives it without the workaround.
-let value = code =>
+let codeToString = code =>
   switch code {
   | DaemonNotRunning => "DAEMON_NOT_RUNNING"
   | DaemonStartFailed => "DAEMON_START_FAILED"
@@ -73,7 +78,7 @@ exception Passenger({code: code, message: string, detail: option<string>})
 
 /// The whole failure on one line: what the boundary reports when nobody catches.
 let rendered = (code, message, detail) =>
-  `[${value(code)}] ${message}` ++
+  `[${codeToString(code)}] ${message}` ++
   switch detail {
   | Some(d) => ` -- ${d}`
   | None => ""

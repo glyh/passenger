@@ -131,7 +131,7 @@ let serve = (port, root) => {
 // --- is it up, and is it ours -----------------------------------------------
 
 /// Is something already serving on that port?
-let listening = port => Sessions.isListening(Config.vncHost.contents, port)
+let listening = port => NestedSessions.isListening(Config.vncHost.contents, port)
 
 @val external fetch: (string, {..}) => promise<'res> = "fetch"
 @send external text: 'res => promise<string> = "text"
@@ -165,7 +165,7 @@ let serving = async port => isViewerPage(await fetchPath(port))
 /// call, which is the kind of destructive act ticket 057 deliberately kept out of
 /// agent hands.
 let squatter = port => {
-  let who = switch Sessions.listenerOn(port) {
+  let who = switch NestedSessions.listenerOn(port) {
   | Some((pid, command)) => `pid ${pid->Int.toString} (${command})`
   | None => "an unidentifiable process"
   }
@@ -213,20 +213,10 @@ let ensure = async port =>
     switch Proc.detach(execPath, reExecArgs(port)) {
     | None => false
     | Some(_) =>
-      let up = ref(false)
-      for _ in 1 to 20 {
-        if !up.contents {
-          // Serving, not listening: the bind happens before the first route
-          // exists, and a caller told "yes" in that window is told a URL it could
-          // not have fetched.
-          if await serving(port) {
-            up := true
-          } else {
-            await Sessions.sleep(100)
-          }
-        }
-      }
-      up.contents
+      // Serving, not listening: the bind happens before the first route exists,
+      // and a caller told "yes" in that window is told a URL it could not have
+      // fetched.
+      await Poll.until(~times=20, ~everyMs=100, () => serving(port))
     }
   }
 

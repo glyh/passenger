@@ -85,7 +85,7 @@ no reference -- the directories are for a reader, and the compiler does not care
       Geometry.res   at what density the nested browser renders
       Config.res     the PASSENGER_* env boundary
       Assets.res     the four files read from `assets/`
-      Handoff.res Present.res Launch.res Sessions.res Webserve.res Notify.res
+      Handoff.res Present.res Launch.res NestedSessions.res Webserve.res Notify.res
                      summoning a human: sway + wayvnc + the noVNC viewer page
 
     src/cli/       the entry point and its two subcommands.
@@ -96,6 +96,15 @@ no reference -- the directories are for a reader, and the compiler does not care
     src/runtime/   other people's APIs, bound thinly. Nothing here is Passenger's.
       Fs Proc Posix Sqlite Timers WebSocket Node   what the BCL used to supply
       Mcp Pw                                       the SDK and Playwright
+      Poll                                         the two waiting shapes the
+                                                   shell needs, said once
+
+Two naming rules, both of them scar tissue. Every wire spelling is `<type>ToString`
+-- `Errors.codeToString`, `Models.kindToString` -- because those six functions had
+four conventions between them and one of them (`Errors.value`) was C#'s
+extension-method name carried over whole. And `NestedSessions` keeps the word
+`Nested`: `Session`, singular and next door, is the Playwright attach, and the
+two were one letter apart until it bit.
 
 Two placements are worth the sentence, because the obvious reading of each is
 the other one.

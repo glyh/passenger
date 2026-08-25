@@ -93,7 +93,7 @@ let blockedField = page =>
         JSON.Encode.object(
           Dict.fromArray([
             ("name", str(name)),
-            ("kind", str(kindName(kind))),
+            ("kind", str(kindToString(kind))),
             ("url", str(url)),
             ("hint", str(hint)),
           ]),
@@ -118,7 +118,7 @@ let encode = outcome => {
   | Failed({tab, code, error, where, page}) =>
     [
       ("tab", str(tab)),
-      ("code", str(Errors.value(code))),
+      ("code", str(Errors.codeToString(code))),
       ("error", str(error)),
       ("where", str(where)),
       ("wallChecked", JSON.Encode.bool(wallChecked(page))),

@@ -65,7 +65,7 @@ let pollIntervalMs = 250
 /// configured port instead is how a viewer ends up attached to a previous, dead
 /// session and shows nothing but black.
 let endpoint = () =>
-  switch Sessions.live() {
+  switch NestedSessions.live() {
   | Some(live) => (live.vncHost, live.vncPort)
   | None => (Config.vncHost.contents, Config.vncPort.contents)
   }
@@ -94,7 +94,7 @@ let prepared = async live =>
   | None => ""
   | Some(session) =>
     await Browser.unfullscreen()
-    switch Geometry.fit(session.Sessions.waylandDisplay) {
+    switch Geometry.fit(session.NestedSessions.waylandDisplay) {
     | Some(change) => `, ${change}`
     | None => ""
     }
@@ -115,7 +115,7 @@ let viewerBrowser = () =>
 ///
 /// Tracked by the pid we spawned, which is only meaningful because the window
 /// runs on a profile of its own -- see `Config.viewerProfile`.
-let windowPresented = () => Sessions.viewerPid()->Option.isSome
+let windowPresented = () => NestedSessions.viewerPid()->Option.isSome
 
 let viewerArgs = () => [
   `--app=${pageUrl()}`,
@@ -132,18 +132,13 @@ let openWindow = async browser => {
   switch Proc.detach(browser, args) {
   | None => throw(failed())
   | Some(pid) =>
-    Sessions.recordViewer(pid)
-    let up = ref(false)
-    for _ in 1 to openPolls {
-      if !up.contents {
-        await Sessions.sleep(pollIntervalMs)
-        if windowPresented() {
-          up := true
-        }
-      }
-    }
-    if !up.contents {
-      Sessions.clearViewer()
+    NestedSessions.recordViewer(pid)
+    // The window is never up on the first look, so this always waits once --
+    // which is `Poll.until`'s shape read backwards, and cheaper than a check
+    // that cannot succeed.
+    await Timers.sleep(pollIntervalMs)
+    if !(await Poll.until(~times=openPolls, ~everyMs=pollIntervalMs, async () => windowPresented())) {
+      NestedSessions.clearViewer()
       throw(failed())
     }
   }
@@ -155,7 +150,7 @@ let window = {
   available: () => viewerBrowser()->Option.isSome && Webserve.novncRoot()->Option.isSome,
   presented: windowPresented,
   present: async () => {
-    let live = Sessions.live()
+    let live = NestedSessions.live()
     if windowPresented() {
       `viewer already open${await prepared(live)}`
     } else {
@@ -190,11 +185,11 @@ let window = {
   /// The old `pkill -x` swept up every VNC client on the machine, including
   /// remote desktops that had nothing to do with this browser.
   dismiss: () => {
-    switch Sessions.viewerPid() {
+    switch NestedSessions.viewerPid() {
     | Some(pid) => Posix.kill(pid, Posix.sigterm)
     | None => ()
     }
-    Sessions.clearViewer()
+    NestedSessions.clearViewer()
   },
 }
 
@@ -212,7 +207,7 @@ let link = {
   available: () => Webserve.novncRoot()->Option.isSome,
   presented: () => false,
   present: async () => {
-    let live = Sessions.live()
+    let live = NestedSessions.live()
     if !(await Webserve.ensure(Config.novncPort.contents)) {
       throw(noViewer("cannot serve the viewer", "no noVNC found; set PASSENGER_NOVNC"))
     }

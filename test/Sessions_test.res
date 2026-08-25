@@ -141,7 +141,7 @@ kill -s STOP $$`,
     if !found.contents && state(pid) == "Z" {
       found := true
     } else if !found.contents {
-      await Sessions.sleep(10)
+      await Timers.sleep(10)
     }
   }
   T.ok(found.contents)
@@ -154,7 +154,7 @@ while :; do sleep 1; done`)
   child->childPid
 }
 
-let record = (~chromePid=?, ~compositorPid=?, ~vncPid=?, ()): Sessions.session => {
+let record = (~chromePid=?, ~compositorPid=?, ~vncPid=?, ()): NestedSessions.session => {
   let self = 1
   {
     compositorPid: compositorPid->Option.getOr(self),
@@ -162,15 +162,15 @@ let record = (~chromePid=?, ~compositorPid=?, ~vncPid=?, ()): Sessions.session =
     vncPid: vncPid->Option.getOr(self),
     vncHost: Config.vncHost.contents,
     vncPort: Config.vncPort.contents,
-    ctlSocket: Sessions.ctlSocket(Config.vncPort.contents),
+    ctlSocket: NestedSessions.ctlSocket(Config.vncPort.contents),
     waylandDisplay: "wayland-test",
   }
 }
 
-let write = (r: Sessions.session) => {
+let write = (r: NestedSessions.session) => {
   Fs.mkdirp(Config.stateDir.contents)
   Fs.writeFileSync(
-    Sessions.sessionFile(),
+    NestedSessions.sessionFile(),
     [
       `compositor_pid=${r.compositorPid->Int.toString}`,
       `chrome_pid=${r.chromePid->Int.toString}`,
@@ -184,9 +184,9 @@ let write = (r: Sessions.session) => {
 }
 
 let clean = () => {
-  Sessions.alive := Sessions.readProcState
-  Fs.delete(Sessions.sessionFile())
-  Sessions.clearViewer()
+  NestedSessions.alive := NestedSessions.readProcState
+  Fs.delete(NestedSessions.sessionFile())
+  NestedSessions.clearViewer()
 }
 
 // --- the record -------------------------------------------------------------
@@ -195,13 +195,13 @@ T.test("a record left by a cage session still parses", () => {
   // Ticket 063 renamed the key. A session that was already running when the
   // binary was upgraded is a real compositor still holding the port and the
   // profile, and the only thing that can tear it down is this record.
-  let session = Sessions.sessionOf(
-    Sessions.parseRecord(
+  let session = NestedSessions.sessionOf(
+    NestedSessions.parseRecord(
       "cage_pid=4242\nchrome_pid=1\nvnc_pid=2\nvnc_host=127.0.0.1\n" ++
       "vnc_port=5900\nctl_socket=/tmp/x.sock\nwayland_display=wayland-9",
     ),
   )
-  T.equal(session->Option.map(s => s.Sessions.compositorPid), Some(4242))
+  T.equal(session->Option.map(s => s.NestedSessions.compositorPid), Some(4242))
 })
 
 T.test("a malformed record reads as absent", () => {
@@ -209,8 +209,8 @@ T.test("a malformed record reads as absent", () => {
   // half-written record must not raise on the way past.
   clean()
   Fs.mkdirp(Config.stateDir.contents)
-  Fs.writeFileSync(Sessions.sessionFile(), "compositor_pid=1\nnot a pair\nvnc_port=")
-  T.equal(Sessions.current(), None)
+  Fs.writeFileSync(NestedSessions.sessionFile(), "compositor_pid=1\nnot a pair\nvnc_port=")
+  T.equal(NestedSessions.current(), None)
   clean()
 })
 
@@ -222,13 +222,13 @@ T.testAsync("a zombie does not count as alive", async () => {
   // a black screen with every status agreeing it was fine.
   let pid = await zombie()
   T.equal(state(pid), "Z") // the old check would still pass here
-  T.ok(!Sessions.readProcState(pid))
+  T.ok(!NestedSessions.readProcState(pid))
 })
 
-T.testAsync("a running process is alive", async () => T.ok(Sessions.readProcState(await running())))
+T.testAsync("a running process is alive", async () => T.ok(NestedSessions.readProcState(await running())))
 
 T.test("a pid that is not there is not alive", () =>
-  T.ok(!Sessions.readProcState(4194304))
+  T.ok(!NestedSessions.readProcState(4194304))
 )
 
 T.testAsync("a session whose chrome is gone is not live", async () => {
@@ -238,8 +238,8 @@ T.testAsync("a session whose chrome is gone is not live", async () => {
   clean()
   let (dead, up) = (await zombie(), await running())
   write(record(~chromePid=dead, ~compositorPid=up, ~vncPid=up, ()))
-  T.ok(Sessions.current()->Option.isSome)
-  T.equal(Sessions.live(), None)
+  T.ok(NestedSessions.current()->Option.isSome)
+  T.equal(NestedSessions.live(), None)
   clean()
 })
 
@@ -247,7 +247,7 @@ T.testAsync("a session whose chrome is gone is not live", async () => {
 
 T.testAsync("freePort takes the configured port when nothing holds it", async () => {
   await pinPort()
-  T.equal(await Sessions.freePort(), Config.vncPort.contents)
+  T.equal(await NestedSessions.freePort(), Config.vncPort.contents)
 })
 
 T.testAsync("freePort steps over a port someone else holds", async () => {
@@ -261,7 +261,7 @@ T.testAsync("freePort steps over a port someone else holds", async () => {
   await Promise.make((resolve, _reject) =>
     held->listen(Config.vncPort.contents, Config.vncHost.contents, () => resolve())
   )
-  let scanned = await Sessions.freePort()
+  let scanned = await NestedSessions.freePort()
   await Promise.make((resolve, _reject) => held->closeServer(() => resolve()))
   T.equal(scanned, Config.vncPort.contents + 1)
 })
@@ -290,9 +290,9 @@ T.testAsync("teardown waits for the process to actually go", async () => {
   let (slow, _) = await sh(slowScript)
   let pid = slow->childPid
   let began = Date.now()
-  let _ = await Sessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ()))
+  let _ = await NestedSessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ()))
   let elapsed = Date.now() -. began
-  T.ok(!Sessions.readProcState(pid))
+  T.ok(!NestedSessions.readProcState(pid))
   T.ok(elapsed >= 900.0)
   clean()
 })
@@ -305,9 +305,9 @@ T.testAsync("teardown kills what will not terminate", async () => {
   let (child, _) = await sh(stubbornScript)
   let pid = child->childPid
   write(record(~compositorPid=pid, ~vncPid=pid, ()))
-  T.equal(await Sessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ())), None)
-  T.ok(!Sessions.readProcState(pid))
-  T.equal(Sessions.current(), None)
+  T.equal(await NestedSessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ())), None)
+  T.ok(!NestedSessions.readProcState(pid))
+  T.equal(NestedSessions.current(), None)
   clean()
 })
 
@@ -321,11 +321,11 @@ T.testAsync("a pid that survives even sigkill keeps its record", async () => {
   // the port attributable to a session someone can name.
   clean()
   let pid = await running()
-  Sessions.alive := (_ => true)
+  NestedSessions.alive := (_ => true)
   write(record(~compositorPid=pid, ~vncPid=pid, ()))
-  let note = await Sessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ()))
+  let note = await NestedSessions.stopAll(record(~compositorPid=pid, ~vncPid=pid, ()))
   T.ok(note->Option.getOr("")->String.includes(pid->Int.toString))
-  T.ok(Sessions.current()->Option.isSome)
+  T.ok(NestedSessions.current()->Option.isSome)
   clean()
 })
 
@@ -335,16 +335,16 @@ T.testAsync("viewer pid is keyed on the pid not the name", async () => {
   // So a VNC client the user opened for something else is never mistaken for
   // ours, in either direction.
   let pid = await running()
-  Sessions.recordViewer(pid)
-  T.equal(Sessions.viewerPid(), Some(pid))
-  Sessions.clearViewer()
-  T.equal(Sessions.viewerPid(), None)
+  NestedSessions.recordViewer(pid)
+  T.equal(NestedSessions.viewerPid(), Some(pid))
+  NestedSessions.clearViewer()
+  T.equal(NestedSessions.viewerPid(), None)
 })
 
 T.testAsync("a viewer that died is not reported", async () => {
-  Sessions.recordViewer(await zombie())
-  T.equal(Sessions.viewerPid(), None)
-  Sessions.clearViewer()
+  NestedSessions.recordViewer(await zombie())
+  T.equal(NestedSessions.viewerPid(), None)
+  NestedSessions.clearViewer()
 })
 
 T.testAsync("pidsRunning matches on the command line", async () => {
@@ -361,7 +361,7 @@ T.testAsync("pidsRunning matches on the command line", async () => {
 while :; do sleep 1; done`,
     ~name=tag,
   )
-  T.ok(Sessions.pidsRunning(tag)->Array.includes(child->childPid))
-  T.equal(Sessions.pidsRunning("absent-" ++ tag), [])
+  T.ok(NestedSessions.pidsRunning(tag)->Array.includes(child->childPid))
+  T.equal(NestedSessions.pidsRunning("absent-" ++ tag), [])
   reap()
 })

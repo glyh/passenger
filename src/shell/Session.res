@@ -150,18 +150,12 @@ let blankUrls = ["about:blank", "chrome://newtab/"]
 /// callers, one tab, and neither aware of the other.
 let page = async (session, lane, ~reuse=true) => {
   let mine = reuse ? Lanes.tabsOf(lane) : []
-  let found = ref(None)
   let blanks = session.context->Pw.pages->Array.filter(p => blankUrls->Array.includes(Pw.url(p)))
-  for i in 0 to blanks->Array.length - 1 {
-    if found.contents->Option.isNone {
-      let existing = blanks->Array.getUnsafe(i)
-      if mine->Array.includes(await targetId(session, existing)) {
-        found := Some(existing)
-      }
-    }
-  }
+  let found = await blanks->Poll.find(async blank =>
+    mine->Array.includes(await targetId(session, blank))
+  )
 
-  switch found.contents {
+  switch found {
   | Some(existing) => existing
   | None =>
     let opened = await session.context->Pw.newPage
@@ -187,18 +181,12 @@ let pageFor = async (session, lane, tab) =>
       throw(Errors.tabNotFound(~tab, ~lane, ~openTabs=Lanes.tabsOf(lane)))
     }
 
-    let found = ref(None)
-    let open_ = session.context->Pw.pages
-    for i in 0 to open_->Array.length - 1 {
-      if found.contents->Option.isNone {
-        let candidate = open_->Array.getUnsafe(i)
-        if await targetId(session, candidate) == tab {
-          found := Some(candidate)
-        }
-      }
-    }
+    let found =
+      await session.context
+      ->Pw.pages
+      ->Poll.find(async candidate => (await targetId(session, candidate)) == tab)
 
-    switch found.contents {
+    switch found {
     // Closed, or from a browser that has restarted since. Either way the caller
     // is holding a handle to something gone, and needs to know which of its own
     // tabs there are rather than a bare failure.

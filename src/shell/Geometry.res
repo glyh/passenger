@@ -27,29 +27,23 @@ module Scale: {
 }
 
 /// Leading number of a field like `1.601562` or `2,`.
-let number = text => {
-  let digits = ref("")
-  let done = ref(false)
+///
+/// This was a character loop with two `ref` cells -- a transliteration of C#'s
+/// `foreach (char ch in text.Trim())`, accumulating digits and stopping at the
+/// first non-digit after them. A regex says the same thing and the equivalence
+/// is what the nine cases in `Geometry_test.res` check, ported from the same
+/// oracle: the first run of digits with at most one dot inside it, anywhere in
+/// the string.
+///
+/// C# reached `double.Parse` on what it collected and would have thrown on a
+/// lone ".", which no recorded output has produced but nothing prevented
+/// either. There is no match to parse here, so the parser has one fewer way to
+/// take the session down.
+let number = text =>
   text
-  ->String.trim
-  ->String.split("")
-  ->Array.forEach(ch => {
-    if !done.contents {
-      let isDigit = ch >= "0" && ch <= "9"
-      let firstDot = ch == "." && !(digits.contents->String.includes("."))
-      if isDigit || firstDot {
-        digits := digits.contents ++ ch
-      } else if digits.contents->String.length > 0 {
-        done := true
-      }
-    }
-  })
-
-  // C# reached `double.Parse` here and would have thrown on a lone ".", which
-  // no recorded output has produced but nothing prevented either. Float.fromString
-  // answers None for it, so the parser has one fewer way to take the session down.
-  digits.contents == "" ? None : Float.fromString(digits.contents)
-}
+  ->String.match(%re("/\d+(?:\.\d+)?/"))
+  ->Option.flatMap(m => m->Array.get(0)->Option.getOr(None))
+  ->Option.flatMap(digits => Float.fromString(digits))
 
 /// The first `wl_output` stanza, from its header to the next interface.
 ///

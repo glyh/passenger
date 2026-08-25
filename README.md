@@ -105,7 +105,7 @@ lives in the shell.
       Handoff.res     summon, notify, poll for a human
       Launch.res      how Chrome is started so it comes up hidden
       Present.res     putting the hidden browser in front of a human
-      Sessions.res    which sway/wayvnc/viewer processes are ours
+      NestedSessions.res  which sway/wayvnc/viewer processes are ours
       Webserve.res    serving the page a human takes the browser over in
       Config.res      the PASSENGER_* env boundary
       Assets.res      the four files read from assets/
@@ -118,6 +118,7 @@ lives in the shell.
     src/runtime/    other people's APIs, bound thinly -- nothing here is ours
       Fs Proc Posix Sqlite Timers WebSocket Node    what the BCL used to supply
       Mcp Pw                                        the SDK and Playwright
+      Poll                                          waiting, and async find
 
     skill   skills/using-passenger/SKILL.md        how an agent operates this: the judgement
             skills/using-passenger/references/     the mechanics, read on demand

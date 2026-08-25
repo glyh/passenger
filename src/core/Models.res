@@ -26,9 +26,9 @@ type signature = {
 
 let conditions = s => [s.first]->Array.concat(s.rest)
 
-/// The wire spelling of a kind, written out for the reason `Errors.value` is:
+/// The wire spelling of a kind, written out for the reason `Errors.codeToString` is:
 /// a caller may be branching on it.
-let kindName = kind =>
+let kindToString = kind =>
   switch kind {
   | Challenge => "challenge"
   | Login => "login"
@@ -66,7 +66,7 @@ type wedge = Silent | Uncommitted
 // reads the same way twice for the same browser.
 let wedges = [Silent, Uncommitted]
 
-let wedgeName = w =>
+let wedgeToString = w =>
   switch w {
   | Silent => "silent"
   | Uncommitted => "uncommitted"
@@ -93,20 +93,20 @@ type backendName = Nested | NoBackend
 /// How a human is given a look at the hidden browser.
 type presenterName = Local | Web | NoPresenter
 
-// The wire spellings, written out for the same reason `Errors.value` is: a
+// The wire spellings, written out for the same reason `Errors.codeToString` is: a
 // session record on disk or an agent's saved string is holding one of these,
 // so it is a contract rather than a rendering of a constructor name. The
 // constructors read `NoBackend` / `NoPresenter` rather than `None` twice over,
 // because ReScript has one constructor namespace per type but `None` is already
 // the option's, and shadowing it inside this module would be a trap for every
 // later reader.
-let backendNameOf = name =>
+let backendToString = name =>
   switch name {
   | Nested => "nested"
   | NoBackend => "none"
   }
 
-let presenterNameOf = name =>
+let presenterToString = name =>
   switch name {
   | Local => "local"
   | Web => "web"
@@ -135,7 +135,7 @@ let backendNames = ["nested", "none"]
 /// What ends a `showBrowser` wait.
 type waitFor = Closed | Unblocked
 
-let waitForOf = w =>
+let waitForToString = w =>
   switch w {
   | Closed => "closed"
   | Unblocked => "unblocked"

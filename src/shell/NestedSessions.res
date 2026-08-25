@@ -1,5 +1,10 @@
 // Imperative shell: which sway/wayvnc/viewer processes are *ours*.
 //
+// `NestedSessions`, not `Sessions`, and the extra word is doing work: `Session`
+// -- singular, next door -- is the Playwright attach, and the two have nothing
+// to do with each other. They were one letter apart for a while, which is how
+// the C# name `NestedSessions.cs` earned itself back.
+//
 // Every process this tool starts is nested one inside another -- sway holds
 // wayvnc and Chrome, and a viewer connects to that wayvnc from outside. Nothing
 // in the process table says which of them belong together, so this module keeps
@@ -359,21 +364,12 @@ let forget = session => {
   Fs.delete(sessionFile())
 }
 
-let sleep = ms => Promise.make((resolve, _reject) => Timers.setTimeout(() => resolve(), ms)->ignore)
-
 /// Poll until every pid is gone, and report those that are not.
 let waitForExit = async (pids, polls) => {
-  let remaining = ref(pids)
-  for _ in 1 to polls {
-    if remaining.contents->Array.length > 0 {
-      if remaining.contents->Array.some(isAlive) {
-        await sleep(pollIntervalMs)
-      } else {
-        remaining := []
-      }
-    }
-  }
-  remaining.contents->Array.filter(isAlive)
+  let _ = await Poll.until(~times=polls, ~everyMs=pollIntervalMs, async () =>
+    !(pids->Array.some(isAlive))
+  )
+  pids->Array.filter(isAlive)
 }
 
 /// Stop a session's processes. Returns a note if any of them survived.

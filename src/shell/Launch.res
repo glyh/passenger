@@ -177,8 +177,8 @@ let nested = {
     // Claimed per session rather than fixed: a second session that reused the
     // port would lose the bind, leaving the *stale* wayvnc serving an empty
     // compositor to anyone who connected.
-    let port = await Sessions.freePort()
-    let ctl = Sessions.ctlSocket(port)
+    let port = await NestedSessions.freePort()
+    let ctl = NestedSessions.ctlSocket(port)
     // After argv[0], so the browser being launched is still the first word and a
     // reader of the generated script sees which one it is.
     let full =
@@ -196,7 +196,7 @@ let nested = {
       ->String.replaceAll("{ctl}", ctl)
       ->String.replaceAll("{host}", Config.vncHost.contents)
       ->String.replaceAll("{port}", port->Int.toString)
-      ->String.replaceAll("{record}", Sessions.sessionFile())
+      ->String.replaceAll("{record}", NestedSessions.sessionFile())
       ->String.replaceAll("{output}", output)
       ->String.replaceAll("{chrome}", quoted),
     )

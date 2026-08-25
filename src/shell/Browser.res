@@ -19,7 +19,7 @@ let pollIntervalMs = 500
 /// ReScript has no circular module dependencies.
 let isUp = Targets.isUp
 
-let portTaken = () => Sessions.isListening("127.0.0.1", Config.cdpPort.contents)
+let portTaken = () => NestedSessions.isListening("127.0.0.1", Config.cdpPort.contents)
 
 /// Give Chrome its own toolbar back, by taking it out of fullscreen.
 ///
@@ -108,7 +108,7 @@ let start = async (~hidden=true) =>
     // behind, still holding the VNC port. Left alone, the session starting here
     // cannot claim that port and the stale server keeps answering viewers with
     // the empty compositor it is still attached to.
-    let reaped = await Sessions.reapStale()
+    let reaped = await NestedSessions.reapStale()
     // Every row in the lane registry names a CDP target id from the browser that
     // just went away, and Chrome never hands those ids out again. Kept, they
     // would make `listTabs` promise tabs that cannot exist.
@@ -164,24 +164,12 @@ let start = async (~hidden=true) =>
       )
     }
 
-    let up = ref(None)
-    for _ in 1 to startupPolls {
-      if up.contents->Option.isNone {
-        if await isUp() {
-          await unfullscreen()
-          let state = hidden ? "hidden" : "visible"
-          up :=
-            Some(
-              `chrome up on ${Config.cdpUrl()} [${state}] (profile: ${Config.profileDir()})`,
-            )
-        } else {
-          await Sessions.sleep(pollIntervalMs)
-        }
-      }
-    }
+    let came = await Poll.until(~times=startupPolls, ~everyMs=pollIntervalMs, isUp)
 
-    switch up.contents {
-    | Some(line) =>
+    if came {
+      await unfullscreen()
+      let state = hidden ? "hidden" : "visible"
+      let line = `chrome up on ${Config.cdpUrl()} [${state}] (profile: ${Config.profileDir()})`
       // A reap that could not finish is said out loud here: it means something is
       // still holding the old VNC port, so this session advertises a different one
       // than the last.
@@ -189,7 +177,7 @@ let start = async (~hidden=true) =>
       | Some(note) => `${line}\n${note}`
       | None => line
       }
-    | None =>
+    } else {
       Errors.fail(
         DaemonStartFailed,
         "chrome did not expose CDP in time",
@@ -204,8 +192,8 @@ let start = async (~hidden=true) =>
 /// `pkill -x cage` matched on the program name, so it also killed cage sessions
 /// belonging to anyone else on the machine.
 let stop = async () => {
-  Sessions.pidsRunning(`--user-data-dir=${Config.profileDir()}`)->Array.forEach(
-    Sessions.terminate,
+  NestedSessions.pidsRunning(`--user-data-dir=${Config.profileDir()}`)->Array.forEach(
+    NestedSessions.terminate,
   )
-  await Sessions.teardown()
+  await NestedSessions.teardown()
 }

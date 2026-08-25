@@ -130,7 +130,7 @@ let summaryOf = (found: array<wedge>) =>
     wedges
     ->Array.filterMap(w => {
       let n = found->Array.filter(f => f == w)->Array.length
-      n == 0 ? None : Some(`${n->Int.toString} ${wedgeName(w)}`)
+      n == 0 ? None : Some(`${n->Int.toString} ${wedgeToString(w)}`)
     })
     ->Array.join(", ")
   }

@@ -333,17 +333,25 @@ let browserStatusTool = {
   "inputSchema": {"type": "object", "properties": noProperties, "required": nothingRequired},
 }
 
-let tools: array<JSON.t> = [
-  scriptTool->Obj.magic,
-  openLaneTool->Obj.magic,
-  setTtlTool->Obj.magic,
-  listTabsTool->Obj.magic,
-  closeTabsTool->Obj.magic,
-  closeAllTabsTool->Obj.magic,
-  destroyLaneTool->Obj.magic,
-  showBrowserTool->Obj.magic,
-  hideBrowserTool->Obj.magic,
-  browserStatusTool->Obj.magic,
+/// A tool declaration, as the SDK wants it.
+///
+/// One coercion, named once, rather than ten `Obj.magic` in a row. The schemas
+/// above are heterogeneous object literals -- that is what a JSON Schema is --
+/// so there is no record type they all share, and this is the boundary where
+/// that stops mattering.
+external tool: {..} => JSON.t = "%identity"
+
+let tools = [
+  tool(scriptTool),
+  tool(openLaneTool),
+  tool(setTtlTool),
+  tool(listTabsTool),
+  tool(closeTabsTool),
+  tool(closeAllTabsTool),
+  tool(destroyLaneTool),
+  tool(showBrowserTool),
+  tool(hideBrowserTool),
+  tool(browserStatusTool),
 ]
 
 let call = async (name, a) =>
@@ -510,15 +518,15 @@ let call = async (name, a) =>
           // it here rather than losing it, because a machine that resolved no
           // nested backend starts Chrome *visible* and this is the only line that
           // says so before somebody notices a browser on their desktop.
-          ("launch", JSON.Encode.string(Models.backendNameOf(Launch.select().name))),
-          ("presenter", JSON.Encode.string(Models.presenterNameOf(presenter.name))),
+          ("launch", JSON.Encode.string(Models.backendToString(Launch.select().name))),
+          ("presenter", JSON.Encode.string(Models.presenterToString(presenter.name))),
           ("onScreen", JSON.Encode.string(presenter.presented() ? "True" : "False")),
           ("profile", JSON.Encode.string(Config.profileDir())),
           // Named so a black screen is diagnosable: a viewer attached while
           // session reads "stale" is looking at a compositor with nothing in it.
           (
             "session",
-            JSON.Encode.string(Sessions.live()->Option.isSome ? "live" : "stale"),
+            JSON.Encode.string(NestedSessions.live()->Option.isSome ? "live" : "stale"),
           ),
           ("vnc", JSON.Encode.string(`${host}:${port->Int.toString}`)),
           // The only number that reveals a lane you do not own. Without it

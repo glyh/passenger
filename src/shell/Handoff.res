@@ -40,7 +40,7 @@ let waitUntilUnblocked = async (page, ~timeoutS=?) => {
   let deadline = now() +. Int.toFloat(budget) *. 1000.0
   let answer = ref(None)
   while answer.contents->Option.isNone && now() < deadline {
-    await Sessions.sleep(pollIntervalMs.contents)
+    await Timers.sleep(pollIntervalMs.contents)
     if await clear(page) {
       let waited = budget - Float.toInt((deadline -. now()) /. 1000.0)
       answer := Some(`wall cleared after ${waited->Int.toString}s`)
@@ -63,13 +63,13 @@ let waitUntilUnblocked = async (page, ~timeoutS=?) => {
 /// poll instead of being handed a wait that would return instantly.
 let waitForDismissal = async (presenter: Present.presenter, timeoutS) =>
   if !presenter.observesPresence {
-    `cannot wait on the ${presenterNameOf(presenter.name)} presenter: it ` ++
+    `cannot wait on the ${presenterToString(presenter.name)} presenter: it ` ++
     "cannot see whether the viewer is open. Poll the tab with `script` instead"
   } else {
     let deadline = now() +. Int.toFloat(timeoutS) *. 1000.0
     let answer = ref(None)
     while answer.contents->Option.isNone && now() < deadline {
-      await Sessions.sleep(pollIntervalMs.contents)
+      await Timers.sleep(pollIntervalMs.contents)
       if !presenter.presented() {
         let waited = timeoutS - Float.toInt((deadline -. now()) /. 1000.0)
         answer := Some(`viewer closed after ${waited->Int.toString}s`)

@@ -16,7 +16,7 @@ let main = async () =>
   | Some(root) =>
     Config.novncPort := port
     Webserve.serve(port, root)
-    await Sessions.sleep(200)
+    await Timers.sleep(200)
     let base = `http://127.0.0.1:${port->Int.toString}`
 
     Console.log(`serving() says ours: ${(await Webserve.serving(port)) ? "true" : "false"}`)
