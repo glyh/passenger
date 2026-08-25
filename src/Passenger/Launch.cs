@@ -186,6 +186,7 @@ public static class Launch
             string imeScript = ImeSection(ime, Which("dbus-send") is not null);
 
             File.WriteAllText(SessionSh, SessionScript
+                .Replace("{state}", Config.StateDir)
                 .Replace("{ime}", imeScript)
                 .Replace("{ctl}", ctl)
                 .Replace("{host}", Config.Settings.VncHost)

@@ -7,6 +7,7 @@
 // what used to be one file into a config and a script that have to agree with
 // each other.
 
+using System.Text.RegularExpressions;
 using Passenger;
 using Xunit;
 
@@ -110,6 +111,22 @@ public class LaunchTests
         // cannot compose, which is what every session was before ticket 066.
         Assert.DoesNotContain("dbus-run-session", Launch.ImeSection("none", available: true));
         Assert.DoesNotContain("dbus-run-session", Launch.ImeSection("fcitx5", available: false));
+    }
+
+    [Fact]
+    public void NoPlaceholderSurvivesIntoWhatIsWritten()
+    {
+        (_, string config, string script) = Planned();
+
+        // `{state}` once outlived its only user and reached the disk in the
+        // script's very first line -- a redirect into a directory named
+        // "{state}", which kills the shell before it can say so. The session
+        // came up with a compositor, no browser, and no log to explain it.
+        foreach (string written in new[] { config, script })
+        {
+            Match left = Regex.Match(written, @"\{[a-z][a-z0-9_]*\}");
+            Assert.False(left.Success, $"placeholder {left.Value} was never substituted");
+        }
     }
 
     [Fact]
