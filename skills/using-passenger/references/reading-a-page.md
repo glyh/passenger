@@ -43,6 +43,51 @@ them to disk rather than returning them (below); and `GetAsync` hands back a
 live handle, so ask it for `TextAsync()` or `BodyAsync()` and return that
 (`writing-scripts.md`).
 
+### When `APIRequest` cannot verify the certificate
+
+`Page.APIRequest` does its own TLS verification, and it is stricter than the
+browsing context beside it. A host that serves an incomplete certificate chain
+-- the leaf without the intermediate, which every real browser papers over by
+fetching the missing link itself -- fails here with `unable to verify the first
+certificate`, while `Page.GotoAsync` to the same origin loads fine.
+
+That asymmetry is the tell: **if navigation works and `APIRequest` does not,
+suspect the chain, not the site.** The fix is to make the request from inside
+the page, where the browsing context's own trust applies:
+
+    await Page.GotoAsync(origin);          // any page on that origin
+    var text = await Page.EvaluateAsync<string>(@"async (u) => {
+        const r = await fetch(u);
+        return await r.text();
+    }", url);
+
+For bytes rather than text -- a PDF, an image, a font -- come back base64 and
+decode on this side. **Build the string in chunks:** spreading a whole file
+into `String.fromCharCode(...)` passes one argument per byte and throws
+`RangeError: Maximum call stack size exceeded` somewhere in the low hundreds of
+kilobytes, which is under every PDF worth fetching this way.
+
+    var b64 = await Page.EvaluateAsync<string>(@"async (u) => {
+        const b = new Uint8Array(await (await fetch(u)).arrayBuffer());
+        let s = '';
+        for (let i = 0; i < b.length; i += 0x8000)
+            s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+        return btoa(s);
+    }", url);
+    await File.WriteAllBytesAsync(path, Convert.FromBase64String(b64));
+
+Base64 is four bytes out for every three in, and all of it crosses back through
+a tool reply, so check the size before you reach for this -- a large file wants
+a download, not an encoding.
+
+This costs a navigation that `APIRequest` would have saved, so reach for it
+only once the certificate error has actually appeared. Same-origin only: the
+page's `fetch` is subject to CORS, which `APIRequest` is not.
+
+⚠️ The certificate asymmetry is measured; **these two recipes are written from
+it and have not been run verbatim.** Print the length of what comes back and
+read it against what you expected before you build on either.
+
 It is also *reading*, in the sense **Prefer reading to driving** means: no
 click, no keystroke, nothing a behavioural system scores. Use it freely.
 

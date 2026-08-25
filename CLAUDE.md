@@ -88,6 +88,12 @@ cleanup.
   screen. `SKILL.md` is the judgement, `references/` the mechanics, `scripts/` the recipes
   (`markdown.js`, `unstrip-asides.js`, `pictures.js`) that a caller reads off disk and runs in
   a page.
+- **`skills/` ships three, and they are not peers.** `using-passenger` is this server's own
+  operating knowledge, and is the only one the tool docstrings assume. `html-to-markdown` is a
+  converter a caller reaches for once it has HTML in hand -- it fetches nothing. And
+  `passenger-skill-authoring` is a level up: how to *write* a scraping skill for a site, which
+  is what a caller ends up doing after the second time it works a site out from scratch. A site's
+  own skill lives with that caller, not here; this repo carries only what is true of the tool.
 
 ## Working in this repo
 
