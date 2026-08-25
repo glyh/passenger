@@ -3,7 +3,7 @@ id: 063
 title: Sway replaces cage as the nested compositor
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
