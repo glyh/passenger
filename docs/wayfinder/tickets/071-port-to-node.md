@@ -1,6 +1,6 @@
 ---
 id: 071
-title: Port the server to Node, in a sound compile-to-JS language
+title: Port the server to Node, in ReScript
 labels: [wayfinder:research]
 status: open
 assignee:
@@ -54,35 +54,57 @@ does who would still be maintaining it in five years: none of the three has a
 company behind it, and the question is what survives if the maintainers stop
 -- a language with an owner and other backends, or nothing.
 
-- **F# via Fable** -- the recommendation. The existing code moves sideways
-  rather than being re-conceived, and `CLAUDE.md`'s union workaround ("a base
-  record with a `type` discriminator, since C# has none") stops being a
-  workaround: F# has real unions with exhaustiveness checking, so the port
-  *gains* the guarantee the plain-JS version would have lost. `fable` 5.13.0
-  is in nixpkgs, and the .NET SDK stays a build-time tool only -- the runtime
-  still leaves the closure. Unknown to establish: how Fable's `promise`
-  interop feels against an API as async as Playwright's, and that models are
-  weak at Fable's own interop attributes even where they are fine at F#.
-- **ReScript** -- soundest of the three, best JS interop ergonomics, emits
-  readable JS. Not a top-level nixpkgs package, so the toolchain arrives
-  through npm. Models write much less of it than F#. And the maintainer
-  question cuts hardest here: measured on the repo 2026-08-26, Hongbo Zhang
-  -- who wrote BuckleScript and turned it into ReScript, 8,637 commits --
-  last committed in **November 2022** and has moved to building MoonBit;
-  Patrick Ecker last committed October 2023. Of the most recent 100 commits,
-  Christoph Knittel has 29 and Cristiano Calcagno 25, with everyone else in
-  single digits. The project is alive and shipping (v12.3.1 on 2026-08-24,
-  a commit the day after), and the ReScript Association is a non-profit with
-  no single corporate owner -- but a bus factor near two on a language whose
-  *language is the project* is a different risk from the same number on
-  Fable, where F# would outlive the backend.
-- **OCaml via Melange** -- the same shape with a larger language behind it,
-  and `ocamlPackages.melange` 7.0.1 is packaged. Worth weighing given the
-  owner already works in OCaml.
-- **Ruled out:** Gleam and PureScript (fluency near zero, and interop fights
-  an async-heavy API); Scala.js and Kotlin/JS (drag a JVM into the build,
-  cancelling the closure win that is half this ticket's case); ClojureScript
-  (dynamic, so a worse type position than C# is today).
+**Decided: ReScript.** The owner's call, with the reasoning kept so a later
+session does not reopen it rather than because it was close.
+
+*Why it won.* The binding tax turned out not to discriminate at all -- checked
+2026-08-26, there are no Playwright bindings on GitHub or npm for ReScript,
+Melange or anything else, and ReScript needs `external` declarations exactly
+as Melange does; same BuckleScript ancestry, same mechanism, `@send`/`@module`
+against `[@mel.send]`/`[@mel.module]`. What does discriminate is how the
+bindings *feel* against an API where every call is a promise. ReScript has had
+real `async`/`await` since 10.1 and is uncurried by default; Melange refuses
+both on purpose, to avoid widening the gap with upstream OCaml, and gives you
+`let*` over `Js.Promise` instead. That is workable but it is not free here:
+OCaml's `try ... with` cannot cross a `let*`, so a rejection has to be caught
+with `Js.Promise.catch` as an untyped value, and this shell has 48 `catch`
+sites, 9 loops containing an await, and 27 delay/deadline/retry sites -- the
+three shapes monadic binding handles worst.
+
+*What is being accepted.* ReScript's ergonomics are bought by walking away
+from OCaml compatibility, and that same trade is why ReScript code has no exit
+if the project stops: its syntax and stdlib are its own, and v11 onward
+dropped the compatibility that would have made Melange a fallback. Melange
+would have kept that exit -- OCaml source stays valid OCaml, with
+js_of_ocaml as a second backend -- at the cost of the promise ergonomics
+above. Both readings are defensible; this one is chosen knowingly.
+
+The maintainer numbers behind that risk, measured 2026-08-26: Hongbo Zhang,
+who wrote BuckleScript and turned it into ReScript (8,637 commits), last
+committed **November 2022** and has moved to MoonBit; Patrick Ecker last
+committed October 2023. Of the last 100 commits, Christoph Knittel has 29 and
+Cristiano Calcagno 25, everyone else in single digits. Against that: the
+project ships steadily (523 commits in the last year, v12.3.1 on 2026-08-24),
+which is twice Melange's rate, and Melange's own bus factor is *one*
+(anmonteiro, 93 of the last 100), so "more maintained" was never Melange's
+argument -- survivability was.
+
+*Also rejected, with reasons:* F# via Fable (the earlier recommendation in
+this ticket -- keeps the .NET family and gains real unions, but adds a second
+toolchain and models are weak at Fable's interop attributes); OCaml via
+Melange (above); js_of_ocaml (compiles bytecode, emits a runtime blob, built
+to run OCaml in a browser rather than to live in an npm project -- worse at
+the one thing this port is for); plain JS and TypeScript (the type system,
+above); Gleam and PureScript (fluency near zero); Scala.js and Kotlin/JS (a
+JVM in the build cancels the closure win); ClojureScript (dynamic, a worse
+type position than C# is today).
+
+*Consequences to plan for.* ReScript is not a top-level nixpkgs package, so
+the toolchain arrives through npm and has to be packaged for a build that is
+currently nix all the way down -- that is a real task in this port, not a
+footnote. And the bindings, though only about fifteen Playwright members deep
+(see below), are all new work in a language with less to copy from than the
+JS ecosystem has.
 
 ### What the port would win
 
@@ -139,6 +161,19 @@ company behind it, and the question is what survives if the maintainers stop
   instead of through the .NET binding is an assumption until measured. This is
   the whole point of the tool, so measure it early -- against a real wall, not
   a smoke test.
+- **The bindings, and they are smaller than they sound.** Counted against the
+  current shell, it touches about fifteen Playwright members -- `Pages`,
+  `Contexts`, `Url`, `NewPage`, `Goto`, `Title`, `InnerText`, `Close`, the two
+  CDP-session calls, `Send`, `TargetId`, `PageFor`. Not the API surface, a
+  corner of it, because **the caller's script is raw JavaScript calling
+  Playwright directly** and needs no bindings at all. The MCP SDK is the other
+  binding job. Both can start behind `%raw` and gain types where they pay.
+- **Catch rejections at the binding, not at the call site.** Whatever the
+  language, wrap each binding to return a `result` rather than letting a JS
+  rejection travel: `Service.cs:93` already says a failure here is "an outcome
+  rather than an exception, for the same reason `blocked` is one". Doing that
+  once per binding is what keeps the 48 `catch` sites from being ported one by
+  one.
 - **The nix side changes wholesale**: `buildDotnetModule` and two lockfiles
   out, a Node build in, and `nix bundle` re-checked.
 
