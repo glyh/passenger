@@ -87,7 +87,35 @@ public class LaunchTests
         (_, _, string script) = Planned();
 
         // A URL with a shell metacharacter in it is an ordinary URL.
-        Assert.Contains("'chrome' 'about:blank' &", script);
+        Assert.Contains("'chrome' '--ozone-platform=wayland' 'about:blank' &", script);
+    }
+
+    [Fact]
+    public void ChromeIsToldWhichPlatformItIsLaunchingInto()
+    {
+        (_, _, string script) = Planned();
+
+        // The session serves Wayland and nothing else. Chrome used to be left to
+        // work that out, and did -- from a flag the developer's personal
+        // chrome-flags.conf happened to supply. On any other host it would have
+        // fallen back to X11, meaning Xwayland or nothing at all.
+        Assert.Contains("'--ozone-platform=wayland'", script);
+    }
+
+    [Fact]
+    public void TheHostsChromeFlagsFileIsKeptOutOfTheSession()
+    {
+        (_, _, string script) = Planned();
+
+        // The distribution's wrapper splices $XDG_CONFIG_HOME/chrome-flags.conf
+        // into argv, so a personal dotfile was deciding what the nested browser
+        // was -- down to --touch-events, which a page can read. Chrome is pointed
+        // at a config directory that mirrors the host's without that one file.
+        Assert.Contains("XDG_CONFIG_HOME=\"$chrome_config\"", script);
+        Assert.Contains("chrome-flags.conf", script);
+        // A mirror, not a blank: the fonts and the fontconfig that picks them are
+        // the whole reason this tool runs on the host rather than in a container.
+        Assert.Contains("ln -s", script);
     }
 
     [Fact]

@@ -331,6 +331,15 @@ string is one of the most visible fingerprint fields there is -- a browser
 months behind what real users run is a tell in itself, and stops getting
 security updates.
 
+That is a decision about *which browser*, and it was never one about the
+browser's configuration. The nested session passes `--ozone-platform=wayland`
+itself -- it serves Wayland and nothing else, and used to be left to work that
+out -- and runs Chrome against a symlink mirror of `$XDG_CONFIG_HOME` with
+`chrome-flags.conf` left out, since the distribution's launcher is a shell
+wrapper that splices that file into argv. A mirror rather than an empty
+directory: fontconfig's config lives there too, and inheriting the host's fonts
+is the argument below against containers.
+
 Without nix, install the equivalents yourself: `sway wayvnc` plus a copy of
 noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
 

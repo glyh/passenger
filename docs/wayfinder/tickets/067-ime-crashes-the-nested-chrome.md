@@ -40,11 +40,15 @@ So: why does Chrome die, and can the IME be had without it?
 
 ## What is already known
 
-- `--ozone-platform=wayland` and `--ozone-platform-hint=auto` reach the nested
-  Chrome from the human's `~/.config/chrome-flags.conf`, not from this repo --
-  see [061](061-chrome-platform-from-a-dotfile.md), which is still open. So the
-  browser under test is speaking Wayland for a reason nothing here controls, and
-  061 should probably close before this one is chased far.
+- ~~`--ozone-platform=wayland` and `--ozone-platform-hint=auto` reach the nested
+  Chrome from the human's `~/.config/chrome-flags.conf`~~ -- settled by
+  [061](061-chrome-platform-from-a-dotfile.md), which now passes the platform
+  itself and keeps that file out of the session entirely. **It was not the
+  cause.** Retried on controlled flags, Chrome still segfaulted 0.2s after
+  announcing CDP. That retry was contaminated -- a second Passenger server on
+  the machine restarted the daemon on port 9222 underneath it, from an older
+  build -- so it is one datapoint, not a clean pair like the two above; worth
+  redoing when nothing else is holding the port.
 - Chrome logs `'--ozone-platform=wayland' is not compatible with Vulkan` on every
   start, with or without an IME. Probably unrelated; recorded so the next person
   does not chase it twice.

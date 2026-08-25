@@ -85,7 +85,9 @@ it is launching Chrome into a cage Wayland session, so it should pass
 happens to own the machine. Once it does, Xwayland and gtk+3 can leave together. That half is now its own
 ticket: [The nested browser's display platform comes from the host's
 dotfile](061-chrome-platform-from-a-dotfile.md), which has to close before the
-Xwayland trim can be attempted.
+Xwayland trim can be attempted. **It has: 061 passes `--ozone-platform=wayland`
+unconditionally in the nested backend, so nothing falls back to X11 and nothing
+in the session needs Xwayland to catch it.** The trim is unblocked.
 
 Two things to check before that lands, since it changes what the browser is
 rather than what ships beside it: that the handoff window still behaves (ticket

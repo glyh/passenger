@@ -86,13 +86,22 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [The nested browser's flags are this repo's, not the host's](tickets/061-chrome-platform-from-a-dotfile.md)
+  — `--ozone-platform=wayland` is passed by the nested backend rather than
+  arriving from whoever's `~/.config/chrome-flags.conf` happens to be on the
+  machine, and Chrome is pointed at a symlink mirror of that config directory
+  with the flags file left out. A mirror rather than a blank, because fontconfig
+  lives there too and inheriting the host's fonts is the point. Nothing
+  measurable moved; what moved is that the file is no longer an input.
+
 - [The session runs the host's own IME](tickets/066-an-ime-in-the-session.md)
-  — fcitx5 from the host's PATH, like the browser and for the same reason, on a
-  private D-Bus so it cannot fight the desktop's own instance and against a
-  refreshed copy of its config so it cannot write to one. Chrome needed no
-  argument; the missing piece was only that nothing in the session was being an
-  input method. `PASSENGER_IME=none`, or no fcitx5, is a session that cannot
-  compose — which is what every session was before it.
+  — the fcitx5 already running for the human's desktop is asked to serve this
+  display too (`OpenWaylandConnection`), so the session gets the real config and
+  the real learned dictionary rather than a private instance against a copy,
+  which is what the first attempt built and what the owner rightly questioned.
+  Chrome needed no argument; the missing piece was only that nothing in the
+  session was being an input method. `PASSENGER_IME=none` by default, because
+  attaching one segfaults Chrome — [067](tickets/067-ime-crashes-the-nested-chrome.md).
 
 - [Sway replaces cage as the nested compositor](tickets/063-sway-instead-of-cage.md)
   — cage was never the light one (33 MiB under sway on a 896 MiB closure) and

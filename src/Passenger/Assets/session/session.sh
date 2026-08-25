@@ -19,7 +19,33 @@ vnc_pid=$!
 
 {ime}
 
-{chrome} &
+# The host's config directory, minus the one file in it that decides what this
+# browser *is*.
+#
+# The distribution's `google-chrome-stable` is a shell wrapper that splices
+# `$XDG_CONFIG_HOME/chrome-flags.conf` into argv. That file is a human's
+# personal dotfile for their own desktop -- unversioned, invisible to this side,
+# and free to say anything: `--disable-gpu` in there would silently undo the
+# hardware GL this session goes to some trouble to keep, and the one on the
+# machine this was written on was quietly supplying `--touch-events` and the
+# ozone platform this session runs on -- so on any host without that file, the
+# browser fell back to X11 (ticket 061).
+#
+# A symlink farm rather than an empty directory, because this tool's whole
+# premise is inheriting the host -- its fonts above all -- and $XDG_CONFIG_HOME
+# is also where fontconfig and GTK keep theirs. Blanking it would have insulated
+# Chrome from far more than the flags file. Links, so writes still land in the
+# real files.
+chrome_config='{state}/xdg-config'
+host_config="${XDG_CONFIG_HOME:-$HOME/.config}"
+rm -rf "$chrome_config" && mkdir -p "$chrome_config"
+for entry in "$host_config"/* "$host_config"/.[!.]*; do
+  [ -e "$entry" ] || continue                        # an unmatched glob is itself
+  [ "${entry##*/}" = 'chrome-flags.conf' ] && continue
+  ln -s "$entry" "$chrome_config/" || echo "could not link $entry"
+done
+
+XDG_CONFIG_HOME="$chrome_config" {chrome} &
 chrome_pid=$!
 
 printf 'compositor_pid=%s\nchrome_pid=%s\nvnc_pid=%s\nvnc_host=%s\nvnc_port=%s\nctl_socket=%s\nwayland_display=%s\n' \

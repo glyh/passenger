@@ -173,6 +173,26 @@ public static class Launch
         {
         }
 
+        /// <summary>
+        /// What this session *is*, said to Chrome rather than hoped for.
+        ///
+        /// The session serves Wayland and nothing else: `WLR_BACKENDS=headless`,
+        /// no DRM master, no X server. Chrome was never told, and on the machine
+        /// this was written on it came up as a Wayland client anyway -- because
+        /// the developer's `~/.config/chrome-flags.conf` happened to say
+        /// `--ozone-platform-hint=auto`, which the distribution's wrapper splices
+        /// into argv. On any host without that file Chrome would fall back to
+        /// X11, which in here means Xwayland or, where the closure has none, a
+        /// browser that never starts (ticket 061).
+        ///
+        /// Unconditional, and only in this backend. There is no X to fall back
+        /// to inside the session, so nothing is being closed off that was
+        /// reachable; `--visible` still hands the host's own desktop whatever it
+        /// prefers. Chrome has accepted the flag since ozone shipped, and a
+        /// Chrome older than that could not have run in here at all.
+        /// </summary>
+        private static readonly string[] Platform = ["--ozone-platform=wayland"];
+
         public LaunchPlan Plan(IReadOnlyList<string> argv)
         {
             Directory.CreateDirectory(Config.StateDir);
@@ -181,7 +201,10 @@ public static class Launch
             // empty compositor to anyone who connected.
             int port = Sessions.FreePort();
             string ctl = Sessions.CtlSocket(port);
-            string quoted = string.Join(" ", argv.Select(a => $"'{a}'"));
+            // After argv[0], so the browser being launched is still the first
+            // word and a reader of the generated script sees which one it is.
+            IReadOnlyList<string> full = [argv[0], .. Platform, .. argv.Skip(1)];
+            string quoted = string.Join(" ", full.Select(a => $"'{a}'"));
             string ime = Config.Settings.ImeCommand;
             string imeScript = ImeSection(ime, Which("dbus-send") is not null);
 
