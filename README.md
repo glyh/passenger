@@ -315,6 +315,8 @@ supports both ways.
 
 ## Install
 
+### With nix
+
     nix develop            # dev shell: sway, wayvnc, noVNC, the dotnet SDK
     nix run .              # run the MCP server (there is no other app)
 
@@ -353,8 +355,66 @@ without npm and corepack. Together: 896 MiB down to 658, 268 store paths down to
 216, and `nix bundle --bundler github:NixOS/bundlers#toArx .` down from 302 MB
 to 222.
 
-Without nix, install the equivalents yourself: `sway wayvnc` plus a copy of
-noVNC (`PASSENGER_NOVNC`, or one of the usual `/usr/share/novnc` paths).
+### Without nix
+
+Nothing here needs nix; it only needs the same pieces in the same place. There
+are four steps, and only the third is unusual.
+
+**1. The runtime pieces, from your distribution.** What must be on the PATH of
+the process your MCP client launches:
+
+    sway, swaymsg, wayvnc     required -- without all three, `hideBrowser`
+                              answers CANNOT_HIDE and Chrome starts visible
+    wlr-randr, wayland-info   the nested output's scale, which sets the density
+                              the browser renders at (wayland-info ships with
+                              wayland-utils)
+    dbus-send                 only for PASSENGER_IME=fcitx5
+    google-chrome-stable      the browser, or whatever PASSENGER_CHROME names
+
+Plus noVNC's static files, which are the viewer page. `/usr/share/webapps/novnc`,
+`/usr/share/novnc` and `/usr/local/share/novnc` are probed in that order;
+anywhere else, say where with `PASSENGER_NOVNC`.
+
+There is no wrapper outside nix, so this is your PATH, not the package's. A
+client that launches servers with a stripped environment has to be told.
+
+**2. The .NET 10 SDK**, from your distribution or from Microsoft.
+
+**3. The MCP C# SDK, which is a fork and is not on nuget.org.** Upstream's
+stdio transport escapes every non-ASCII character on the wire (ticket 056,
+csharp-sdk#795); the fork adds the hook that lets a server choose the encoder.
+Clone it and pack it into a directory of your own:
+
+    git clone -b utf8-wire-encoding https://github.com/glyh/csharp-sdk
+    cd csharp-sdk
+    for p in src/ModelContextProtocol.Core src/ModelContextProtocol; do
+      dotnet pack $p -c Release -p:Version=2.2.0-utf8wire.1 \
+        -p:EnablePackageValidation=false -o ~/.local/share/passenger-nupkgs
+    done
+
+One project per `dotnet pack` -- it takes exactly one and says so unhelpfully
+if given two. The version has to be *exactly* `2.2.0-utf8wire.1`, because that
+is what `src/Passenger.Mcp/Passenger.Mcp.csproj` asks for by name; if you bump
+one, bump both.
+
+**4. Build passenger against it.** `Directory.Build.props` adds
+`MCP_SDK_NUGET_SOURCE` to the restore sources when it is set, which is the
+whole mechanism -- the dev shell sets it to the flake's nupkgs, and here it is
+yours:
+
+    export MCP_SDK_NUGET_SOURCE=~/.local/share/passenger-nupkgs
+    dotnet publish src/Passenger.Mcp -c Release -o ~/.local/lib/passenger
+
+Then register the published binary instead of `nix run`:
+
+    claude mcp add passenger --scope user \
+      --env PASSENGER_NOVNC=/usr/share/novnc \
+      -- ~/.local/lib/passenger/Passenger.Mcp
+
+One difference worth knowing, and it is in your favour: the published tree
+keeps Patchright's own bundled Node, which is linked against
+`/lib64/ld-linux-x86-64.so.2` and therefore works on an ordinary distribution.
+Substituting nixpkgs' node for it is a fix for a problem only the store has.
 
 ### Why not Docker
 
