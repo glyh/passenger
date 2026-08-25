@@ -92,11 +92,11 @@ ever grows a "use the host's sway" mode, it stops holding.
 - `Available()` checks `sway`, not `cage`.
 - The session script no longer receives Chrome as `cage -- script`. Sway starts
   its child from `exec` in a generated config, so the record-writing trick has
-  to be re-derived: `$PPID` is the cage that started the script today, and `$$`
-  survives the `exec` to become Chrome's pid. Under sway both change hands.
-  Whatever replaces it must still be written **from inside the session**, for
-  the reason the current comment gives -- only there are the real
-  `WAYLAND_DISPLAY` and pids observable.
+  to be re-derived. *Half of that worry was wrong, and measuring settled it:*
+  `$PPID` still reaches the compositor -- sway's `exec` does not double-fork
+  away from it -- so only the `$$` half changed hands. Written **from inside the
+  session** either way, for the reason the current comment gives: only there are
+  the real `WAYLAND_DISPLAY` and pids observable.
 - A generated sway config: no bar, no keybindings, `default_border none`, one
   output, and `exec` for Chrome. It is generated per start like
   `cage-session.sh` is, and `SessionSh`'s name stops being true.
@@ -134,3 +134,58 @@ ever grows a "use the host's sway" mode, it stops holding.
   this ticket only removes the excuse that it is impossible.
 - [060](060-trim-the-closure.md): unrelated to the Python, but the Xwayland
   trim still waits on [061](061-chrome-platform-from-a-dotfile.md) either way.
+
+## What landed
+
+*2026-08-25, commit `0f6b4a5`.* `Launch.NestedBackend` writes a sway config
+beside the session script and starts `sway -c`; `Sessions` renamed `cage_pid` to
+`compositor_pid` and still reads the old key, so a cage session running across
+the upgrade can be torn down rather than orphaned. `LaunchTests` is new and pins
+the two generated files to one output constant.
+
+Three things were measured rather than assumed, and one of them contradicted
+this ticket:
+
+- **`$PPID` is sway.** A probe under a real sway: `ppid=1582165`, and
+  `SWAYSOCK=/run/user/1000/sway-ipc.1000.1582165.sock` names the same pid. The
+  plan above expected to lose this and did not.
+- **The compositor had to be taught to die.** cage exited with its child; sway
+  does not, which would leave a live compositor holding the port behind a dead
+  Chrome -- this map's founding bug. So Chrome is backgrounded and waited on,
+  and its exit drives `swaymsg exit`. Verified: killing Chrome took sway and
+  wayvnc with it, all three pids gone.
+- **wayvnc must name its output.** `-o HEADLESS-1`, with the config and the
+  script pinned to the same constant by a test, because wayvnc serving an output
+  sway never created is a black screen with every status reading healthy.
+
+End to end, on a real Chrome in a throwaway state dir: `script` returned
+`Example Domain` in 2.1s, wayvnc listening on its port, and sway reporting the
+window as `fullscreen_mode=0`, `1280x720`, `app_id=passenger`. The closure went
+895.8 -> 925.8 MiB, against the 33 MiB this ticket predicted.
+
+The live session advertises what it was swapped for:
+
+    ext_data_control_manager_v1   zwlr_data_control_manager_v1
+    zwp_text_input_manager_v3     zwp_input_method_manager_v2
+
+## What remains before this closes
+
+All three need a human at a viewer, which is the one thing this side cannot
+stand in for:
+
+1. **A real handoff.** `showBrowser`, and look at what arrives: a windowed
+   browser with a toolbar, sized to the viewer, and re-hidden afterwards.
+2. **The clipboard actually crossing**, which is 062's test and the reason this
+   was worth doing. The protocol is there and wayvnc implements it; nobody has
+   yet copied text in one direction and pasted it in the other.
+3. **The fingerprint re-measured.** `screen: 1280x720` is now set in the
+   generated config rather than inherited from a compositor default, and the
+   WebGL adapter string should be read once more from inside a nested page.
+
+## Found on the way, and not this ticket's
+
+A `PASSENGER_STATE` deep enough to push the wayvnc control socket past the
+108-byte `sun_path` limit makes wayvnc fail with `Failed to create unix socket:
+File name too long` -- and the session comes up anyway, with a browser, a record
+and no VNC at all. Pre-existing, nothing to do with the swap, and the failure is
+silent in exactly the way this project keeps deciding it will not tolerate.
