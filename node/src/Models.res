@@ -131,3 +131,6 @@ let parsePresenter = text =>
   }
 
 let backendNames = ["nested", "none"]
+
+/// How a window backend wants Chrome started.
+type launchPlan = {argv: array<string>, env: Dict.t<string>}

@@ -1,0 +1,154 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>passenger</title>
+<!--
+  The page a human takes the hidden browser over in.
+
+  Deliberately not noVNC's own vnc.html: that page is a VNC client, with a
+  control bar, a settings panel and a connect dialog wrapped around the
+  screen. What is wanted here is the browser itself and nothing else, in a
+  window that looks like any other window on the desktop -- so this is the
+  screen alone, edge to edge, and the host browser is started in app mode so
+  there is no tab strip or address bar around it either.
+-->
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1c1e; }
+  /* The screen is the window. noVNC sizes the canvas inside it, and asks the
+     server for a framebuffer to match, so there is never a border to hide. */
+  #screen { width: 100vw; height: 100vh; }
+  #screen canvas { display: block; }
+  #status { position: fixed; inset: 0; display: grid; place-items: center;
+            font: 14px system-ui, sans-serif; color: #8e8e93;
+            /* Never in the way of a click, shown or not. `display: grid`
+               above beats the `hidden` attribute's `display: none` from the
+               UA stylesheet, so hiding it takes an explicit rule -- without
+               one this overlay stays on top of the screen, invisibly, and
+               swallows every click meant for the browser underneath. */
+            pointer-events: none; }
+  #status[hidden] { display: none; }
+</style>
+
+<div id="status">connecting…</div>
+<div id="screen"></div>
+
+<script type="module">
+  import RFB from './novnc/core/rfb.js';
+
+  const screen = document.getElementById('screen');
+  const status = document.getElementById('status');
+  const endpoint = new URLSearchParams(location.search).get('ws');
+  const ratio = () => window.devicePixelRatio || 1;
+
+  function connect() {
+    const rfb = new RFB(screen, `ws://${endpoint}/`, {});
+
+    // noVNC knows nothing about HiDPI. Left alone it asks for a framebuffer
+    // the size of the window in *CSS* pixels and then paints one framebuffer
+    // pixel per CSS pixel, so on a scaled screen every pixel of the remote
+    // browser arrives upscaled -- precisely when someone is being asked to
+    // read a captcha. So the size is asked for in device pixels...
+    rfb._screenSize = function () {
+      const rect = this._screen.getBoundingClientRect();
+      return { w: Math.floor(rect.width * ratio()),
+               h: Math.floor(rect.height * ratio()) };
+    };
+    // ...while the canvas is laid out in CSS pixels, which leaves the display
+    // scaled by 1/ratio: one framebuffer pixel on exactly one device pixel.
+    // Going through noVNC's own autoscale rather than a CSS transform is what
+    // keeps the pointer honest -- it divides coordinates by the scale it knows
+    // about, and a scale it did not know about would land every click in the
+    // wrong place.
+    rfb._updateScale = function () {
+      const rect = this._screen.getBoundingClientRect();
+      this._display.autoscale(rect.width, rect.height);
+    };
+
+    rfb.scaleViewport = true;   // makes the override above the authority
+    rfb.resizeSession = true;   // the window drives the framebuffer size
+    rfb.showDotCursor = false;  // wayvnc draws the real one into the frame
+    rfb.background = '#1c1c1e';
+
+    // The clipboard, in both directions, because nothing else moves it.
+    //
+    // wayvnc has implemented both halves all along, and since ticket 063 the
+    // compositor offers the data-control protocol it needs -- but RFB's
+    // clipboard stops at this page. noVNC hands incoming text to a `clipboard`
+    // event and sends outgoing text only when something calls
+    // `clipboardPasteFrom`; this page did neither. So a human handed a browser
+    // to finish a login could not paste the password, and on a CJK machine
+    // could not enter the text at all, since nothing in the session composes.
+    //
+    // `mirrored` is what keeps the two directions from feeding each other: text
+    // that arrived from the session is never pushed back into it.
+    let mirrored = null;
+
+    rfb.addEventListener('clipboard', (e) => {
+      const text = e.detail.text;
+      if (text === mirrored) return;
+      mirrored = text;
+      navigator.clipboard.writeText(text).catch(() => {});
+    });
+
+    // The other direction cannot be a `paste` listener. noVNC calls
+    // preventDefault on every key it forwards, so Ctrl+V inside the screen
+    // never becomes a paste event here at all. The host clipboard is read when
+    // this window takes focus instead -- which is the moment after someone
+    // copied something elsewhere and came back to use it.
+    const pushHostClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (!text || text === mirrored) return;
+        mirrored = text;
+        rfb.clipboardPasteFrom(text);
+      } catch (e) {
+        // Refused, or this document is not focused. Both are ordinary, and
+        // neither is worth a message: the handoff works without a shared
+        // clipboard, just less well.
+      }
+    };
+    window.addEventListener('focus', pushHostClipboard);
+
+    rfb.addEventListener('connect', () => {
+      status.hidden = true;
+      // Keys go where focus is. Until this line the canvas did not have it on
+      // open, so the first shortcut of a handoff landed on the *host* desktop
+      // -- Ctrl+N opening a window next to the viewer rather than inside it.
+      rfb.focus();
+      pushHostClipboard();
+    });
+    rfb.addEventListener('disconnect', () => {
+      // The session outlives the window: the compositor and Chrome keep running
+      // while nobody is looking, so a dropped connection is worth retrying
+      // rather than reporting as the end of anything.
+      status.hidden = false;
+      status.textContent = 'reconnecting…';
+      setTimeout(connect, 1000);
+    });
+
+    // A file dropped on this page is a file dropped on an ordinary browser, and
+    // a browser's default for that is to navigate to it -- so dragging a log
+    // file onto the viewer opened it in a *host* window, having done nothing
+    // remote at all. RFB carries no file transfer and this is not the place to
+    // invent one: the session shares this filesystem, so its own file chooser
+    // already reaches any path on it.
+    for (const type of ['dragover', 'drop']) {
+      window.addEventListener(type, (e) => e.preventDefault());
+    }
+
+    // A window dragged between screens of different density changes ratio
+    // without changing its CSS size, which is the one resize noVNC cannot
+    // notice on its own -- its check short-circuits on the unchanged size.
+    let density = ratio();
+    window.addEventListener('resize', () => {
+      if (density === ratio()) return;
+      density = ratio();
+      rfb._expectedClientWidth = -1;
+    });
+  }
+
+  if (endpoint) {
+    connect();
+  } else {
+    status.textContent = 'no VNC endpoint given';
+  }
+</script>
