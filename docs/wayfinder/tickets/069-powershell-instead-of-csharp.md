@@ -27,9 +27,10 @@ because C# bites. Splitting its entries by whose fault they are:
   strictly better shape for the thing every script does most.
 - The nested `await` that will not compile at the top level.
 - `JsonSerializer`'s ASCII-escaping default, per
-  [068](068-json-encoder-in-scope.md).
-  `ConvertTo-Json` on PowerShell 7 is believed not to ASCII-escape -- verify,
-  do not assume.
+  [068](068-json-encoder-in-scope.md). **Measured, 7.6.5:** `ConvertTo-Json`
+  escapes nothing -- `@{t="腾冲"; e="😀"}` comes out as
+  `{"e":"😀","t":"腾冲"}`, emoji included, which is more than the C# side
+  manages ([070](070-astral-still-escapes.md)).
 - Local functions having to precede the `return`.
 
 **Not the language's, and no door change touches them**
@@ -42,16 +43,25 @@ because C# bites. Splitting its entries by whose fault they are:
 
 So roughly four of nine, and the four are the smaller ones.
 
-**What PowerShell would cost, and this is the half to measure first**
+**What PowerShell would cost.** Three of these were guesses when this ticket
+was opened; they have since been run against PowerShell 7.6.5, and two of the
+three did not survive.
 
-- **Async.** Playwright .NET is async-only and PowerShell has no `await`.
-  Every call becomes `.GetAwaiter().GetResult()` or `$t.Result` -- noisier than
-  `await` on the exact call a script makes most, and with its own deadlock
-  hazards depending on the synchronisation context the runspace runs under.
-  This alone could sink it; establish it before anything else.
-- **Generics.** `EvalOnSelectorAllAsync<string[]>` is already the most-missed
-  detail in the C# door. PowerShell 7.3 added a generic-method invocation
-  syntax; whether it reaches this call cleanly is unverified.
+- **Async.** Playwright .NET is async-only, and **measured on 7.6.5, there is
+  no `await`**: `await <expr>` raises `CommandNotFoundException`, no
+  `Wait-Task`/`Receive-Task` exists, and a returned `Task` does not unwrap
+  itself (it comes back as `AsyncStateMachineBox\`1`). The shape is
+  `.GetAwaiter().GetResult()` on every Playwright call, which is 26 characters
+  of ceremony on the operation a script performs most. The deadlock worry is
+  *not* confirmed: a bare runspace reports no `SynchronizationContext`, so
+  blocking there is safe. Whether that holds for a runspace hosted inside
+  `Passenger.Mcp` is the part still to establish, and it is the one that could
+  sink this.
+- ~~**Generics.**~~ **Settled, and not a cost.** `Method[Type](args)` works:
+  `[System.Text.Json.JsonSerializer]::Deserialize[string[]]('["a","b"]')`
+  returns the array, and `[Enumerable]::Empty[string]()` types correctly. So
+  `EvalOnSelectorAllAsync<string[]>` translates, and PowerShell's syntax makes
+  the type argument no easier to forget than C#'s does.
 - **Return semantics.** PowerShell has no single return value -- it emits a
   pipeline, and anything not captured joins the success stream. A script whose
   stray expression silently becomes part of `returned` is the same class of
