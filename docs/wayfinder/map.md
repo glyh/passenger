@@ -932,3 +932,11 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   there; what is missing is a gesture, not transport. `setInputFiles` hands a
   host path straight to a file input with no viewer and no human. See [Getting a
   file into the session](tickets/072-file-into-the-session.md).
+
+- **A tool reply is read by something dynamic, so it is one flat object.** The
+  `script` reply was two nested tagged unions, and both discriminators were a
+  serialiser's need rather than a caller's -- `System.Text.Json` had to be told
+  how to spell a union it could not express. `if (r.blocked)` is the whole test
+  now. The union stays on the server side, where an exhaustive `switch` still
+  guarantees a member cannot fail to reach the wire. See [Flatten the script
+  reply](tickets/073-flatten-the-script-reply.md).

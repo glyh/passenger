@@ -136,8 +136,16 @@ page means. That division is deliberate and load-bearing -- six mechanisms that
 crossed it have been deleted from this codebase -- and it is why the reading
 above is yours to do.
 
-**A `script` reply carries what you returned, and nothing about the page except
-a wall.** It used to carry a measurement of the tab you ended on -- a character
+**A `script` reply is flat, and carries what you returned plus nothing about the
+page except a wall.**
+
+    tab           always -- the handle you pass back to continue on this page
+    returned      what your script returned. absent if it did not finish
+    code, error,  present only on failure, and their presence *is* the failure:
+      where       `if (r.error)` is the test, and `where` is your own line
+    wallChecked   always. false means you passed `checkWall: false`
+    blocked       present only when a vendor's markup matched -- `if (r.blocked)`
+ It used to carry a measurement of the tab you ended on -- a character
 count, the picture geometry, the url and title -- and that is gone. Whatever
 you want to know about the page, return it: `Page.url()`,
 `await Page.title()`, `(await Page.innerText("body")).length`. They cost you

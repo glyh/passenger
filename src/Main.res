@@ -157,8 +157,8 @@ reCAPTCHA, hCaptcha, DataDome, Arkose, PerimeterX, a login wall). On by
 default, because a wall makes what you returned *wrong* rather than short -- a
 challenge page's content in the shape of an answer. Turn it off when you are
 driving one page across many calls and know there is no wall: it costs two
-round trips. \`page\` then says \`unchecked\`, so a reply never implies a check
-that did not happen.`,
+round trips. The reply then says \`wallChecked: false\`, so it never implies a
+check that did not happen.`,
       },
     },
     "required": ["source", "lane"],

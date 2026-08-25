@@ -62,8 +62,8 @@ Four choices worth knowing, all deliberate:
   accident cannot tell which lane it is in.
 - **`script` does not wait for a human.** A tool call that hangs for
   five minutes while someone hunts for a captcha is a bad citizen, so a blocked
-  page comes straight back as `type="blocked"` with what is in the way and how
-  to clear it. The agent tells the user, the user solves it, the agent calls
+  page comes straight back with a `blocked` field saying what is in the way and
+  how to clear it. The agent tells the user, the user solves it, the agent calls
   again -- the profile kept the result. `waitSeconds` opts into blocking.
 - **The daemon starts on demand.** Nothing has to be started first, by anyone.
 - **`showBrowser` exists at all.** The caller is not the human, so summoning one
@@ -159,8 +159,8 @@ picture geometry and `charCount` survived it by a year and then went too
 (ticket 048) -- not because they were judgement, but because they arrived
 whether or not anyone asked. A reply now carries what the script returned, and a
 wall if there is one. The wall check itself can be turned off with `checkWall`,
-and says `unchecked` when it is, so a page nobody looked at never reads like a
-page that came back clean.
+and the reply says `wallChecked: false` when it is, so a page nobody looked at
+never reads like a page that came back clean.
 
 **The DOM walk is still this repo's** in the sense that it ships here, and so does
 `pictures.js` now -- both in `skills/using-passenger/scripts/`, both recipes the

@@ -37,11 +37,11 @@ type pageOutcome =
   /// path is gone with the word-count tier (ticket 005) -- it was proposing to
   /// block whole domains by their own name.
   ///
-  /// `tab` is here so the caller can act on the wall without guessing. `ran` and
-  /// `failed` always carried one; this did not, which left an agent that wanted
-  /// to summon a human deliberately reading `listTabs` and matching on a URL
-  /// (ticket 018).
-  | Blocked({name: string, kind: kind, url: string, tab: string, hint: string})
+  /// No `tab` on this one: it carried one from ticket 018, because an agent that
+  /// wanted to summon a human deliberately was otherwise reading `listTabs` and
+  /// matching on a URL. Flattening put the tab at the top of every reply, so the
+  /// copy inside here would be the same string twice.
+  | Blocked({name: string, kind: kind, url: string, hint: string})
 
 type scriptOutcome =
   /// A script that finished, and what the tab looked like afterwards.
@@ -56,51 +56,76 @@ type scriptOutcome =
 
 let str = JSON.Encode.string
 
-let encodePage = outcome =>
-  switch outcome {
-  | Unchecked => JSON.Encode.object(Dict.fromArray([("type", str("unchecked"))]))
-  | Blocked({name, kind, url, tab, hint}) =>
-    JSON.Encode.object(
-      Dict.fromArray([
-        ("type", str("blocked")),
-        ("name", str(name)),
-        ("kind", str(kindName(kind))),
-        ("url", str(url)),
-        ("tab", str(tab)),
-        ("hint", str(hint)),
-      ]),
-    )
-  }
-
-let encodePageSlot = page =>
+/// The reply, flat.
+///
+/// This was two nested tagged unions until the shape was flattened: a `type` of
+/// `ran` or `failed` at the top, and a `page` slot holding a second record whose
+/// own `type` was `blocked` or `unchecked`. Both discriminators were pydantic's,
+/// carried through the C# port because a serialiser there needed to be told how
+/// to spell a union it had no way to express -- and neither is worth a level of
+/// nesting to a caller whose language tests a field by asking whether it is
+/// there. `if (r.blocked)` is the whole of it now.
+///
+/// The union survives on *this* side, where it earns its keep: `encode` is a
+/// `switch` the compiler checks, so a member added later cannot quietly fail to
+/// reach the wire.
+///
+/// What a caller reads:
+///
+///     tab           always -- the tab this ran on, and the handle to continue
+///     returned      on success. absent when the script did not finish
+///     code/error/   on failure, and their presence *is* the failure. absent on
+///       where       success, so `if (r.error)` is the test
+///     wallChecked   always. false is `checkWall: false`, and it is a fact about
+///                   what this side did rather than about the page (ticket 042):
+///                   a check that never ran must not read as a page that was fine
+///     blocked       only when a vendor's markup matched, so `if (r.blocked)`
+///
+/// `blocked` no longer repeats the tab it is on. It carried one because the
+/// nested record had no other way to name it (ticket 018), and flat it is
+/// already there.
+let blockedField = page =>
   switch page {
-  | Some(outcome) => encodePage(outcome)
-  | None => JSON.Encode.null
+  | Some(Blocked({name, kind, url, hint})) =>
+    [
+      (
+        "blocked",
+        JSON.Encode.object(
+          Dict.fromArray([
+            ("name", str(name)),
+            ("kind", str(kindName(kind))),
+            ("url", str(url)),
+            ("hint", str(hint)),
+          ]),
+        ),
+      ),
+    ]
+  | _ => []
   }
 
-let encode = outcome =>
-  switch outcome {
-  | Ran({tab, returned, page}) =>
-    JSON.Encode.object(
-      Dict.fromArray([
-        ("type", str("ran")),
-        ("tab", str(tab)),
-        ("returned", returned),
-        ("page", encodePageSlot(page)),
-      ]),
-    )
-  | Failed({tab, code, error, where, page}) =>
-    JSON.Encode.object(
-      Dict.fromArray([
-        ("type", str("failed")),
-        ("tab", str(tab)),
-        ("code", str(Errors.value(code))),
-        ("error", str(error)),
-        ("where", str(where)),
-        ("page", encodePageSlot(page)),
-      ]),
-    )
+let wallChecked = page =>
+  switch page {
+  | Some(Unchecked) => false
+  | _ => true
   }
+
+let encode = outcome => {
+  let common = switch outcome {
+  | Ran({tab, returned, page}) =>
+    [("tab", str(tab)), ("returned", returned)]
+    ->Array.concat([("wallChecked", JSON.Encode.bool(wallChecked(page)))])
+    ->Array.concat(blockedField(page))
+  | Failed({tab, code, error, where, page}) =>
+    [
+      ("tab", str(tab)),
+      ("code", str(Errors.value(code))),
+      ("error", str(error)),
+      ("where", str(where)),
+      ("wallChecked", JSON.Encode.bool(wallChecked(page))),
+    ]->Array.concat(blockedField(page))
+  }
+  JSON.Encode.object(Dict.fromArray(common))
+}
 
 /// Is a known vendor's wall on this page?
 ///
@@ -125,7 +150,7 @@ let blockedHint =
 /// probe as the only work here nobody asked for: two round trips, a title and a
 /// selector match, on every call. A caller driving one page across many calls
 /// pays them every time, and that caller is the one `checkWall` is for.
-let look = async (page, tab, checkWall) =>
+let look = async (page, checkWall) =>
   if !checkWall {
     Some(Unchecked)
   } else {
@@ -137,7 +162,6 @@ let look = async (page, tab, checkWall) =>
           name: blocker.signature.name,
           kind: blocker.signature.kind,
           url: blocker.probe.url,
-          tab,
           hint: blockedHint,
         }),
       )
@@ -178,14 +202,14 @@ let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true)
 
   let outcome = switch await Script.execute(source, page) {
   | returned =>
-    Ran({tab, returned: returnedOrNull(returned), page: await look(page, tab, checkWall)})
+    Ran({tab, returned: returnedOrNull(returned), page: await look(page, checkWall)})
   | exception Errors.Passenger({code, message, detail}) =>
     Failed({
       tab,
       code,
       error: message,
       where: detail->Option.getOr(""),
-      page: await look(page, tab, checkWall),
+      page: await look(page, checkWall),
     })
   }
 
