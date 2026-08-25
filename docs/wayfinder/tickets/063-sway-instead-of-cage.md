@@ -2,7 +2,7 @@
 id: 063
 title: Sway replaces cage as the nested compositor
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -189,3 +189,36 @@ A `PASSENGER_STATE` deep enough to push the wayvnc control socket past the
 File name too long` -- and the session comes up anyway, with a browser, a record
 and no VNC at all. Pre-existing, nothing to do with the swap, and the failure is
 silent in exactly the way this project keeps deciding it will not tolerate.
+
+## Answer
+
+*Closed 2026-08-25.* The three checks that needed a human all passed, on a real
+handoff driven from this repo's own MCP server.
+
+A windowed browser with its toolbar arrived without the CDP call having anything
+to undo -- sway does not fullscreen what it starts -- and the viewer resized the
+nested output continuously, `1423x1730` at scale 1.6 into a logical `889x1081`,
+so 002 and 003 survived the swap. The fingerprint did not move: `screen
+1280x720`, and `ANGLE (Intel, Mesa Intel(R) Graphics (LNL), OpenGL ES 3.2)`,
+identical to the README's measurement under cage. The clipboard crosses, which
+is [062](062-across-the-vnc-boundary.md)'s close and the reason this was worth
+doing.
+
+Two things the testing changed:
+
+**The tiling is real and was left alone.** A second window (the human pressed
+Ctrl+N) tiles beside the first rather than stacking over it. Nobody minded, so
+no `for_window ... floating enable` was added; if a handoff ever wants a
+stacking desktop, that is the one line.
+
+**sway binds no keys, and now cannot start.** It has none compiled in and `-c`
+keeps the distribution's config out, so every keystroke belongs to the browser.
+A test asserts the generated config carries no `bindsym`, `bindcode`,
+`bindswitch`, `bindgesture` or `floating_modifier`, because the guarantee was
+worth more than the observation.
+
+The fullscreen + `navigator.keyboard.lock()` design this was heading for was
+abandoned, and that is the useful finding. Ctrl+N looked like it leaked to the
+host; it turned out the noVNC canvas simply did not have focus on open, and a
+Chrome *app-mode* window never claims Ctrl+N in the first place. One
+`rfb.focus()` on connect replaced the whole scheme.

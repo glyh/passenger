@@ -2,7 +2,7 @@
 id: 062
 title: Clipboard, IME and drag-and-drop do not cross the VNC boundary
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee:
 blocked_by: []
 ---
@@ -99,3 +99,39 @@ of this ticket.
 is the other ticket whose answer is "not cage". They should be decided
 together, since both are paying for the same choice and neither is worth
 replacing a compositor for on its own.
+
+## Answer
+
+*Closed 2026-08-25.* All three crossed, and they needed fixes at two different
+layers -- which is why the ticket was worth keeping whole.
+
+**Clipboard: works, both directions, verified by a human.** It took the
+compositor swap ([063](063-sway-instead-of-cage.md)) for a data-control protocol
+to exist at all, and then a bridge in `viewer.html`, which had been attaching a
+framebuffer and wiring nothing else. The direction that is not obvious: host to
+session cannot be a `paste` listener, because noVNC calls `preventDefault` on
+every key it forwards, so Ctrl+V never becomes a paste event on the host page.
+The host clipboard is read when the viewer window *gains focus* instead. That is
+a sequence a human has to be told -- copy, click the window, paste -- and it is
+now in `references/tabs-and-lanes.md`.
+
+**IME: reduced to the clipboard, and left there.** Nothing in the session
+composes and no IME can attach, so a human cannot *type* Chinese into the
+browser they are handed. They can paste it, which is what the clipboard fix
+bought and what the skill now says. An in-session IME remains unbuilt and
+unasked-for; sway offers `text-input-v3` and `input-method-v2`, so the door is
+open if anyone ever wants it.
+
+**Drag: split in two, and both halves are settled.** Inside the page -- a
+slider, a reorder, an HTML5 drop target -- it works, tested by hand; wayvnc
+feeds real pointer motion, so the concern inherited from ticket 004's teleporting
+CDP cursor did not apply. Across the boundary it does not work and will not: RFB
+carries no file transfer. What was actually broken there was that a dropped file
+made the *host* browser navigate to it, which looked like something happening;
+the viewer now refuses `dragover`/`drop` outright.
+
+The capability behind the drag was never missing. A file input in the nested
+page opens a chooser on the host desktop, reaches any path, and delivers the
+file to the nested renderer -- measured end to end with a 133-byte `wifi.md`.
+So the thing to tell a human is "click the upload button", never "drag it in",
+and that is documented rather than left to be rediscovered.

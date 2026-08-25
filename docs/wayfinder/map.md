@@ -86,6 +86,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [Sway replaces cage as the nested compositor](tickets/063-sway-instead-of-cage.md)
+  — cage was never the light one (33 MiB under sway on a 896 MiB closure) and
+  cost three tickets: no data-control for wayvnc's clipboard, no input-method
+  for an IME, one output forever. sway answers on a socket, and the config it
+  runs binds no keys, by test. The compositor no longer dies with its child, so
+  the session script kills it; `$PPID` still reaches it, measured.
+- [Clipboard, IME and drag-and-drop across the VNC boundary](tickets/062-across-the-vnc-boundary.md)
+  — clipboard crosses both ways, read from the host on focus because noVNC
+  swallows the paste keystroke; CJK goes in by pasting, since nothing in the
+  session composes; in-page dragging works, cross-boundary never will, and files
+  go in through the page's own file chooser, which opens on the host desktop.
+
 - [Sizing the cage output to the viewer's real window and scale](tickets/002-vnc-output-sizing.md)
   — the viewer owns the size and asks for it over RFB, continuously; this
   side keeps only the scale. The local presenter is now the viewer page in
