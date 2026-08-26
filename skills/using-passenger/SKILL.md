@@ -64,8 +64,8 @@ start again.
 
 ## One door, and it hands you the page
 
-There is no `fetch`. `script` is the whole surface onto a page: it navigates,
-it drives, and it returns what you tell it to.
+There is no `fetch` *tool*. `script` is the whole surface onto a page: it
+navigates, it drives, and it returns what you tell it to.
 
     script(lane, source: """
         await Page.goto("https://example.com");
@@ -89,13 +89,13 @@ failure:
   no `(async () => {...})()` to add yourself.
 
 The ones that bite afterwards -- `Page.evaluate` silently answering `undefined`
-when handed a string, the Node builtins that are *not* in scope, the live
-handles that cannot cross back -- are in `references/writing-scripts.md`.
+when handed a string, what is in scope around your source, the live handles
+that cannot cross back -- are in `references/writing-scripts.md`.
 **Trigger:** open it the moment a script fails to parse, a call throws something
 other than a wall or a timeout, or an `evaluate` comes back `undefined`.
 
-**This server does not interpret pages.** It used to: there was a `fetch` with
-an `article` mode and a `dom` mode, and choosing between them was the caller's
+**This server does not interpret pages.** It used to: there was a `fetch` tool
+with an `article` mode and a `dom` mode, and choosing between them was the caller's
 problem while getting them wrong was everyone's. Extraction is a judgement
 about what a page *means*, and that judgement is yours -- you know what you
 asked for and what you need from it. What this side does is navigate, measure

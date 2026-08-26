@@ -940,3 +940,15 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   now. The union stays on the server side, where an exhaustive `switch` still
   guarantees a member cannot fail to reach the wire. See [Flatten the script
   reply](tickets/073-flatten-the-script-reply.md).
+
+- **passenger runs on the user's own machine, and the script door is not a
+  sandbox.** Two rules acted as though somebody hostile were on the other side
+  of the wall: an allowlist of names in a bare `vm` context with `fetch` left
+  off by hand, and a per-operation timeout clamped 1..600 with a forced 60s
+  default. Neither enforced anything -- `Script.res` had said "not a sandbox,
+  and not pretending to be one" the whole time -- while both cost a caller with
+  a legitimate need. A script now runs in this context with node's globals in
+  scope, plus `Page`, `fs`, `path`, `require` and a stderr `console`; the
+  timeout is `operationTimeoutSeconds`, optional and unbounded. The premise is
+  load-bearing, so it is now the second paragraph of the README. See [The
+  script door runs on your machine](tickets/074-local-machine-scope.md).

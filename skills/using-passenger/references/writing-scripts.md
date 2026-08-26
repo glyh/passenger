@@ -6,32 +6,30 @@ are not about the page.
 
 ## What you are writing
 
-Your source runs in a `node:vm` context with a short list of names in scope and
-nothing else. There is no `require`, no `import`, no module wrapper, and no
-`window`:
+Your source runs as the body of an async function inside the server's own
+process, with the server's own globals in scope. **passenger runs on your
+machine**, so there is no sandbox here and none is pretended: `fetch`, `URL`,
+`TextEncoder`, `Buffer`, `process`, `structuredClone`, `AbortController`, the
+timers -- if node has it, you have it. There is no `window`, because this is
+not the page; reach the page through `Page`.
+
+Five names are handed in on top of that:
 
     Page                    a Playwright Page, and the whole point
     console                 all of it, routed to stderr -- see below
     fs                      node:fs/promises
     path                    node:path
-    setTimeout, clearTimeout
+    require                 node's, so `require('node:os')` and friends work
 
-Everything V8 supplies is there: `JSON`, `Math`, `Promise`, `Object`, `Array`,
-`Intl`. Everything *Node* adds is not, and the list is longer than it looks --
-measured, all `undefined`: `URL`, `URLSearchParams`, `TextEncoder`,
-`TextDecoder`, `Buffer`, `atob`, `btoa`, `structuredClone`, `AbortController`,
-`process`, `require`. A vm context is a bare V8 realm, so anything you would
-call a "Node builtin" has to be reached another way.
+`import` is not available as a statement (you are inside a function, not a
+module), but `require` covers the same ground and dynamic `import()` works.
 
-Two of those have easy answers. Base64 belongs to `fs`, which decodes on the way
-out -- `await fs.writeFile(path, b64, 'base64')` -- and anything you would want
-`URL` or `TextEncoder` for, the *page* has, so do it inside a
-`Page.evaluate` and return the result.
-
-**`fetch` is absent deliberately**, not as an oversight of the same kind. It
-would be a second way onto the web that goes around the browser -- no cookies,
-no session, none of what this tool exists for. `Page.request` is the sanctioned
-one and it goes through the browser's own context.
+**`fetch` exists but is almost never what you want.** It goes around the
+browser -- no cookies, no session, none of the logged-in Chrome this tool
+exists for -- so a page that needs any of that will hand it a login screen or a
+challenge. `Page.request` is the one to reach for: same API shape, and it goes
+through the browser's own context. `fetch` used to be left out of scope to make
+that point; it is in scope now, and the point is unchanged.
 
 ## The ones that bite once
 
@@ -65,10 +63,13 @@ that itself followed an evaluation raises `Execution context was destroyed, most
 likely because of a navigation`. Put the `goto` inside the per-item helper and
 wait once after it before reading.
 
-**`timeoutSeconds` is a budget per Playwright operation, not per script.** It
-defaults to 60, so a script doing thirty scroll rounds is nowhere near it while
-a single screenshot of a tall page can be. Raise it on the call that contains
-one slow operation, not on the call that contains many quick ones.
+**`operationTimeoutSeconds` is a budget per Playwright operation, not per
+script.** Omit it and each `goto`, `click` or `waitForSelector` gets
+Playwright's own 30s; a script doing thirty scroll rounds is nowhere near that
+while a single screenshot of a tall page can be. Raise it on the call that
+contains one slow operation, not on the call that contains many quick ones, and
+pass 0 for no limit. Nothing bounds your *script* -- a loop that never calls
+Playwright runs until the client gives up.
 
 **A missing `tab` does not fail -- it answers.** Omit `tab` and you get a fresh
 blank page, and the script runs happily against `about:blank` and returns zeroes

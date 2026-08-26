@@ -58,6 +58,20 @@ return { title: await Page.title(), emoji: '😀 腾冲',
   let _ = await call("script", {"lane": lane, "tab": tab, "source": "var x = 1;\nvar y = (;"})
   let _ = await call("script", {"lane": lane, "tab": tab, "source": "return Page.locator('body');"})
 
+  // What ticket 074 opened up, over the wire rather than in a unit test: node's
+  // own globals are in scope, `require` reaches a module, and the renamed
+  // per-operation budget is accepted by the schema at the door.
+  let _ = await call(
+    "script",
+    {
+      "lane": lane,
+      "tab": tab,
+      "source": "return [typeof fetch, typeof process, require('node:os').platform()].join();",
+      "checkWall": false,
+      "operationTimeoutSeconds": 5,
+    },
+  )
+
   let _ = await call("listTabs", {"lane": lane})
   let _ = await call("script", {"lane": lane, "source": "return 'a second tab';", "checkWall": false})
   let _ = await call("listTabs", {"lane": lane})

@@ -4,6 +4,15 @@ Generic web access through a real, logged-in Chrome that sites can't
 distinguish from your daily driver — with a human handoff when a site puts up a
 challenge the agent shouldn't (and shouldn't try to) solve.
 
+**It runs on your machine.** Not a service, not a shared host: one process on
+your laptop, launched by your own agent, driving your own Chrome with your own
+logins in it. Everything below rests on that. A caller's `script` is code you
+asked for, run in your own process with your own globals in scope -- there is
+no sandbox here and none is pretended, because there is nobody on the other
+side of the wall to keep out. Ticket 074 removed the last two rules that acted
+as though there were. If you ever put this behind a socket somebody else can
+reach, that premise is gone and so is the design.
+
 It is an MCP server and nothing else. Register it with Claude Code for every
 project:
 
@@ -26,12 +35,15 @@ window on screen. Everything else this used to offer at a terminal -- `script`,
 copy of a tool, and nobody had ever run any of it. See
 `docs/wayfinder/tickets/057-delete-the-cli.md`.
 
-**There is no `fetch`.** There was, with an `article` mode and a `dom` mode,
-and ticket 046 retired both: extraction is a judgement about what a page means,
+**There is no `fetch` tool.** There was, with an `article` mode and a `dom`
+mode, and ticket 046 retired both: extraction is a judgement about what a page means,
 and this tool's whole design says judgement belongs to the caller. `script` is
 the only door onto a page — it navigates, drives and hands back what you
 return. The recipes for reading one, including the DOM walk that used to be
-`dom` mode, live in `skills/using-passenger/`.
+`dom` mode, live in `skills/using-passenger/`. (The *function* `fetch` is in a
+script's scope, along with the rest of node's globals -- but it goes around the
+browser and therefore around the session, so `Page.request` is the one you
+want.)
 
 ## As an MCP server
 

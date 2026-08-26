@@ -154,13 +154,22 @@ cleanup.
   that remembers is a second memory owned by the wrong party. The builtin signature table is
   fixed at build time and identical on every machine.
 - **One door onto a page.** `script` — no tool per Playwright verb (ticket 004), no `fetch`
-  (046). Adding a second way to do something already reachable through `script` needs a
+  tool (046). Adding a second way to do something already reachable through `script` needs a
   ticket's worth of justification.
-- **What crosses that door is JavaScript, and what comes back is JSON.** A caller's source
-  runs in a `node:vm` context with `Page` bound, plus the short list `Script.globals` names --
-  and `fetch` is deliberately absent from it, because a second way onto the web that goes
-  around the browser is what ticket 046 deleted. `Script.crossable` refuses only what is not a
-  JSON document -- a cycle, a BigInt. It does *not* refuse a live Playwright handle, and the
+- **This runs on the user's own machine, and the script door is not a sandbox.** One process
+  on their laptop, their agent, their logged-in Chrome. Ticket 074 rests the design on that
+  and deletes the two rules that pretended otherwise: a caller's source now runs in *this*
+  context with node's own globals in scope, and the per-operation timeout is optional and
+  unbounded. `Script.res` had said "deliberately not a sandbox, and not pretending to be one"
+  for as long as the allowlist existed, which is the point -- a list that stops an accident
+  but not an intent costs a caller with a legitimate need and buys nothing. Two things that
+  look like restrictions survive because they are not: `console` is rebuilt onto stderr
+  (stdout is the JSON-RPC transport, so this is protocol correctness), and `fetch`, while now
+  in scope, is still the wrong answer -- it goes around the browser and therefore around the
+  session, which is what ticket 046 was actually about. Do not re-add a wall here without a
+  ticket that first says who is on the other side of it.
+- **What crosses that door is JavaScript, and what comes back is JSON.** `Script.crossable`
+  refuses only what is not a JSON document -- a cycle, a BigInt. It does *not* refuse a live Playwright handle, and the
   comment there says why the C# rule that did was an inheritance rather than a fact about this
   runtime: Playwright's JavaScript client ships `toJSON`, so a returned handle is 64 bytes
   that name themselves, and a rule that guessed at one would sooner refuse a site's own JSON.

@@ -9,8 +9,10 @@
 //
 // **The one place the port changes the caller's contract, again.** The source
 // was Python, then C# on Roslyn, and is JavaScript on `node:vm` here. The shape
-// of the door is unchanged: one name is bound, `return` hands a value back, and
-// what may cross is still JSON and nothing else. What the caller writes is
+// of the door is unchanged where it counts: `Page` is bound, `return` hands a
+// value back, and what may cross is still JSON and nothing else. What *is*
+// different since ticket 074 is how much else is in scope -- everything this
+// process has, because this process is the caller's own machine. What the caller writes is
 // `await Page.goto(url)` where the C# door wanted `await Page.GotoAsync(url)` --
 // camelCase because a Playwright member in this runtime is camelCase, which is
 // the same reasoning that made it PascalCase there.
@@ -83,14 +85,21 @@ let crossable = value => {
 
 // --- compiling and running --------------------------------------------------
 
+/// The names the wrapper takes, in the order `execute` applies them.
+///
+/// A list rather than a record now: they are the parameters of an async
+/// function, so their spelling here and their order there have to agree, and
+/// one array is the only place that is true.
+let bound = ["Page", "console", "fs", "path", "require"]
+
 /// Compile, reporting a syntax error against the caller's own line numbers.
 ///
-/// The line needs no offset: the async IIFE `Node.wrap` puts round the source
+/// The line needs no offset: the async wrapper `Node.wrap` puts round the source
 /// carries no newline before the body, so line 1 is still line 1. V8 puts the
 /// line on the *first* line of the stack -- `<script>:1` -- rather than in the
 /// message, which is where this reads it from.
 let compile = source =>
-  switch Node.script(Node.wrap(source), {"filename": scriptPath}) {
+  switch Node.script(Node.wrap(source, ~names=bound), {"filename": scriptPath}) {
   | compiled => compiled
   | exception JsExn(e) =>
     let line =
@@ -113,7 +122,7 @@ let compile = source =>
 /// Reported against the source the caller sent, not the machinery it was run
 /// in, so the line numbers are the ones they can see.
 ///
-/// One frame is always dropped: the IIFE's own closing `})()` sits one line past
+/// One frame is always dropped: the wrapper's own closing `})` sits one line past
 /// the end of the caller's source, so V8 reports the call itself as a frame the
 /// caller did not write. A line number past the end of the source is that
 /// wrapper and nothing else, since the wrapper adds exactly one line.
@@ -168,33 +177,50 @@ let raised = (e, source) =>
 
 /// What a script sees.
 ///
-/// `Page` and a short list beside it, which is this runtime's answer to the C#
-/// door's `Imports`. A vm context starts with V8's intrinsics -- JSON, Math,
-/// Promise, Object -- and none of Node's host objects, so anything a recipe in
-/// the skill reaches for has to be put here by name.
+/// **Everything this process sees, plus `Page`.** Since ticket 074 the source
+/// runs in *this* context rather than a fresh `vm` one, so `fetch`, `URL`,
+/// `Buffer`, `process`, the timers and every other Node global are simply
+/// there, because they are there for this file too.
 ///
-/// The list is what those recipes need and stops there. `console` because a
-/// script's own tracing has to go somewhere, and **it is rebuilt so that all of
-/// it goes to stderr**. Handing the real `console` over looked right and was
-/// not: `console.log` writes to stdout, which is the JSON-RPC transport, so one
-/// tracing line in a caller's script corrupted the stream it was travelling on.
-/// Measured after the fact -- the comment here claimed stderr for a while before
-/// the code did.
-/// `fs`/`path` for the same reason the C# door imported `System.IO`: the walker
-/// and the picture measurement are read off disk, and bytes that cannot cross
-/// back as JSON are written out. Timers because a script that needs to wait
-/// without a page in hand has nothing else.
+/// That is a reversal of two rules and it is worth being plain about both.
+/// There was a list here -- `Page`, `console`, `fs`, `path`, and the two timers
+/// -- and `fetch` was left off it by name, from ticket 046, on the grounds that
+/// a second way onto the web going around the browser has none of the cookies
+/// and none of the session this tool exists for. That reasoning is still true
+/// about *the design*: `Page.request` is the sanctioned way onto the web and a
+/// recipe that reaches for `fetch` instead has misunderstood the tool. What was
+/// never true is that leaving the name out *enforced* anything. This file's own
+/// header said so -- "deliberately not a sandbox, and not pretending to be one:
+/// a caller-supplied script runs in this process either way, and what is
+/// missing here is still reachable by other means." A name that a determined
+/// script could reach through `process.binding` or a `require` away was
+/// stopping an accident, at the price of a real one: a caller with a legitimate
+/// need for a Node global got a `ReferenceError` and no way round it.
 ///
-/// **`fetch` is deliberately not here.** It would be a second way onto the web
-/// that goes around the browser entirely -- no cookies, no session, none of what
-/// this tool exists for -- and ticket 046 deleted exactly that. `Page.request`
-/// is the sanctioned one, and it goes through the browser's own context.
+/// **passenger runs on the caller's own machine**, launched by their own agent,
+/// against their own logged-in Chrome. There is nobody on the other side of
+/// that wall to keep out, which is the whole of ticket 074's argument.
 ///
-/// Deliberately not a sandbox, and not pretending to be one: a caller-supplied
-/// script runs in this process either way, and what is missing here is still
-/// reachable by other means.
-/// Every method on it, pointed at stderr. Not a subset: a script reaching for
-/// `console.table` or `console.dir` must not be the one that breaks the wire.
+/// Four names are still handed in, and none of them is a restriction:
+///
+///   `Page`      the door itself. The one thing here that is Passenger's.
+///   `console`   **rebuilt so that all of it goes to stderr**, and this one is
+///               not negotiable at any level of trust. `console.log` writes to
+///               stdout, which is the JSON-RPC transport, so one tracing line
+///               in a caller's script corrupts the stream it is travelling on.
+///               Passed as an argument precisely so it *shadows* the real
+///               global rather than hoping the caller avoids it.
+///   `fs`/`path` bound for convenience, because every recipe in the skill uses
+///               them -- the walker is read off disk and bytes that cannot
+///               cross back as JSON are written out. `require` reaches the same
+///               modules; these two save the ceremony.
+///   `require`   this file's own, from `createRequire`. ES module scope has no
+///               `require` global to inherit, so a script that wants a module
+///               would otherwise have nothing but dynamic `import`.
+///
+/// Every method on `console`, pointed at stderr. Not a subset: a script
+/// reaching for `console.table` or `console.dir` must not be the one that
+/// breaks the wire.
 let quietConsole: 'a = %raw(`(() => {
   const out = {};
   for (const name of Object.keys(console)) {
@@ -207,17 +233,11 @@ let quietConsole: 'a = %raw(`(() => {
 
 @module("node:fs/promises") external fs: 'a = "default"
 @module("node:path") external path: 'a = "default"
-@val external setTimeout_: 'a = "setTimeout"
-@val external clearTimeout_: 'a = "clearTimeout"
+@module("node:module") external createRequire: string => 'a = "createRequire"
 
-let globals = page => {
-  "Page": page,
-  "console": quietConsole,
-  "fs": fs,
-  "path": path,
-  "setTimeout": setTimeout_,
-  "clearTimeout": clearTimeout_,
-}
+let require = createRequire(%raw(`import.meta.url`))
+
+let apply: ('f, 'a, 'b, 'c, 'd, 'e) => promise<'r> = %raw(`(f, a, b, c, d, e) => f(a, b, c, d, e)`)
 
 /// Run the script and return what it returned, checked.
 ///
@@ -225,9 +245,8 @@ let globals = page => {
 /// script that threw, and a value that cannot leave -- each naming which one it
 /// was, since the caller's next move differs for each.
 let execute = async (source, page) => {
-  let compiled = compile(source)
-  let context = Node.createContext(globals(page))
-  switch await compiled->Node.runInContext(context) {
+  let body = compile(source)->Node.runInThisContext
+  switch await apply(body, page, quietConsole, fs, path, require) {
   | returned => crossable(returned)
   | exception JsExn(e) => throw(raised(e, source))
   }

@@ -28,16 +28,54 @@ T.testAsync("the script can see the page", async () => {
   }
 })
 
-T.testAsync("a name nobody bound is not in scope", async () => {
-  // `read` was bound beside `Page` until ticket 046 retired extraction, and
-  // `fetch` is left out on purpose -- it would be a way onto the web that goes
-  // around the browser. Both fail the same way, at the caller's own line.
-  switch await Script.execute("return fetch('https://example.com');", Nullable.null) {
+T.testAsync("this process's own globals are in scope", async () => {
+  // The reversal ticket 074 made. `fetch` is the pointed case: it was left out
+  // by name from ticket 046 and this test asserted the `ReferenceError` that
+  // came of it -- which was measuring the wall rather than anything true. The
+  // *design* is unchanged, and `Page.request` is still the sanctioned way onto
+  // the web; what went is the pretence that a missing name enforced it on a
+  // process running on the caller's own machine.
+  //
+  // Typeof rather than a call, deliberately: this suite does not touch the
+  // network, and the old version of this test spent 258ms reaching example.com
+  // to prove a negative.
+  T.equal(
+    await Script.execute("return [typeof fetch, typeof process, typeof URL].join();", Nullable.null),
+    "function,object,function"->Obj.magic,
+  )
+})
+
+T.testAsync("a name genuinely nobody bound is still a ReferenceError", async () => {
+  // The other half: scope is this process's, not everything imaginable. Still
+  // reported at the caller's own line.
+  switch await Script.execute("return notAName;", Nullable.null) {
   | _ => T.ok(false)
   | exception Errors.Passenger({code, message}) =>
     T.equal(code, ScriptRaised)
-    T.ok(message->String.includes("fetch"))
+    T.ok(message->String.includes("notAName"))
   }
+})
+
+T.testAsync("require reaches a module", async () => {
+  // ES module scope has no `require` to inherit, so a script that wants one
+  // has to be handed it -- `fs` and `path` are the same modules, kept by name
+  // because every recipe in the skill uses them.
+  T.equal(
+    await Script.execute("return typeof require('node:os').platform();", Nullable.null),
+    "string"->Obj.magic,
+  )
+})
+
+T.testAsync("console is shadowed, not inherited", async () => {
+  // The one thing that is not a matter of trust: stdout is the JSON-RPC
+  // transport, so a caller's `console.log` must not reach it. It is passed as
+  // an *argument* named `console` precisely so it shadows the real global --
+  // this asserts the identity, since asserting the absence of stdout bytes
+  // from inside the process running the test is not something a test can see.
+  T.equal(
+    await Script.execute("return console.log === globalThis.console.log;", Nullable.null),
+    false->Obj.magic,
+  )
 })
 
 T.test("a value that is not JSON is refused", () => {

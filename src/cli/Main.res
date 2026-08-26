@@ -55,6 +55,15 @@ let int = (args, name, ~fallback) =>
   ->Option.map(f => f->Float.toInt)
   ->Option.getOr(fallback)
 
+/// An integer the caller either sent or did not, with no stand-in for absence.
+///
+/// `int` takes a fallback, which is right when the tool has a default worth
+/// having. `operationTimeoutSeconds` since ticket 074 does not: absent means
+/// "leave Playwright's own default alone", and 0 means "no limit", so a
+/// fallback would have to invent one of the two.
+let intOpt = (args, name) =>
+  args->Dict.get(name)->Option.flatMap(v => v->JSON.Decode.float)->Option.map(f => f->Float.toInt)
+
 let requiredInt = (args, name) =>
   switch args->Dict.get(name)->Option.flatMap(v => v->JSON.Decode.float) {
   | Some(f) => f->Float.toInt
@@ -144,11 +153,13 @@ For markdown with links and headings, run scripts/markdown.js from the
         "type": "string",
         "description": "Which tab to run against, from a previous reply or from listTabs. Omit for a fresh blank tab.",
       },
-      "timeoutSeconds": {
+      "operationTimeoutSeconds": {
         "type": "integer",
-        "minimum": 1,
-        "maximum": 600,
-        "description": "Per-call budget for each Playwright operation.",
+        "minimum": 0,
+        "description": `How long *one* Playwright operation may wait -- a \`goto\` for the load, a
+\`click\` for the button to appear. Not a budget for your script: ten clicks at
+60 is ten minutes, and a loop that never calls Playwright is not interruptible
+at all. Omit for Playwright's own default of 30s; 0 for no limit.`,
       },
       "checkWall": {
         "type": "boolean",
@@ -362,7 +373,7 @@ let call = async (name, a) =>
       ~source=a->string("source"),
       ~lane=a->string("lane"),
       ~tab=?a->optionalString("tab"),
-      ~timeoutS=a->int("timeoutSeconds", ~fallback=60),
+      ~operationTimeoutS=?a->intOpt("operationTimeoutSeconds"),
       ~checkWall=a->bool("checkWall", ~fallback=true),
     )
     json(Service.encode(outcome))

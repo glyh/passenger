@@ -180,13 +180,7 @@ let returnedOrNull: 'a => JSON.t = %raw(`v => (v === undefined ? null : v)`)
 /// 004). What this function adds is the envelope: which tab, a bounded clock,
 /// and a reading of the ending page -- so a challenge met halfway through a
 /// sequence comes back as `blocked`, not as a puzzling empty string.
-let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true) => {
-  if timeoutS < 1 {
-    // The bound pydantic held with `Field(ge=1)`, and the MCP schema holds
-    // again at the door. Kept here because this is the function that would
-    // hand a nonsensical budget to Playwright.
-    Errors.fail(ScriptInvalid, "timeoutSeconds must be at least 1")
-  }
+let run = async (~source, ~lane, ~tab as named=?, ~operationTimeoutS=?, ~checkWall=true) => {
 
   let _ = await Lanes.sweep()
   Lanes.require(lane)->ignore
@@ -200,7 +194,19 @@ let run = async (~source, ~lane, ~tab as named=?, ~timeoutS=60, ~checkWall=true)
   // selector that never appears ends the call instead of the session. A script
   // that loops without calling Playwright is not interruptible; that is the
   // honest limit of running code in-process.
-  page->Pw.setDefaultTimeout(timeoutS * 1000)
+  //
+  // Only when asked, since ticket 074. It defaulted to 60s and was clamped to
+  // 1..600 -- a bound inherited from pydantic's `Field(ge=1)` and never
+  // revisited -- and both were doing less than the name suggested. This is a
+  // budget for one *operation*, not for the script: ten clicks at 60 is ten
+  // minutes, and a `while(true)` is forever either way. So there was nothing to
+  // be gained by capping it at ten minutes on a machine that is the caller's
+  // own, and untouched it means Playwright's own default rather than this
+  // side's guess. Zero is Playwright's spelling of no limit, and reaches it.
+  switch operationTimeoutS {
+  | Some(seconds) => page->Pw.setDefaultTimeout(seconds * 1000)
+  | None => ()
+  }
   let tab = await Session.targetId(session, page)
 
   let outcome = switch await Script.execute(source, page) {
