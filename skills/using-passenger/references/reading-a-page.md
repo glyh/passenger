@@ -62,8 +62,10 @@ the page, where the browsing context's own trust applies:
         return await r.text();
     }, url);
 
-(That `fetch` is the *page's*, which is the point. There is none in your own
-scope -- see `writing-scripts.md`.)
+(That `fetch` is the *page's*, which is the point -- it runs inside the tab, so
+it carries the tab's cookies, its origin and its certificate exception. You do
+have a `fetch` of your own in scope, and it has none of those, which is why it
+is the wrong one here.)
 
 For bytes rather than text -- a PDF, an image, a font -- come back base64 and
 decode on this side. **Build the string in chunks:** spreading a whole file
@@ -76,7 +78,7 @@ kilobytes, which is under every PDF worth fetching this way.
         let s = '';
         for (let i = 0; i < b.length; i += 0x8000)
             s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
-        return btoa(s);                    // btoa is the page's; you have none
+        return btoa(s);                    // the page's btoa; you also have one
     }, url);
     await fs.writeFile(path, b64, "base64");   // fs decodes on the way out
 
