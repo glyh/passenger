@@ -93,6 +93,34 @@ up to the next quote truncates any field containing an escaped quote, silently,
 keeping the half before it. If a captured field comes back with `\uXXXX` in it,
 that is the tell -- do not reach for an unescape helper, reach for the parser.
 
+**Parse fetched HTML too -- and know what `innerText` does once you have.** The
+cheapest way to run selectors over something `Page.request` fetched is to hand
+the string to the page and let it build a real document:
+
+    const html = await (await Page.request.get(url)).text();
+    const got = await Page.evaluate((h) => {
+      const doc = new DOMParser().parseFromString(h, 'text/html');
+      return { title: doc.title, rows: [...doc.querySelectorAll('.row')].map(e => e.textContent.trim()) };
+    }, html);
+
+That gives you `querySelector`, decoded entities, and correct container
+boundaries, none of which a regex over the raw bytes gets right. Two things
+about it bite:
+
+- **A parsed document has no layout, so `innerText` has no line breaks.** It is
+  not the `innerText` you get from a rendered page -- it comes back closer to
+  `textContent`, one unbroken run. Splitting it on `\n` yields a single
+  enormous "line", so every line-oriented filter matches that one line and
+  returns the whole page. Measured: a filter meant to pick six rows off a
+  listing returned the entire 200 KB document, four times over. Select the
+  nodes you want instead of slicing text.
+- **A regex over the raw HTML misses any value split across tags.** Markup sits
+  between a number and its unit far more often than it looks: one listing page
+  contains `元/月` thirty times while `/([\d,]+)\s*元\/月/` matches it zero
+  times, because each price is `<em>1900</em> 元/月`. The tell is a unit whose
+  occurrence count far exceeds your number-plus-unit hits -- it reads exactly
+  like a page with no prices on it.
+
 **A page's own state blob is not always JSON.** `window.__INITIAL_STATE__` and
 friends are JavaScript *expressions*, so they can carry `undefined` and
 `new Map([])`, which `JSON.parse` refuses. Substitute before parsing rather than
