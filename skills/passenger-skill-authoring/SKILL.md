@@ -5,8 +5,8 @@ description: |
   evaluating whether an existing one earns its keep. Trigger phrases: "write a
   skill for <site>", "we keep re-learning this site", "this site's skill did not
   help", "is this skill worth keeping", "A/B two versions of a scraping skill".
-  Covers what to probe for, which findings to record, how to phrase them, and
-  how to measure whether the skill helped.
+  Covers what to probe for, which findings to record, how to phrase them, where
+  a run's evidence is logged, and how to measure whether the skill helped.
   Does NOT cover performing a single scrape, and does NOT cover any individual
   site's mechanics — those belong in that site's own skill. For driving the
   browser at all, use `using-passenger` instead.
@@ -20,7 +20,7 @@ into `description`, and body text written as revision history ("the previous
 record has been overturned") — map to one rule that was already written and one
 that should have been. The author had read this document both times.
 
-⇒ **Re-read section 9 line by line before committing the file.** Do not rely on
+⇒ **Re-read section 10 line by line before committing the file.** Do not rely on
 remembering the rules. A checklist is worth something at the moment it is
 executed, not at the moment it is written.
 
@@ -157,6 +157,11 @@ abnormal.**
 12/37 above means **the dedup key must have a degraded branch**, or the same
 item is counted repeatedly or the batch is dropped.
 
+**`SKILL.md` carries one baseline — the current one.** Superseding it does not
+mean the old one was worthless: it is what "abnormal" was judged against, so the
+previous run's numbers stay in that run's file under `evals/` (section 8), and
+`SKILL.md` never accumulates two.
+
 ⚠️ **State explicitly which shortfalls are not failures** (image-only posts
 never had text), or the next person will fix something that is not broken.
 
@@ -192,7 +197,7 @@ belonging to no single page:
 cannot reach X" measured while logged out may become three readable page types
 once logged in. A skill written from a logged-out session can be **wrong for a
 whole chapter**, and confidently so. Every "cannot reach" must state **which
-state it was measured in** (section 9).
+state it was measured in** (section 10).
 
 ## 5. Where the good material is matters as much as how to fetch it
 
@@ -275,6 +280,10 @@ have expired.
 **Test: delete every date and every "previously / originally / now changed to".
 Do the sentences still stand?** If not, it was a changelog.
 
+**Deleted, not lost.** What comes out here is the run's evidence, and it is
+worth keeping — in `evals/`, which is section 8. "Overturned", "first attempted,
+then retried", "we used to worry about" are all correct sentences *there*.
+
 ### File layout
 
 **`SKILL.md`:**
@@ -291,7 +300,87 @@ Do the sentences still stand?** If not, it was a changelog.
 **`references/`:** one file **per page type** (listing, detail, comments…),
 plus one file for **this site's own** scripting traps. Nothing generic.
 
-## 8. Evaluating a scraping skill: the metric is detour cost, not answer correctness
+**`evals/`:** one file per run — the datapoints behind everything above, and the
+only place a date or a "this used to be true" belongs. Section 8.
+
+## 8. `evals/`: where everything section 7 deletes goes
+
+Section 7 makes `SKILL.md` a description of the site as it is now, with the
+history stripped out. That rule is right, and it throws away information that
+cost a run to obtain: the probe that found nothing, the numbers the next run
+needs to compare against, the reason a rule that reads as arbitrary is there,
+the two assertion rewrites that both failed. Deleted from `SKILL.md`, they are
+gone — and the next reviser re-derives them, or re-walks the same dead end.
+
+They go in **`evals/`**, one file per run. **A site's skill therefore has two
+documents with two readers**, and confusing them is what produced the changelog
+voice section 7 is about:
+
+- `SKILL.md` is read **at scrape time**, by an agent doing a job. It reads as
+  one fluent recipe — what this site is, what to do about it. No dates, no
+  "previously", no account of who learned what when.
+- `evals/` is read **at revision time**, by whoever is changing the skill. It is
+  the datapoints. It is a log, it carries dates, and it keeps findings that
+  contradict each other.
+
+⚠️ **`SKILL.md` must not link to `evals/`.** A cross-reference drags the log
+into scrape-time reading and the recipe stops being one. The pointer runs the
+other way: an eval file names the sections it changed.
+
+### One file per run: `evals/YYYY-MM-DD-<slug>.md`
+
+Not one growing file — per-run files are what make "compare two runs" and "read
+the last three" cheap. Each holds five things:
+
+1. **Conditions.** Skill version (commit is enough), login state, which
+   questions were asked, how many agents ran and against which sites. Without
+   these the numbers below are unreadable, and section 9's contamination is
+   undetectable after the fact.
+2. **Numbers, per question.** Calls, tokens, failed calls, wall clock — section
+   9's primary metrics. This is the row a later run compares against; without a
+   recorded baseline, "it got faster" is a feeling.
+3. **What was hit.** Every silent failure, dead end, throttle, and surprise —
+   *including the ones not written into `SKILL.md`*, each with one sentence on
+   why not (seen once; or unclear whether it was the site or us).
+4. **What changed in `SKILL.md`, and what deliberately did not.** One line each.
+   **The deliberate omissions are the valuable half**: without them the next run
+   rediscovers the same thing and has no way to tell it was already judged and
+   dropped.
+5. **Assertion changes**, if the run was an evaluation — including rewrites that
+   failed and why (section 9 has two worked examples of exactly this).
+
+### Promote on a second sighting, except for silent failures
+
+A finding from one run is a datapoint, not yet a rule. **What earns a line in
+`SKILL.md` is a second run hitting the same thing** — timings, throttle
+thresholds, "this endpoint is slow", "the feed looked shuffled" are all things a
+single run cannot tell from noise, and a `SKILL.md` full of one-off observations
+is the recipe getting slower to read for no gain.
+
+**Silent failures are the exception and go in on first sighting.** They are
+cheap to state and expensive to hit, and a reader who has not been warned writes
+the wrong data into a conclusion (section 2). Everything else waits for
+confirmation, in `evals/` until then.
+
+### Negative results are a line each, and only the log can hold them
+
+"The `.json` endpoint 404s." "No `__NEXT_DATA__` on the detail page." "Scrolling
+past round 12 adds nothing." These are never sentences `SKILL.md` should carry —
+it says what to do, not the list of things that do not work — but re-checking
+each of them costs a probe. The log is where a probe gets paid for once.
+
+### Read them before revising
+
+**Before touching a site's `SKILL.md`, read its `evals/` newest-first.** It is a
+handful of short files, and it is the only place that answers "why is this rule
+here" and "has this already been tried". Section 6's harder case — once true,
+silently now false — is also read from here: a rule whose only eval entry is
+several runs old, on a version of the site nothing since has confirmed, is the
+first place to point a re-run.
+
+---
+
+## 9. Evaluating a scraping skill: the metric is detour cost, not answer correctness
 
 A/B-ing an old and new version is right, but **metric and scheduling are two
 halves of one thing: schedule it wrong and the numbers are contaminated; pick
@@ -374,7 +463,15 @@ during evaluation.)
 ⇒ Before spawning, work out which site the agent will hit and whether it
 collides with one already running. Afterwards, read call counts, not pass rates.
 
-## 9. Pre-commit checklist
+### Every evaluation ends in a file under `evals/`
+
+An evaluation that only produces a verdict has thrown away the run. The call
+counts, the questions, the assertion rewrites that failed, the findings judged
+too thin to promote — all of it is what the *next* evaluation compares against,
+and none of it can live in `SKILL.md`. Write it up per section 8 before drawing
+the conclusion; the conclusion is one line at the top of that file.
+
+## 10. Pre-commit checklist
 
 - [ ] Directory name and `name:` are both `passenger-<site>`
 - [ ] Every page type says whether it needs rendering
@@ -397,5 +494,10 @@ collides with one already running. Afterwards, read call counts, not pass rates.
 - [ ] Delete every date and every "previously / originally / now changed to" —
       do the sentences still stand? (Sole exception: provenance of baseline
       numbers)
+- [ ] This run left a file in `evals/`, naming what it changed **and what it
+      deliberately did not**
+- [ ] Nothing new in `SKILL.md` is a single-run observation, unless it is a
+      silent failure; the rest stayed in `evals/`
+- [ ] `SKILL.md` does not link to `evals/`
 - [ ] If evaluating: primary metric is call count / tokens, not pass rate; no
       assertion encodes a policy that can change
