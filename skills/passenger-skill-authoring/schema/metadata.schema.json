@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://passenger.local/schema/metadata.schema.json",
+  "title": "passenger-<site>/metadata.json",
+  "description": "The lookup tables a scraping skill needs at query time. One file per site skill, read by a script rather than by a person, so that no caller ever guesses a site's internal code for a place or an object.",
+  "type": "object",
+  "required": ["site", "tables"],
+  "additionalProperties": false,
+  "properties": {
+    "site": {
+      "description": "The slug after `passenger-` in the directory name.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "tables": {
+      "description": "Named tables. A name is what the skill's prose calls this table, e.g. `city`, `station`, `district`.",
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": { "^[a-z0-9][a-z0-9_]*$": { "$ref": "#/$defs/table" } },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "table": {
+      "type": "object",
+      "oneOf": [{ "$ref": "#/$defs/shipped" }, { "$ref": "#/$defs/upstream" }]
+    },
+    "common": {
+      "describes": {
+        "description": "What the key is and what the value is, in one sentence, in the site's own vocabulary.",
+        "type": "string",
+        "minLength": 1
+      },
+      "on_mismatch": {
+        "description": "What the site does when the key is wrong. Required because on these sites it is almost never a 404: state the observed behaviour ('returns the national homepage', 'silently degrades to the city-level page', 'returns an empty table with no message').",
+        "type": "string",
+        "minLength": 1
+      },
+      "verify": {
+        "description": "The check that confirms the key you used was the key you wanted, run against the response. The reverse lookup, or the field in the response that echoes the key back.",
+        "type": "string",
+        "minLength": 1
+      },
+      "coverage": {
+        "description": "`complete` = every key the site has is in here, so a miss means the site does not have it. `partial` = only what has been hit, so a miss means nothing.",
+        "enum": ["complete", "partial"]
+      }
+    },
+    "shipped": {
+      "type": "object",
+      "required": ["describes", "source", "on_mismatch", "verify", "coverage", "measured", "entries"],
+      "additionalProperties": false,
+      "properties": {
+        "describes": { "$ref": "#/$defs/common/describes" },
+        "on_mismatch": { "$ref": "#/$defs/common/on_mismatch" },
+        "verify": { "$ref": "#/$defs/common/verify" },
+        "coverage": { "$ref": "#/$defs/common/coverage" },
+        "source": {
+          "description": "`measured` = every row was hit. `derived` = rows were written from the site's naming pattern and not all were hit; each row's `verified` says which.",
+          "enum": ["measured", "derived"]
+        },
+        "measured": {
+          "description": "When these rows were last confirmed. The only provenance a reader has for judging whether they have expired.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/entry" }
+        }
+      }
+    },
+    "upstream": {
+      "description": "The site publishes its own authoritative table. Ship the query against it, never a copy of it — a copy goes stale silently and is always a subset.",
+      "type": "object",
+      "required": ["describes", "source", "on_mismatch", "verify", "coverage", "url", "format", "query"],
+      "additionalProperties": false,
+      "properties": {
+        "describes": { "$ref": "#/$defs/common/describes" },
+        "on_mismatch": { "$ref": "#/$defs/common/on_mismatch" },
+        "verify": { "$ref": "#/$defs/common/verify" },
+        "coverage": { "$ref": "#/$defs/common/coverage" },
+        "source": { "const": "upstream" },
+        "url": { "type": "string", "minLength": 1 },
+        "format": {
+          "description": "The record shape at that URL, e.g. `@<abbr>|<name>|<code>|<pinyin>|<abbr>|<index>`, so a reader can write the extraction without fetching it first.",
+          "type": "string",
+          "minLength": 1
+        },
+        "query": {
+          "description": "A runnable one-liner that pulls out the rows wanted, rather than the whole file. Include the reverse lookup too — it is the self-check.",
+          "type": "string",
+          "minLength": 1
+        },
+        "size": {
+          "description": "How big the upstream file is, so nobody reads it into context whole.",
+          "type": "string"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["key", "value", "verified"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "description": "What a caller has in hand — the human name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "description": "What the site wants. Any JSON: a code, or an object when one key carries several."
+        },
+        "verified": {
+          "description": "true only if this row was used against the site and the response confirmed it. A row written from a naming pattern is `false` — it looks identical to a measured one otherwise, which is how a guess gets read as a fact.",
+          "type": "boolean"
+        },
+        "note": {
+          "description": "Only what is true of this row and would otherwise surprise: a name collision, a station that is not in the city it is named after.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

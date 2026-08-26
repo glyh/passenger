@@ -6,7 +6,8 @@ description: |
   skill for <site>", "we keep re-learning this site", "this site's skill did not
   help", "is this skill worth keeping", "A/B two versions of a scraping skill".
   Covers what to probe for, which findings to record, how to phrase them, where
-  a run's evidence is logged, and how to measure whether the skill helped.
+  a site's lookup tables and a run's evidence are kept, and how to measure
+  whether the skill helped.
   Does NOT cover performing a single scrape, and does NOT cover any individual
   site's mechanics — those belong in that site's own skill. For driving the
   browser at all, use `using-passenger` instead.
@@ -49,8 +50,9 @@ body. It contains only:
 1. **What it can do** (capability)
 2. **When to use it** (positive trigger — include the phrasings a caller
    actually types)
-3. **When not to use it / who owns that instead** (negative routing, e.g. "this
-   skill cannot reach that page type; use another source")
+3. **Where its boundary is** — stated in the first person, as a fact about this
+   site: "境外房价不归这里", "距离与路线这个站给不了". Never the destination; see
+   below.
 
 **Mechanism never goes in `description`:** selectors, field names, URL shapes,
 evidence for silent failures. All of it stays in the body, which is in front of
@@ -61,6 +63,66 @@ contradict each other in front of a user.
 
 **Test after writing a description:** does this sentence help me *choose* this
 skill, or help me *use* it? If the latter, move it into the body.
+
+### A site skill never names another site
+
+**No "走 X", no "X 更好用", no link to a sibling skill.** Measured: the corpus
+grew a dense hand-maintained graph of these — three housing sites pointing at
+each other, two search engines, four skills all routing to the same map service
+— and it fails three ways at once.
+
+- **It fires too late to help.** A routing line inside skill A is only read once
+  A has been selected. If A was the wrong choice, selection already failed and
+  the line is repairing the damage, not preventing it.
+- **The claim cannot be verified by the skill making it.** "这个源的租金样本是
+  三个源里最好用的" is an assertion about three sites written in one site's
+  description, backed by nothing the reader can reach. Section 6 applies with
+  full force and there is no way to run it.
+- **The edges are one-way and stay that way.** Skill A routes to B; B has never
+  heard of A. A caller who lands on B never learns the boundary exists.
+
+⇒ A description carries only what **one run against this one site** could
+establish. "境外房价不归这里" is that. "境外房价走 X" is not.
+
+### Comparisons live in one document per *question*
+
+The routing knowledge is real and deleting it would lose it — so it moves, whole,
+to where it can be maintained and verified: **one document per question the
+sites compete to answer** (中国城市房价, 网页搜索, 中国大陆餐厅口碑), owned by
+whoever ran the comparison, with the comparison itself recorded in an `evals/`
+file covering **the whole family** rather than one member (section 8).
+
+Per *question*, not per site, because that is what the caller is actually holding
+when they choose. Nobody arrives wanting `beike`; they arrive wanting a rent
+number, and a document named for the rent number is selectable while a web of
+cross-links between three site skills is not.
+
+**One carve-out: two skills reaching the same site.** When a site is reachable
+two ways — an official API client and a scrape of its web version — one of them
+must say which is primary and when to fall back, because otherwise the caller
+faces two descriptions of the same site and has no basis to choose. That claim
+is first-person (the cap you hit is yours to measure) and there is exactly one
+edge, so it does not become a graph. This does not extend to a second *site*.
+
+### Two kinds of site, and they do not want the same document
+
+Left to themselves, 18 produced skills converged on two layouts, and the split is
+real rather than stylistic:
+
+- **A lookup** — one question, one query, a table back (weather, air quality,
+  flights, trains, house prices, a government gazette). Section 3 is the whole
+  ballgame: a wrong code is the failure mode, and the capability table plus the
+  recipe are most of the file. **Section 5 does not apply** — there is no
+  signal-density question when the site returns one number — and not one lookup
+  skill in the corpus grew that section.
+- **A corpus** — human text of wildly varying quality (forums, review sites,
+  social feeds, Q&A). Section 5 and the coverage numbers are where the value is;
+  a purely mechanical version of one of these leads its reader to collect spam
+  and conclude that is all the site has.
+
+⇒ Decide which one you are writing **before** the layout, and take the matching
+set. A lookup skill with a methodology section is padding; a corpus skill
+without one is a scraper.
 
 Every section below asks the same question: **what did you hit this time that
 the next person will hit identically?** Things that are hit *and recognised*
@@ -144,26 +206,145 @@ spot and returns a verdict**:
 always wrong** — the truncation point moves with post length, and an empty
 result can be the same length as a real one.
 
-## 3. Record baseline numbers
+### Mark every self-check with the same string, so the audit is a `grep`
 
-Baselines have exactly one use: **letting the next run decide whether it is
-abnormal.**
+Measured across 18 produced skills: **about 40% of hard rules carry no
+self-check** — 3 of 8 in one, 3 of 6 in another, 6 of 11 in a third — while the
+three skills that hit every rule are the three whose author had a marker to
+repeat. The rule above is the one this document calls its most important
+sentence, and it is the one most often skipped, because a prose checklist is
+recalled rather than run.
 
-> 12 scroll rounds ≈ 35s for 37 items; 1–5 live units per round; 36/37 have a
-> date; **only 12/37 have a permalink**; 33/37 have body text (the rest are
-> image-only posts, which is not a failure).
+⇒ Open every self-check with **the same literal string** in a given file
+(`**自检**：`, `**Self-check:**` — one per file, whichever the skill is written
+in). Then the audit is one line, and it belongs in the pre-commit pass:
 
-⚠️ **Call out any field with a low hit rate and state the consequence.** The
-12/37 above means **the dedup key must have a degraded branch**, or the same
-item is counted repeatedly or the batch is dropped.
+    n=$(grep -c '^### ' SKILL.md); m=$(grep -c '自检' SKILL.md)
+    [ "$m" -ge "$n" ] || echo "$((n - m)) rule(s) with no self-check"
 
-**`SKILL.md` carries one baseline — the current one.** Superseding it does not
-mean the old one was worthless: it is what "abnormal" was judged against, so the
-previous run's numbers stay in that run's file under `evals/` (section 8), and
-`SKILL.md` never accumulates two.
+### A number inside a rule is a threshold, not a record
 
-⚠️ **State explicitly which shortfalls are not failures** (image-only posts
-never had text), or the next person will fix something that is not broken.
+Numbers earn their place in `SKILL.md` only where **a check compares against
+them** — "got 146 of 156, and the gap is deletions" is what makes "you tripped
+the paging bug" readable. Put that number *in the self-check that uses it*, not
+in a table at the foot of the file, which is the place least likely to be open
+when the run goes wrong. Everything else the run measured — call counts,
+timings, byte sizes, hit rates — is evidence for the *next run*, not for this
+one, and goes to `evals/` (section 8).
+
+Two of those thresholds have to be stated as consequences or they read as
+trivia:
+
+- ⚠️ **A field with a low hit rate needs its consequence spelled out.** "Only
+  12 of 37 have a permalink" is a number; "so the dedup key needs a degraded
+  branch, or the batch gets dropped" is the rule.
+- ⚠️ **Say which shortfalls are not failures.** Image-only posts never had body
+  text. Unsaid, the next person fixes something that is not broken.
+
+### If it is not a silent failure, it is not a hard rule
+
+The hard-rules section is the skill's core asset and it is also the easiest
+place to put anything true about the site. Measured drift: one skill's 12 rules
+include "the forecast only goes 7 days" and "the station id is not five digits"
+— the first is a capability-table row, the second a line of the recipe. Neither
+is a thing that returns 200 and lies, and both dilute the ten that are.
+
+⇒ **Filter: does following it wrong produce a well-formed wrong answer?** No →
+capability table or recipe.
+⇒ Past roughly eight rules, **tier them by where the caller is in the flow**
+rather than by discovery order — one corpus skill splits its thirteen into
+listing-layer, article-layer, and both-layers, and it is the only one of that
+size that stays navigable.
+
+## 3. A lookup table is a silent failure with rows: `metadata.json`
+
+**Five of the eighteen produced skills have this as their top-ranked hard rule**,
+which makes it the most common single failure in the corpus. The caller holds a
+**human name**
+— a city, a station, a district — and the site wants **its own opaque code** for
+it. The gap between the two is not derivable, so it gets guessed; and on these
+sites **a wrong code is not an error.** It returns the national homepage, or the
+parent region, or a well-formed empty table with no message on it, or simply
+somebody else's city — measured, in all four of those forms.
+
+That fixes what a lookup table *is* here, and it is not reference data. **The
+table and its failure mode are one object**, and four things are part of the
+datum rather than notes about it:
+
+1. **Absence has two meanings.** "The site does not have this city" and "we
+   never looked up this city" are indistinguishable in a bare table, and the
+   first is a conclusion while the second is nothing at all.
+2. **A row can be a guess.** A slug written from the site's naming pattern and a
+   slug that was actually opened are byte-identical once written down. This is
+   section 6's problem in data form, and it is worse there: prose can hedge, a
+   table row cannot.
+3. **What a wrong key does** is not the same on two sites, and it decides what
+   the caller's check has to look for.
+4. **The check that proves the key was right** — usually the reverse lookup, or
+   the field in the response that echoes the key back.
+
+A CSV cannot hold any of the four. Measured: one site's `cityid.csv` carries a
+`测得日期` column that is **empty on every row** — the author felt the need for
+provenance, and the format gave them nowhere to say what the date meant or what
+happened when the id was wrong.
+
+⇒ **Lookup tables go in `metadata.json` at the skill root, against
+`schema/metadata.schema.json` in this directory.** One file per site, one shape
+across every site, so that reading a table is a fixed flow rather than a thing
+each skill invents.
+
+```json
+{
+  "site": "anjuke",
+  "tables": {
+    "city": {
+      "describes": "地级市 → 安居客城市 slug",
+      "source": "derived",
+      "on_mismatch": "静默退化成全国首页，页面结构完全正常",
+      "verify": "打开 /market/<slug>/ 后核对页面标题里的城市名",
+      "coverage": "partial",
+      "measured": "2026-08-26",
+      "entries": [
+        { "key": "玉溪", "value": "yuxi", "verified": true },
+        { "key": "蒙自", "value": "mengzi", "verified": false, "note": "按命名规律写的，没打开过" }
+      ]
+    }
+  }
+}
+```
+
+`source` is `measured` (every row hit), `derived` (some rows written from the
+naming pattern — `verified` per row says which), or **`upstream`**.
+
+### `upstream`: when the site publishes the table itself, ship the query
+
+A local copy of a table the site maintains is always a stale subset, and it goes
+stale **silently** — which is the whole failure this section exists to remove,
+reintroduced by the fix. So an `upstream` table carries no `entries` at all:
+`url`, `format` (the record shape, so the extraction can be written without
+fetching first), `size` (so nobody reads 168 KB into context), and `query` — a
+runnable one-liner that pulls out the rows wanted **and** does the reverse
+lookup, because the reverse lookup is the self-check.
+
+### Validate before committing, and read the summary even when it passes
+
+    node skills/passenger-skill-authoring/scripts/validate-metadata.mjs \
+         path/to/passenger-<site>/metadata.json
+
+It exits non-zero listing every problem at its JSON path. On success it prints a
+per-table line, and **that line is worth reading**: it names the `derived` rows
+and the `partial` coverage, which are the two things a reader mistakes for
+measured fact.
+
+### `SKILL.md` states the flow once and never the contents
+
+The prose says *which table to consult and that guessing is the failure* — one
+sentence — and stops. It does not restate rows, because that is section 0's two
+copies rotting, with the added twist that the stale copy here is the one a human
+reads while the script reads the other. The `on_mismatch` and `verify` strings
+are the exception in the other direction: they are properties of the site, so
+they earn their hard rule in `SKILL.md` too, and the table is where they are
+attached to the data that triggers them.
 
 ## 4. Account for reading and driving separately
 
@@ -200,6 +381,10 @@ whole chapter**, and confidently so. Every "cannot reach" must state **which
 state it was measured in** (section 10).
 
 ## 5. Where the good material is matters as much as how to fetch it
+
+**Corpus sites only** (section 0). A lookup site returns one number and has no
+signal-density question; not one lookup skill in the corpus grew this section,
+correctly.
 
 A purely mechanical skill leads people to collect garbage and conclude that is
 all the site has. Write down this site's signal-to-noise patterns:
@@ -272,10 +457,13 @@ changed. They want to know **what the site looks like now.** Rewrite every
 sentence as a property of the site: *logging in trips risk control; if it does,
 retry the next day.* One sentence, no timeline, executable.
 
-**Dates survive in exactly one place**: the provenance of baseline numbers
-("measured 2026-08-25, Beijing, N=2"). That is a statement of measurement
-currency, not a change record — the reader uses it to judge whether the numbers
-have expired.
+**`SKILL.md` carries no dates at all.** Provenance is still required — a number
+nobody can date cannot be judged expired — but it now attaches to the two files
+that hold the numbers: `measured` in `metadata.json` (section 3) and the run's
+own file in `evals/` (section 8). That makes the rule mechanical rather than a
+judgement call about whether this particular date is a change record:
+
+    grep -nE '[0-9]{4}-[0-9]{2}-[0-9]{2}' SKILL.md    # must print nothing
 
 **Test: delete every date and every "previously / originally / now changed to".
 Do the sentences still stand?** If not, it was a changelog.
@@ -288,20 +476,58 @@ then retried", "we used to worry about" are all correct sentences *there*.
 
 **`SKILL.md`:**
 
+- **A thesis sentence, before anything else.** One sentence saying what this
+  site *is*, and one saying what shape its failures take. The best skill in the
+  corpus opens with "almost everything here has a clean JSON endpoint — the
+  whole cost is in the parameters, and most of the rules below are about that
+  one thing", and eight rules become one idea. The skills that open straight
+  into the rule list read as checklists, which is the property you are trying
+  not to have. It costs a paragraph.
 - **Hard rules** — silent failures, one per section, **each with its own
-  self-check**. This is the part read first.
+  self-check** carrying the threshold it compares against (section 2).
 - **Capability table** — which page types need rendering, which come back in one
   fetch; what this site does and does not yield.
-- **Method** — the "where the good material is" content from section 5.
-- **Out of scope** — explicit boundaries, especially when using the user's login.
-- **Reporting requirements** — what a conclusion must disclose (coverage, dates,
-  provenance of numbers).
+- **Method** — the "where the good material is" content from section 5. **Corpus
+  sites only** (section 0).
+- **Three closing lists, and they are not one list** (see below).
+- **Reporting requirements** — what a conclusion must disclose (coverage, which
+  entry point was read, provenance of any number quoted).
 
-**`references/`:** one file **per page type** (listing, detail, comments…),
-plus one file for **this site's own** scripting traps. Nothing generic.
+**No baseline section.** Thresholds live in the self-checks that use them; the
+run's raw numbers live in `evals/`. Section 2, and section 8.
 
-**`evals/`:** one file per run — the datapoints behind everything above, and the
-only place a date or a "this used to be true" belongs. Section 8.
+**`metadata.json`:** the site's lookup tables, against this directory's schema.
+Section 3.
+
+**`references/`:** one file for **what most runs do not need** — a page type with
+mechanics that only some tasks reach, this site's own scripting traps. Not one
+file per page type by reflex: the strongest skill in the corpus has no
+`references/` at all and keeps each recipe next to the rule that cites it, at
+390 lines. Split when the file stops being readable straight through, not
+before.
+
+**`evals/`:** one file per run — the datapoints behind everything above, and,
+with baselines moved here, the only place in a skill where a date appears
+outside `metadata.json`. Section 8.
+
+### "Won't", "can't" and "haven't tried" are three lists
+
+The corpus invented five heading names for this one slot, and three skills carry
+*two* of them each — the authors clearly felt a distinction and had nothing
+telling them which. The three have opposite consequences for a reader:
+
+| List | What it is | What the reader does |
+| --- | --- | --- |
+| **Won't** | policy — read-only, no voting, no posting under the user's login | obey it |
+| **Can't** | measured — this site does not yield that, and here is the state it was measured in | route around it |
+| **Haven't tried** | unknown — nobody has run it | **try it** |
+
+Folded together, the third one is read as a prohibition and never gets tried
+again, which is the exact opposite of what writing it down was for. Keep three
+headings.
+
+⇒ **The "haven't tried" list is the queue for the next evaluation** (section 9).
+That is what it is for, and it is the reason it must not read like the other two.
 
 ## 8. `evals/`: where everything section 7 deletes goes
 
@@ -336,9 +562,15 @@ the last three" cheap. Each holds five things:
    questions were asked, how many agents ran and against which sites. Without
    these the numbers below are unreadable, and section 9's contamination is
    undetectable after the fact.
-2. **Numbers, per question.** Calls, tokens, failed calls, wall clock — section
-   9's primary metrics. This is the row a later run compares against; without a
-   recorded baseline, "it got faster" is a feeling.
+2. **Numbers, per question — this is where baselines live.** Calls, tokens,
+   failed calls, wall clock, and everything the run measured about the site:
+   items per scroll round, response sizes, per-field hit rates, how long a
+   render took. Section 9's primary metrics are in here too. `SKILL.md` keeps
+   only the handful of numbers a self-check compares against (section 2); the
+   rest are evidence for the *next* run rather than for this one, and a table of
+   them at the foot of a recipe is the least likely thing in the file to be open
+   when a run goes wrong. Without this section recorded, "it got faster" is a
+   feeling.
 3. **What was hit.** Every silent failure, dead end, throttle, and surprise —
    *including the ones not written into `SKILL.md`*, each with one sentence on
    why not (seen once; or unclear whether it was the site or us).
@@ -463,6 +695,14 @@ during evaluation.)
 ⇒ Before spawning, work out which site the agent will hit and whether it
 collides with one already running. Afterwards, read call counts, not pass rates.
 
+### The skill's "haven't tried" list is the run's work-list
+
+An evaluation that only re-asks the old questions measures the skill's known
+half. **Open the skill's "haven't tried" list first** (section 7) and put those
+in the run — they are the entries that have been sitting unclaimed precisely
+because nothing scheduled them, and every one that gets settled either becomes a
+capability or moves to the "can't" list with a measurement behind it.
+
 ### Every evaluation ends in a file under `evals/`
 
 An evaluation that only produces a verdict has thrown away the run. The call
@@ -473,27 +713,51 @@ the conclusion; the conclusion is one line at the top of that file.
 
 ## 10. Pre-commit checklist
 
+**Run these three, they are not reading tasks:**
+
+    grep -nE '[0-9]{4}-[0-9]{2}-[0-9]{2}' SKILL.md   # dates: must print nothing
+    n=$(grep -c '^### ' SKILL.md); m=$(grep -c '自检' SKILL.md)
+    [ "$m" -ge "$n" ] || echo "$((n - m)) rule(s) with no self-check"
+    node .../scripts/validate-metadata.mjs metadata.json    # and read the summary
+
+**Then the rest:**
+
 - [ ] Directory name and `name:` are both `passenger-<site>`
+- [ ] It opens with a thesis sentence, not with rule 1
+- [ ] Lookup or corpus was decided before the layout, and the layout matches
 - [ ] Every page type says whether it needs rendering
-- [ ] Every silent failure has a self-check, and no self-check relies on a
-      length threshold
-- [ ] Baseline numbers call out low-hit-rate fields and their consequences
+- [ ] Every hard rule is a silent failure — following it wrong yields a
+      well-formed wrong answer. The rest moved to the capability table or the
+      recipe
+- [ ] No self-check relies on a length threshold; the threshold each one
+      compares against is written into it
+- [ ] Low-hit-rate fields state their consequence; shortfalls that are not
+      failures say so
+- [ ] No baseline section — the run's numbers are in `evals/`
+- [ ] Every lookup table is in `metadata.json`, and `SKILL.md` states the flow
+      without restating any row
+- [ ] Every table has `on_mismatch` and `verify`; every unmeasured row is
+      `verified: false`; `coverage` says whether a miss means anything
+- [ ] A table the site publishes itself is `upstream` with a query, not a copy
 - [ ] States what driving costs and how quota accrues
 - [ ] Unrun recipes are marked, with a verification entry point
 - [ ] Every recipe touched in this pass was actually run; body grepped for old
       field names and old API names
 - [ ] Nothing restates or links to the tool itself or other generic capabilities
+- [ ] **No other site is named anywhere** — not in `description`, not in the
+      body. Boundaries are first-person; comparisons went to the family
+      document. (Sole carve-out: a second route to *this same* site)
 - [ ] `description` has no mechanism and is not a table of contents — only
-      capability, when to use, and who owns it otherwise
-- [ ] Every "cannot do / cannot reach" was either verified in this pass or says
-      verbatim that it was not tried
+      capability, when to use, and where this site's own boundary is
+- [ ] "Won't", "can't" and "haven't tried" are three separate lists
+- [ ] Every "cannot do / cannot reach" was verified in this pass, or it belongs
+      in the "haven't tried" list instead
 - [ ] Every "cannot reach" states **which login/permission state it was measured
       in**
 - [ ] Login-using sites document how to log in, how to recover from risk
       control, and how to tell the session is still valid
-- [ ] Delete every date and every "previously / originally / now changed to" —
-      do the sentences still stand? (Sole exception: provenance of baseline
-      numbers)
+- [ ] Delete every "previously / originally / now changed to" — do the sentences
+      still stand?
 - [ ] This run left a file in `evals/`, naming what it changed **and what it
       deliberately did not**
 - [ ] Nothing new in `SKILL.md` is a single-run observation, unless it is a
