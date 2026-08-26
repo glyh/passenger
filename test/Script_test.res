@@ -66,6 +66,97 @@ T.testAsync("require reaches a module", async () => {
   )
 })
 
+T.testAsync("a bound name can be redeclared, and shadows", async () => {
+  // A regression, and it was introduced by ticket 074 rather than found in it.
+  // The five bound names are *parameters* of the wrapper now, so `const path =
+  // "/tmp/x.md"` -- an entirely ordinary line, and one this repo's own skill
+  // recipe used -- was redeclaring a parameter: `SyntaxError: Identifier 'path'
+  // has already been declared`, before the browser was touched. In the `vm`
+  // context they had been context globals, where the same line shadowed
+  // happily. `Node.wrap` puts the caller's source in a nested block to give
+  // that back.
+  T.equal(await Script.execute(`const path = "/tmp/x.md"; return path;`, Nullable.null),
+    "/tmp/x.md"->Obj.magic)
+  // ...and the name still works for everyone who did not take it.
+  T.equal(await Script.execute(`return path.join("a", "b");`, Nullable.null), "a/b"->Obj.magic)
+})
+
+T.testAsync("this module's own bindings are not in a script's scope", async () => {
+  // The bound names arrive as arguments, not by lexical capture:
+  // `runInThisContext` compiles against the realm's globals, so nothing in
+  // Script.res is visible to a caller's source. `path` resolving while
+  // `scriptPath` does not is the whole distinction.
+  T.equal(
+    await Script.execute("return [typeof path, typeof scriptPath, typeof crossable].join();", Nullable.null),
+    "object,undefined,undefined"->Obj.magic,
+  )
+})
+
+T.testAsync("a bound name can be redeclared, and shadows", async () => {
+  // A regression introduced by ticket 074 rather than found in it. The bound
+  // names are *parameters* of the wrapper now, so `const path = "/tmp/x.md"`
+  // -- an entirely ordinary line, and one this repo's own skill recipe used --
+  // was redeclaring a parameter: `SyntaxError: Identifier 'path' has already
+  // been declared`, before the browser was touched. In the `vm` context they
+  // had been context globals and the same line shadowed happily.
+  //
+  // Fixed by putting the caller's source in a block, not by unbinding the
+  // name. Unbinding was tried and is the wrong direction: it fixes a caller
+  // who wanted the variable by taking the module away from one who wanted the
+  // module. Both work now.
+  T.equal(
+    await Script.execute(`const path = "/tmp/x.md"; return path;`, Nullable.null),
+    "/tmp/x.md"->Obj.magic,
+  )
+  T.equal(await Script.execute(`return path.join("a", "b");`, Nullable.null), "a/b"->Obj.magic)
+})
+
+T.testAsync("this module's own bindings are not in a script's scope", async () => {
+  // The bound names arrive as arguments, not by lexical capture:
+  // `runInThisContext` compiles against the realm's globals, so nothing in
+  // Script.res is visible to a caller's source. `path` resolving while
+  // `scriptPath` does not is the whole distinction.
+  //
+  // Worth a test rather than a comment because the obvious way to check it by
+  // hand is wrong: `node -e` exposes node's builtin modules as globals, so a
+  // bare `path` answers there whether or not anything bound it.
+  T.equal(
+    await Script.execute(
+      "return [typeof path, typeof scriptPath, typeof crossable].join();",
+      Nullable.null,
+    ),
+    "object,undefined,undefined"->Obj.magic,
+  )
+})
+
+T.testAsync("a script's own const shadows a bound name", async () => {
+  // The recipes in the skill write `const path = "/tmp/pep8.md"` -- naming the
+  // file they are about to write -- so the five names in `context` must not
+  // collide with a caller's own variables. A vm context puts top-level `const`
+  // in that context's lexical scope, which is consulted before the global
+  // object, so this is shadowing rather than a collision.
+  T.equal(
+    await Script.execute(`const path = "/tmp/x.md"; return path;`, Nullable.null),
+    "/tmp/x.md"->Obj.magic,
+  )
+  // ...and the name is still the module for a caller who did not take it.
+  T.equal(await Script.execute(`return path.join("a", "b");`, Nullable.null), "a/b"->Obj.magic)
+})
+
+T.testAsync("require is the only module loader", async () => {
+  // `import()` needs a loader the vm context has no callback for, so a recipe
+  // reaching for it gets `A dynamic import callback was not specified`. The
+  // skill says `require` for that reason, and this pins it.
+  T.equal(
+    await Script.execute(`return require("node:path").join("a", "b");`, Nullable.null),
+    "a/b"->Obj.magic,
+  )
+  switch await Script.execute(`return await import("node:os");`, Nullable.null) {
+  | _ => T.ok(false)
+  | exception Errors.Passenger({code}) => T.equal(code, ScriptRaised)
+  }
+})
+
 T.testAsync("console is shadowed, not inherited", async () => {
   // The one thing that is not a matter of trust: stdout is the JSON-RPC
   // transport, so a caller's `console.log` must not reach it. It is passed as

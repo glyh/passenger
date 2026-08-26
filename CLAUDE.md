@@ -158,9 +158,11 @@ cleanup.
   ticket's worth of justification.
 - **This runs on the user's own machine, and the script door is not a sandbox.** One process
   on their laptop, their agent, their logged-in Chrome. Ticket 074 rests the design on that
-  and deletes the two rules that pretended otherwise: a caller's source now runs in *this*
-  context with node's own globals in scope, and the per-operation timeout is optional and
-  unbounded. `Script.res` had said "deliberately not a sandbox, and not pretending to be one"
+  and deletes the two rules that pretended otherwise: the `vm` context a script runs in has
+  node's real global as its **prototype**, so every node global resolves through the chain and
+  no list decides what a caller may reach, and the per-operation timeout is optional and
+  unbounded. Scope is a property of the context object and nothing is imposed on the caller's
+  source -- `Node.wrap` is the same async IIFE it always was, and 074 does not touch it. `Script.res` had said "deliberately not a sandbox, and not pretending to be one"
   for as long as the allowlist existed, which is the point -- a list that stops an accident
   but not an intent costs a caller with a legitimate need and buys nothing. Two things that
   look like restrictions survive because they are not: `console` is rebuilt onto stderr

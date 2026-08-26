@@ -1,266 +1,401 @@
 ---
 name: passenger-skill-authoring
 description: |
-  给一个站点写抓取 skill、改一个已有的、或评它到底省没省事。
-  当要把某个站的抓取经验固化下来时使用——新增一个站，
-  某个站的 skill 在实测里被证明不够用，或要判断一个 skill 值不值得留。
-  不管单次抓取怎么做，也不管任何一个站的具体机制——那是那个站自己的 skill。
+  Use when writing a scraping skill for a specific website, revising one, or
+  evaluating whether an existing one earns its keep. Trigger phrases: "write a
+  skill for <site>", "we keep re-learning this site", "this site's skill did not
+  help", "is this skill worth keeping", "A/B two versions of a scraping skill".
+  Covers what to probe for, which findings to record, how to phrase them, and
+  how to measure whether the skill helped.
+  Does NOT cover performing a single scrape, and does NOT cover any individual
+  site's mechanics — those belong in that site's own skill. For driving the
+  browser at all, use `using-passenger` instead.
 ---
 
-# 给一个站点写抓取 skill
+# Writing a scraping skill for a site
 
-**这份文档最常见的失效方式不是缺规则，是规则没在写的时候被想起来。**
-实测两次违规——description 里混进机制、正文写成"此前记录已被推翻"的修订史——
-对应的规则一条本来就写着、一条该写而没写，而写的人两次都读过这份文档。
+**This document's most common failure is not a missing rule. It is a rule that
+was not recalled at writing time.** Two measured violations — mechanism leaking
+into `description`, and body text written as revision history ("the previous
+record has been overturned") — map to one rule that was already written and one
+that should have been. The author had read this document both times.
 
-⇒ **落文件之前回到第九节逐条对一遍**，不要凭"我记得规矩"。
-清单的价值在它被执行的那一刻，不在它被写下来的那一刻。
+⇒ **Re-read section 9 line by line before committing the file.** Do not rely on
+remembering the rules. A checklist is worth something at the moment it is
+executed, not at the moment it is written.
 
-## 〇、命名与 description：这两样是给"挑 skill"用的，不是给"用 skill"用的
+## 0. Naming and `description`: these are for *selecting* the skill, not using it
 
-### 命名：`passenger-<站点>`
+### Name: `passenger-<site>`
 
-一个站的抓取 skill 一律叫 **`passenger-<站点>`**——目录名和 frontmatter 里的 `name:` 都要带这个前缀
-（如 `passenger-reddit`、`passenger-xiaohongshu`）。加前缀是为了**避免撞名**：同一个站点名可能已经被
-别的、跟 passenger 无关的 skill 占用（官方 API、CLI 之类，不属于本文档管的范围），带前缀能让两者的名字
-天然不冲突，不用等真撞上了才回头改名。
+A site's scraping skill is always named **`passenger-<site>`** — both the
+directory name and the frontmatter `name:` (e.g. `passenger-reddit`,
+`passenger-xiaohongshu`).
 
-**唯一的例外是本文档自己。** `passenger-skill-authoring` 里的 `skill-authoring` 不是站点名——
-它是这一族的元文档，跟着同一个前缀是为了和它管的那些 skill 排在一起。
-除它之外，`passenger-` 后面出现的一律是站点。
+The prefix exists to **avoid collisions**: the same site name may already be
+taken by an unrelated skill (an official API client, a CLI wrapper). The prefix
+keeps them from colliding rather than renaming after the fact.
 
-### `description` 只放三样东西
+**The only exception is this document.** In `passenger-skill-authoring`,
+`skill-authoring` is not a site name — it is the family's meta-document, sharing
+the prefix so it sorts with the skills it governs. Otherwise, whatever follows
+`passenger-` is a site.
 
-`description` 是**用来挑 skill 的**，不是写完之后的正文摘要。里面只该有：
+### `description` holds exactly three things
 
-1. **能做什么**（能力）
-2. **什么时候用**（正向场景）
-3. **什么时候不用 / 归谁**（负向路由，比如"某类页面这个 skill 拿不到，走别的源"）
+`description` is **how a skill gets selected**, not a summary written after the
+body. It contains only:
 
-**机制一律不进 description**：选择器、字段名、URL 形状、静默失败的取证细节——这些全留在正文，
-反正 skill 一加载正文就摆在眼前，没必要在 description 里再抄一遍。抄一遍的后果是两份拷贝要一起维护，
-改了正文、忘改 description，就是一处不会报错的谎言，而且没人会发现——直到 description 说的和正文
-实测的对不上，才被人当场撞见。
+1. **What it can do** (capability)
+2. **When to use it** (positive trigger — include the phrasings a caller
+   actually types)
+3. **When not to use it / who owns that instead** (negative routing, e.g. "this
+   skill cannot reach that page type; use another source")
 
-写完 description 自问一句：**这句话是帮我"选"这个 skill，还是帮我"用"它**——答案是后者，就搬进正文。
+**Mechanism never goes in `description`:** selectors, field names, URL shapes,
+evidence for silent failures. All of it stays in the body, which is in front of
+the reader the moment the skill loads. Duplicating it means maintaining two
+copies; edit the body, forget the description, and you have a lie that raises no
+error and that nobody discovers until the description and the measured body
+contradict each other in front of a user.
 
-下面每一节问的都是同一个问题：**这次撞到的哪些东西，下一个人会原样再撞一遍？**
-撞得到又认得出的（报错、404、超时）不用写；**撞得到但认不出的**才是要写下来的。
+**Test after writing a description:** does this sentence help me *choose* this
+skill, or help me *use* it? If the latter, move it into the body.
 
-只写那个站为真的东西。工具本身怎么用、通用的脚本坑，不在这里，
-也**不要在产出的 skill 里复述或指向**——它们各自有归属，而拷贝和指路会一起烂掉。
+Every section below asks the same question: **what did you hit this time that
+the next person will hit identically?** Things that are hit *and recognised*
+(errors, 404s, timeouts) need no entry. **Things that are hit and not
+recognised** are what to write down.
+
+Write only what is true of that site. How the tool itself works, and generic
+scripting traps, are not here — and **must not be restated or linked to from the
+produced skill**. They have their own owners, and both copies and pointers rot.
 
 ---
 
-## 一、先探"最便宜的读法"，这决定了 skill 一半的价值
+## 1. Probe for the cheapest read first — it is half the skill's value
 
-一个站从"渲染 + 滚 25 轮"降到"取一次 HTML"，这一条就够养活整个 skill 了。
-而且它是**只有第一次探的人才付得起**的成本：后面每个人要么照着做，要么重新探一遍。
+Taking a site from "render plus 25 scroll rounds" down to "fetch the HTML once"
+justifies the whole skill on its own. It is also a cost **only the first prober
+pays**: everyone after either follows the recipe or re-derives it.
 
-**按顺序试，停在第一个成立的：**
+**Try in order; stop at the first that holds:**
 
-1. **原始 HTML 里有没有站点自己的 JSON**——`__INITIAL_STATE__`、`__NEXT_DATA__`、
-   内联的 `application/json`。有就是终点：一次取回，字段比页面上显示的还全。
-2. **`<head>` 里有没有 `<link rel=preload>` 指着数据接口**。有就是"取 HTML → 抽出那条
-   link → 再取一次"，两跳，仍然不用渲染。
-3. **有没有不带 JS 的旧版/移动版/`.json` 端点**。
-4. 都没有，才渲染。
+1. **Does the raw HTML contain the site's own JSON?** `__INITIAL_STATE__`,
+   `__NEXT_DATA__`, an inline `application/json`. If yes, you are done: one
+   fetch, and the fields are more complete than what the page displays.
+2. **Does `<head>` carry a `<link rel=preload>` pointing at the data endpoint?**
+   Then it is fetch HTML → extract that link → fetch once more. Two hops, still
+   no rendering.
+3. **Is there a JS-free legacy/mobile/`.json` endpoint?**
+4. Only if none of the above: render.
 
-**⚠️ 结论要按页面类型分别记，不要一句话概括整个站。** 同一个站上，搜索结果页可能必须渲染，
-而详情页、用户页、推荐流的数据全在原始 HTML 里。**写成一张"哪类页面要渲染"的表**——
-这是读 skill 的人最先要的一句话。
+**⚠️ Record the conclusion per page type. Do not generalise across the site.**
+On one site, search results may require rendering while detail pages, user
+pages, and the recommendation feed all have their data in the raw HTML.
+**Write it as a table of which page types need rendering** — that is the first
+thing a reader of the skill needs.
 
-## 二、找静默失败，这是 skill 的核心资产
+## 2. Hunt for silent failures — this is the skill's core asset
 
-**定义：返回 200、格式正常、结构完整，而内容是错的。**
-它不同于报错——报错模型自己会处理；静默失败模型**认不出来**，会当成真数据写进结论。
+**Definition: returns 200, well-formed, structurally complete, and the content
+is wrong.**
 
-**别等它自己出现，照下面的形状主动去试。**这份清单是实测撞出来的，不是想出来的：
+This differs from an error. A model handles errors on its own. **A model does
+not recognise a silent failure** and will write it into its conclusions as real
+data.
 
-| 形状 | 长什么样 |
-|---|---|
-| **参数缺了照样 200** | 少一个 token / 签名，页面正常返回，只是关键字段整个不在 |
-| **返回的是别的对象** | 查 A city 拿到 B city、查 A 地点拿到上一次查过的、没有数据时回落到上级行政区 |
-| **同名不同物** | 一个选择器在两个界面上指着不同东西；同一个 class 复用在不同按钮上 |
-| **界面语言改变选择器** | `aria-label` 一类的属性随语言参数整体变，另一种语言下静默匹配不到 |
-| **内容被翻译过** | 正文是机翻的，而"原文语言"标注本身是错的 |
-| **数字不是它看起来的意思** | "价格"其实是价格**带**、"评分"其实是加权后的 |
-| **翻页/滚动把读过的掏空** | 容器和高度都留着、孩子节点没了——**按数量做的自检照样通过** |
-| **正文被"展开"截断** | 截断掉的部分**不在 DOM 里**，换选择器、加等待都没用 |
-| **越界后返回固定回落页** | 翻页超过真实深度，每页返回**同一张**与查询无关的页；**条目数照样是满的**，按数量的自检全过 |
-| **同一字段不同子类项数不同** | 同名数组在另一个品类下少一项（少了"食材"），**按下标取会整体错位**——按名字取 |
-| **体积大的条目没有内容** | 11 KB 的响应里只有 id 和标题，地址评分都不在——**别用体积挑数据源**，挑之前先看键 |
-| **检索召回为空但不报错** | 结果里关键词一次都不出现；同一 query 两次返回不同结果集 |
-| **限流不报错** | 把标签页导航走 / 回一页语气不对的东西，读起来像"这里本来就没内容" |
-| **额度按什么累积** | 按端点？按账号？跨会话跨 lane 重不重置？**撞上之后能不能换个端点继续** |
+**Do not wait for these to appear. Probe for the shapes below.** This list was
+produced by hitting them, not by imagining them:
 
-### 每条静默失败必须配一个便宜的自检
+| Shape | What it looks like |
+| --- | --- |
+| **Missing parameter still returns 200** | one token/signature short; the page returns normally, the key field is simply absent |
+| **Returns a different object** | query city A, get city B; query a place, get the previously queried one; no data falls back to the parent region |
+| **Same name, different thing** | one selector points at different things on two screens; one class reused across different buttons |
+| **UI language changes the selector** | `aria-label`-style attributes change wholesale with the language parameter; silently matches nothing in the other language |
+| **Content has been machine-translated** | the body is MT, and the "original language" label is itself wrong |
+| **A number does not mean what it looks like** | "price" is really a price *band*; "rating" is weighted |
+| **Paging/scrolling empties what you read** | container and height remain, children are gone — **a count-based self-check still passes** |
+| **Body truncated behind "expand"** | the truncated part is **not in the DOM**; changing selectors or adding waits does nothing |
+| **Past the end, a fixed fallback page** | paging beyond real depth returns **the same** query-irrelevant page every time; **item counts are still full**, so count-based checks all pass |
+| **Same field, different item count per subtype** | an identically-named array has one fewer entry in another category (no "ingredients"); **index-based access shifts everything** — access by name |
+| **Large items with no content** | an 11 KB response holds only id and title; address and rating are absent. **Do not pick a data source by size** — look at the keys first |
+| **Empty recall without an error** | the keyword appears zero times in the results; the same query returns different result sets twice |
+| **Throttling without an error** | navigates the tab away, or returns a page whose tone is off — reads like "there was never anything here" |
+| **How quota accrues** | Per endpoint? Per account? Does it reset across sessions and lanes? **Can you switch endpoints and continue after hitting it?** |
 
-**这是本节最重要的一句话。**只写"⚠️ 它会返回错误城市的数据"是半成品——
-读的人知道要小心，但不知道小心什么。要给的是**一个当场能跑、能判真假的动作**：
+### Every silent failure needs a cheap self-check attached
 
-- 取完核对返回里的城市名/地点名是不是你要的那个
-- 三个分量之和应当等于总数——不等就是字段认错了
-- `body` 结尾是不是"展开"两个字——是就说明只拿到半截
-- 看 `resp.Status`，别只看有没有返回内容
-- 关键字段在不在（`noteDetailMap` 这种"有它才算成功"的标志位）
+**This is the most important sentence in this section.** Writing only "⚠️ it can
+return data for the wrong city" is half a finding: the reader knows to be
+careful but not what to be careful *about*. Supply **an action that runs on the
+spot and returns a verdict**:
 
-**判据要选"随内容变也不会失效"的那种。**长度阈值几乎总是错的——截断点随帖子长度变，
-空结果的长度和真结果可能一样。
+- After fetching, confirm the returned city/place name is the one you asked for.
+- Three components should sum to the total; if they do not, you have the wrong
+  field.
+- Does `body` end with the word "expand"? Then you have half the content.
+- Check `resp.status`, not just whether a body came back.
+- Is the marker field present (`noteDetailMap` and similar "present means it
+  worked" flags)?
 
-## 三、记基线数字
+**Pick criteria that survive content changes. Length thresholds are almost
+always wrong** — the truncation point moves with post length, and an empty
+result can be the same length as a real one.
 
-基线的用途只有一个：**让下一次运行能判断"我这次是不是不正常"。**
+## 3. Record baseline numbers
 
-滚 12 轮 ≈ 35 秒拿到 37 条；每轮"活着"的单元 1–5 个；有日期 36/37；
-**有永久链接只有 12/37**；有正文 33/37（其余是纯图片帖，不是失败）。
+Baselines have exactly one use: **letting the next run decide whether it is
+abnormal.**
 
-⚠️ **命中率低的那个字段要单独点出来**，并说清后果——上面那个 12/37 意味着
-**去重的 key 必须有退化分支**，否则同一条会被反复计入或整批丢掉。
-⚠️ **把"不是失败"的那部分写明**（纯图片帖本来就没有文字），否则下一个人会去修一个没坏的东西。
+> 12 scroll rounds ≈ 35s for 37 items; 1–5 live units per round; 36/37 have a
+> date; **only 12/37 have a permalink**; 33/37 have body text (the rest are
+> image-only posts, which is not a failure).
 
-## 四、读和驱动要分开算账
+⚠️ **Call out any field with a low hit rate and state the consequence.** The
+12/37 above means **the dedup key must have a degraded branch**, or the same
+item is counted repeatedly or the batch is dropped.
 
-**读**（取 HTML、取接口）不花任何东西，可以随便用。
-**驱动**（点击、输入、滚动）花的是账号风险和限流额度。
+⚠️ **State explicitly which shortfalls are not failures** (image-only posts
+never had text), or the next person will fix something that is not broken.
 
-- **驱动一律放任务最后一步**——中途被截断也只损失那一步。
-- 记下这个站**额度按什么累积**（见第二节最后一行）。这条决定了撞上限流之后是
-  "换个端点继续"还是"今天到此为止"，差别很大。
-- 如果这个站用的是用户本人的登录态，**在 SKILL 里写死"只读"**，并列出不碰的东西。
+## 4. Account for reading and driving separately
 
-**用登录态的站，还要写清登录本身怎么办**，这是一类独立的知识，不属于任何页面：
+**Reading** (fetching HTML, hitting endpoints) costs nothing. Use it freely.
+**Driving** (clicking, typing, scrolling) spends account risk and throttle quota.
 
-- **谁来登**——扫码/短信这类必须由用户手工完成，**不要用脚本驱动登录流程**，
-  那是整个会话里最像机器人的一段操作。
-- **登录会不会触发风控、撞上之后怎么恢复**。实测有站点仅仅"打开登录页"就被判异常并限制网页端，
-  而隔天重试即成功。⇒ 写成"撞上了隔天再试，当天不要反复重试"这种可执行的话，
-  不要写成"有风险，谨慎"。
-- **怎么判断登录态还在**——优先用站点自己返回的标志位（`logined`、`loginCode` 这类），
-  它比"URL 有没有跳走"更硬，比"正文长度"可靠得多。
+- **Put driving in the last step of the task.** Being cut off mid-way then costs
+  only that step.
+- Record **how this site's quota accrues** (last row of section 2). This decides
+  whether hitting the limit means "switch endpoints and continue" or "done for
+  today" — a large difference.
+- If the site uses the user's own login, **write "read-only" into the SKILL**
+  and list what must not be touched.
 
-⚠️ **能力边界会随登录态整体翻转。** 在未登录状态下测出来的"这个站拿不到 X"，
-登录后可能三类页面同时变得可读——一份登出状态写成的 skill 会**整章是错的**，
-而且错得很自信。所以每一条"拿不到"都要标明**是在什么状态下测的**（见第九节）。
+**A site using a login needs the login itself documented**, which is knowledge
+belonging to no single page:
 
-## 五、"在哪儿找得到好东西"和"怎么取"一样重要
+- **Who logs in.** QR-code and SMS flows must be completed by hand. **Do not
+  script the login flow** — it is the most bot-like sequence in the whole
+  session.
+- **Whether logging in trips risk control, and how to recover.** Measured: one
+  site flagged the account and restricted web access on merely *opening the
+  login page*, and a retry the next day succeeded. ⇒ Write it as an executable
+  instruction — "if this trips, retry the next day; do not retry repeatedly the
+  same day" — not as "there is risk, be careful".
+- **How to tell the session is still valid.** Prefer the site's own marker
+  fields (`logined`, `loginCode`). They are harder than "did the URL redirect"
+  and far more reliable than body length.
 
-纯机械的 skill 会让人取到一堆垃圾还以为站点就这样。这个站上信噪比的规律要写下来：
+⚠️ **Capability boundaries flip wholesale with login state.** A "this site
+cannot reach X" measured while logged out may become three readable page types
+once logged in. A skill written from a logged-out session can be **wrong for a
+whole chapter**, and confidently so. Every "cannot reach" must state **which
+state it was measured in** (section 9).
 
-- **高流量的区未必是信息密度高的区**——百万人的"点评大群"可能全是商家日更广告，
-  而几千人的主题小群命中率最高。
-- **评论量大 ≠ 质量好**：评论量最大的那家店/那个源，常常问题也最多。
-- **哪个指标最能反映"这条真有用"**（收藏 > 点赞、附议人数 > 单条长评）。
-- **怎么区分一手和二手**：软广的稳定形态（正文即导流、结尾留联系方式）、
-  内容农场的特征、机翻转载的痕迹。
+## 5. Where the good material is matters as much as how to fetch it
 
-## 六、诚实：从"现象"反推出来的配方必带 bug
+A purely mechanical skill leads people to collect garbage and conclude that is
+all the site has. Write down this site's signal-to-noise patterns:
 
-实测到一个**现象**，然后照着它写一段代码——这段代码没跑过，**而且大概率有 bug**。
-本 session 三次都栽在这里：编的选择器、猜的字段下标、
-一段会在几百 KB 就 `RangeError` 的 base64 编码（它的主要用途恰恰是抓大文件）。
+- **High-traffic areas are not necessarily high-density.** A million-member
+  "reviews" group may be all merchant ad spam, while a few-thousand-member
+  topic group has the highest hit rate.
+- **Review volume ≠ quality.** The venue or source with the most reviews often
+  has the most problems.
+- **Which metric actually indicates "this one is useful"** (saves > likes;
+  number of people agreeing > one long comment).
+- **How to tell first-hand from second-hand:** the stable shape of native ads
+  (body is a funnel, contact details at the end), content-farm markers, traces
+  of machine-translated reposts.
 
-⇒ **把"实测到什么"和"照着写了什么"分开写**，一句话说清哪部分没跑过。
-⇒ **给一个验证入口**：先只跑这一段、打印一个值、对着预期看一眼，再接进主流程。
+## 6. Honesty: a recipe derived from an observation carries bugs
 
-## 七、落文件
+You observe a **phenomenon**, then write code from it. That code has not run,
+**and probably has a bug.** Three failures in one session came from exactly
+this: an invented selector, a guessed field index, and a base64 encoder that
+throws `RangeError` at a few hundred KB — whose primary use is precisely large
+files.
 
-### 先说文风：写站点现在的样子，不写你这次改了什么
+⇒ **Separate "what was measured" from "what was written from it"**, and state in
+one sentence which part has not run.
+⇒ **Give a verification entry point**: run that fragment alone, print one value,
+check it against expectation, then wire it into the main flow.
 
-skill 是**给下一个人看的现状描述**，不是给你自己看的修订记录。
-改一个已有 skill 时最容易滑进 changelog 口吻，实测滑进去的形态有这几种：
+### The harder case: **once true, silently now false**
 
-- "此前记录的『这两类页面拿不到』**已经被推翻**"
-- "**2026-08-24 首次尝试**被限制，**8-25 隔天重试**成功"
-- "原本担心要标『仅某品类实测』，**现在可以**当通用结构用"
+The rule above is about recipes that were never run. This is the opposite: it
+**was run, and was correct**, but the site changed or a layer underneath the
+tool was replaced — and **nothing announces that it expired.** Unlike an
+invented recipe, this one had evidence, so the reader (including you) has no
+reason to doubt it.
 
-读的人不知道"此前"是什么、也不关心哪天改的，他只想知道**现在这个站长什么样**。
-把每一句都改写成站点的属性：*登录会触发风控，撞上隔天再试* ——
-一句话，没有时间线，可执行。
+Measured: an audit of the tool's own skill turned up four such statements — a
+warning that return values carry an extra `$id` field, three API names in the
+previous runtime's spelling (`Page.APIRequest`, now `Page.request`), and a
+closing code block still written in the previous language. Each was correct when
+written. All failed silently: following them returns `undefined`, and
+`undefined` at that line looks exactly like "this page does not have that".
 
-**日期只在一个地方留**：基线数字的出处（"2026-08-25 实测，北京，样本 N=2"）。
-那是测量的时效声明，不是变更记录——读的人靠它判断这批数字过没过期。
+⇒ **Every assertion about *how the tool behaves* must state what it was measured
+against** — not just login state (section 4) but the tool's or site's version or
+shape at the time.
+⇒ **When revising a skill, actually run every recipe you touch.** Far more
+effective than re-reading. All four findings above came from running; many
+read-throughs had missed them.
+⇒ A cheap self-check: **grep the body for spellings that should no longer
+exist** (old field names, old API names, the previous language's syntax). Faster
+than re-reading, and it targets this class specifically.
 
-判据：**删掉所有日期和"此前/原来/现在改成"之后，句子还成立吗？** 不成立就是 changelog。
+## 7. Committing the file
 
-**`SKILL.md`**：
-- **铁律** —— 静默失败，一条一节，**每条自带自检**。这是全文最先被读的部分。
-- **能力表** —— 哪类页面要渲染、哪类一次取回；这个站能拿到什么、拿不到什么。
-- **方法论** —— 第五节那些"怎么找到好东西"。
-- **不做的事** —— 明确的边界，尤其是用了用户登录态的时候。
-- **口径** —— 结论里必须交代的东西（覆盖率、日期、数字出处）。
+### Style: describe the site as it is now, not what you changed
 
-**`references/`**：按**页面类型**一个文件（列表页、详情页、评论……），
-外加一个只写**这个站自己**的脚本坑。通用的不写。
+A skill is **a description of the current state, for the next person.** It is
+not a revision log for you. Revising an existing skill is where changelog voice
+creeps in. Measured forms it takes:
 
+- "the previously recorded 'these two page types are unreachable' **has been
+  overturned**"
+- "**first attempted 2026-08-24**, restricted; **retried 8-25**, succeeded"
+- "originally we worried this needed a 'measured on one category only' caveat;
+  **it can now** be treated as a general structure"
 
-## 八、评一个抓取 skill：主指标是弯路成本，不是答案对不对
+The reader does not know what "previously" was and does not care which day it
+changed. They want to know **what the site looks like now.** Rewrite every
+sentence as a property of the site: *logging in trips risk control; if it does,
+retry the next day.* One sentence, no timeline, executable.
 
-写完之后想知道"这个 skill 到底有没有用"，A/B 一下新旧两版是对的，但**指标和排期是一件事的两半：
-排期错了拿到的就是被污染的数字，指标选错了则连没被污染的数字都读不出结论。**
+**Dates survive in exactly one place**: the provenance of baseline numbers
+("measured 2026-08-25, Beijing, N=2"). That is a statement of measurement
+currency, not a change record — the reader uses it to judge whether the numbers
+have expired.
 
-### 别按答案正确率评
+**Test: delete every date and every "previously / originally / now changed to".
+Do the sentences still stand?** If not, it was a changelog.
 
-一次 7 个 skill 的 A/B 里，**63 条 pass/fail 断言在六组配对里两边全过**，几乎没有区分度。
-原因是模型会自己绕过 skill 里的过时描述——它自己发现了车次表 `fetch` 读不到、空气质量回落到上级州、
-挂牌价百分比丢正负号，全都没靠 skill 提示。
+### File layout
 
-真正有区分度的是**调用数和 token**：一个 skill 修好后从 11–12 次调用 / 238–290 秒
-降到 5–6 次 / 100–108 秒，因为 agent 不用再自己撞一遍那个静默失败。
+**`SKILL.md`:**
 
-⇒ 主指标用**调用次数 / token / 失败调用数**，断言只用来兜底查硬错误。
-skill 的价值不在"让答案对"（模型多半能自己救回来），而在"不用每次重新踩一遍坑"——
-按正确率去评，会得出"skill 没用"的错误结论，然后把最该写下来的坑删掉。
+- **Hard rules** — silent failures, one per section, **each with its own
+  self-check**. This is the part read first.
+- **Capability table** — which page types need rendering, which come back in one
+  fetch; what this site does and does not yield.
+- **Method** — the "where the good material is" content from section 5.
+- **Out of scope** — explicit boundaries, especially when using the user's login.
+- **Reporting requirements** — what a conclusion must disclose (coverage, dates,
+  provenance of numbers).
 
-两个附带的坑：
-- **断言本身经常有 bug**，flag 之前先看证据——一次评测里有 4 条断言误报的其实是正确行为。
-- **测试题不要用 skill 正文里已经写了答案的例子**，换一个 skill 没提过的例子再测一遍才算数。
+**`references/`:** one file **per page type** (listing, detail, comments…),
+plus one file for **this site's own** scripting traps. Nothing generic.
 
-### 断言会把"旧规矩"焊死在评测里
+## 8. Evaluating a scraping skill: the metric is detour cost, not answer correctness
 
-这和上一条"断言有 bug"不是一回事，值得单列：**断言会把 skill 当时的口径固化下来，
-等口径被推翻，它就开始惩罚正确行为。**
+A/B-ing an old and new version is right, but **metric and scheduling are two
+halves of one thing: schedule it wrong and the numbers are contaminated; pick
+the wrong metric and you cannot read a conclusion even from clean numbers.**
 
-实例：一条断言写的是"没有把视频笔记当成文字依据"，照搬当时 skill 的"只看图文，忽略视频"。
-后来实测发现视频有字幕，规矩改了，这条断言**留在原地继续给正确行为扣分**。改写之后又连错两次：
-先是匹配"转写"二字，结果把一句 *视频没有转写* 判成通过（**为"断言了相反的事"给分**）；
-改成查机制（字段名、字幕文件后缀）之后，又变成对"搜索时就过滤掉图文"扣分——
-而那恰恰是复核后确认要保留的策略。
+### Do not score on answer correctness
 
-⇒ 改 skill 的口径时，**同一次把断言一起过一遍**。断言里只放"不管策略怎么变都成立"的东西
-（如实交代覆盖率、数字有出处、不作假），策略偏好（图文优先还是视频优先）不要写进断言。
-一条断言**通过**时也要读它的 evidence——上面那条 false pass 只有看证据才看得出来。
+In one A/B across 7 skills, **63 pass/fail assertions came out identical on both
+sides in six of the pairings** — almost no discriminating power. The reason is
+that the model routes around stale descriptions on its own: it discovered
+unaided that the timetable could not be read with `fetch`, that air quality fell
+back to the parent state, and that listing-price percentages dropped their sign.
 
-### 排期：并行和先后都会污染数据
+What does discriminate is **call count and tokens**: one skill, once fixed, went
+from 11–12 calls / 238–290s down to 5–6 calls / 100–108s, because the agent no
+longer had to rediscover the silent failure.
 
-**根因：所有抓取 agent 共用同一个真实浏览器会话和同一批站点，会互相污染，
-而被污染的数据长得和真实发现一模一样**——分不出来是站点变了还是自己把自己限流了。
-（这条不只在评测时成立，任何时候同时放出多个抓取 agent 都适用。）
+⇒ **Primary metrics: call count, tokens, failed-call count.** Assertions are a
+backstop for hard errors only.
 
-- **同一个 skill 的新旧两版不能同时跑**——打同一个站会互相触发限流，然后把限流误判成站点行为。
-- **并行度约 3**，且尽量一个 agent 一个站。
-- 每个 agent 带**快速失败**指令：连续 2 次网络层失败就停手、写下已有结果并说明卡在哪。
-  有一次 3 个 agent 在本机断网时空转了 28–32 分钟，什么都没写出来。
-- **额度按账号累积的站，先后跑一样污染。**（第二节最后一行那个问题，这里要用上。）
-  一个全新 lane、当天第一条内容、第一个驱动动作就被弹走，因为几小时前另一个 agent
-  把额度用光了——而它长得像"这条本来就没内容"。把吃额度重的题目放在最前面或分到不同天；
-  读结果时先看日志里有没有那个限流错误码，再决定那个数字算不算数。
-- 每个站自己的限流个性（几发撞验证码、额度按什么累积）写在**那个站的 skill** 里，不在这儿。
+A skill's value is not "makes the answer correct" — the model can usually
+recover on its own. It is "nobody has to step in the same hole again". **Scoring
+on correctness produces the wrong conclusion — "this skill is useless" — and
+then deletes the very holes most worth recording.**
 
-⇒ spawn 前先想清楚这个 agent 会打哪个站、会不会和在跑的撞车；跑完读调用数，不读通过率。
+Two adjacent traps:
 
-## 九、收尾前对一遍
+- **Assertions themselves frequently have bugs.** Read the evidence before
+  flagging: in one evaluation, 4 assertions flagged behaviour that was correct.
+- **Do not use test questions whose answers are already written in the skill
+  body.** Re-test with an example the skill never mentions before it counts.
 
-- [ ] 目录名和 `name:` 都是 `passenger-<站点>`
-- [ ] 每类页面都写了要不要渲染
-- [ ] 每条静默失败都配了自检，且自检不依赖长度阈值
-- [ ] 基线数字里点出了命中率低的字段和它的后果
-- [ ] 说清了驱动花什么、额度按什么累积
-- [ ] 没跑过的配方标了，并给了验证入口
-- [ ] 通篇没有复述、也没有指向工具本身或其它通用能力
-- [ ] `description` 里没有机制，也不是正文的目录——只有能力、何时用、归谁
-- [ ] 声称"做不到/拿不到"的地方，要么当场验过，要么原话写着没试过
-- [ ] 每条"拿不到"都标了**是在什么登录/权限状态下测的**
-- [ ] 用登录态的站写了登录怎么来、风控撞上怎么恢复、怎么判断它还在
-- [ ] 通篇删掉日期和"此前/原来/现在改成"之后句子仍然成立（唯一例外是基线数字的出处）
-- [ ] 要评测的话：主指标是调用数/token，不是通过率；断言里没有会随策略变的口径
+### Assertions weld old policy into the evaluation
+
+Distinct from "assertions have bugs" and worth its own entry: **an assertion
+freezes the skill's policy at the time it was written, and once that policy is
+overturned it starts penalising correct behaviour.**
+
+Example: an assertion read "did not treat video notes as textual evidence",
+copied from the skill's then-current "images and text only, ignore video". Later
+measurement found the videos have subtitles and the policy changed — and the
+assertion **stayed in place, docking points for correct behaviour.** Two rewrites
+failed in turn: matching on the word "transcript" passed a sentence saying *the
+video has no transcript* (**awarding points for asserting the opposite**), and
+switching to mechanism (field names, subtitle file extensions) then penalised
+"filter out image posts at search time" — which review had confirmed as the
+policy to keep.
+
+⇒ **When you change a skill's policy, walk the assertions in the same pass.**
+Assertions hold only what stays true regardless of policy (coverage is disclosed
+honestly, numbers have provenance, nothing is fabricated). Policy preferences
+(images-first vs video-first) do not go in assertions. **Read the evidence even
+when an assertion passes** — the false pass above was visible only in evidence.
+
+### Scheduling: both parallel and sequential runs contaminate
+
+**Root cause: all scraping agents share one real browser session and one set of
+sites, so they interfere with each other, and contaminated data looks exactly
+like a genuine finding** — you cannot tell "the site changed" from "I throttled
+myself". (This holds any time multiple scraping agents run at once, not only
+during evaluation.)
+
+- **Never run two versions of the same skill concurrently.** Hitting one site
+  from both triggers throttling, which then gets misread as site behaviour.
+- **Parallelism ≈ 3**, and prefer one agent per site.
+- Give every agent a **fail-fast** instruction: stop after 2 consecutive
+  network-layer failures, write up what you have, and say where you stopped.
+  Measured: 3 agents spun for 28–32 minutes during a local network outage and
+  produced nothing.
+- **On sites whose quota accrues per account, sequential runs contaminate too.**
+  (This is where section 2's last row gets used.) A brand-new lane, the day's
+  first item, thrown out on its first driving action because another agent
+  exhausted the allowance hours earlier — and it looks like "this item never had
+  content". Put quota-heavy tasks first or on separate days. **When reading
+  results, check the log for the throttle code before deciding whether a number
+  counts.**
+- Each site's own throttling personality (how many requests trip a captcha, how
+  quota accrues) goes in **that site's skill**, not here.
+
+⇒ Before spawning, work out which site the agent will hit and whether it
+collides with one already running. Afterwards, read call counts, not pass rates.
+
+## 9. Pre-commit checklist
+
+- [ ] Directory name and `name:` are both `passenger-<site>`
+- [ ] Every page type says whether it needs rendering
+- [ ] Every silent failure has a self-check, and no self-check relies on a
+      length threshold
+- [ ] Baseline numbers call out low-hit-rate fields and their consequences
+- [ ] States what driving costs and how quota accrues
+- [ ] Unrun recipes are marked, with a verification entry point
+- [ ] Every recipe touched in this pass was actually run; body grepped for old
+      field names and old API names
+- [ ] Nothing restates or links to the tool itself or other generic capabilities
+- [ ] `description` has no mechanism and is not a table of contents — only
+      capability, when to use, and who owns it otherwise
+- [ ] Every "cannot do / cannot reach" was either verified in this pass or says
+      verbatim that it was not tried
+- [ ] Every "cannot reach" states **which login/permission state it was measured
+      in**
+- [ ] Login-using sites document how to log in, how to recover from risk
+      control, and how to tell the session is still valid
+- [ ] Delete every date and every "previously / originally / now changed to" —
+      do the sentences still stand? (Sole exception: provenance of baseline
+      numbers)
+- [ ] If evaluating: primary metric is call count / tokens, not pass rate; no
+      assertion encodes a policy that can change

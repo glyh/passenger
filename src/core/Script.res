@@ -10,9 +10,8 @@
 // **The one place the port changes the caller's contract, again.** The source
 // was Python, then C# on Roslyn, and is JavaScript on `node:vm` here. The shape
 // of the door is unchanged where it counts: `Page` is bound, `return` hands a
-// value back, and what may cross is still JSON and nothing else. What *is*
-// different since ticket 074 is how much else is in scope -- everything this
-// process has, because this process is the caller's own machine. What the caller writes is
+// value back, and what may cross is still JSON and nothing else. What the
+// caller writes is
 // `await Page.goto(url)` where the C# door wanted `await Page.GotoAsync(url)` --
 // camelCase because a Playwright member in this runtime is camelCase, which is
 // the same reasoning that made it PascalCase there.
@@ -85,13 +84,6 @@ let crossable = value => {
 
 // --- compiling and running --------------------------------------------------
 
-/// The names the wrapper takes, in the order `execute` applies them.
-///
-/// A list rather than a record now: they are the parameters of an async
-/// function, so their spelling here and their order there have to agree, and
-/// one array is the only place that is true.
-let bound = ["Page", "console", "fs", "path", "require"]
-
 /// Compile, reporting a syntax error against the caller's own line numbers.
 ///
 /// The line needs no offset: the async wrapper `Node.wrap` puts round the source
@@ -99,7 +91,7 @@ let bound = ["Page", "console", "fs", "path", "require"]
 /// line on the *first* line of the stack -- `<script>:1` -- rather than in the
 /// message, which is where this reads it from.
 let compile = source =>
-  switch Node.script(Node.wrap(source, ~names=bound), {"filename": scriptPath}) {
+  switch Node.script(Node.wrap(source), {"filename": scriptPath}) {
   | compiled => compiled
   | exception JsExn(e) =>
     let line =
@@ -175,52 +167,13 @@ let raised = (e, source) =>
     detail: Some(where(JsExn.stack(e)->Option.getOr(""), source)),
   })
 
-/// What a script sees.
+/// Every method on `console`, pointed at stderr.
 ///
-/// **Everything this process sees, plus `Page`.** Since ticket 074 the source
-/// runs in *this* context rather than a fresh `vm` one, so `fetch`, `URL`,
-/// `Buffer`, `process`, the timers and every other Node global are simply
-/// there, because they are there for this file too.
-///
-/// That is a reversal of two rules and it is worth being plain about both.
-/// There was a list here -- `Page`, `console`, `fs`, `path`, and the two timers
-/// -- and `fetch` was left off it by name, from ticket 046, on the grounds that
-/// a second way onto the web going around the browser has none of the cookies
-/// and none of the session this tool exists for. That reasoning is still true
-/// about *the design*: `Page.request` is the sanctioned way onto the web and a
-/// recipe that reaches for `fetch` instead has misunderstood the tool. What was
-/// never true is that leaving the name out *enforced* anything. This file's own
-/// header said so -- "deliberately not a sandbox, and not pretending to be one:
-/// a caller-supplied script runs in this process either way, and what is
-/// missing here is still reachable by other means." A name that a determined
-/// script could reach through `process.binding` or a `require` away was
-/// stopping an accident, at the price of a real one: a caller with a legitimate
-/// need for a Node global got a `ReferenceError` and no way round it.
-///
-/// **passenger runs on the caller's own machine**, launched by their own agent,
-/// against their own logged-in Chrome. There is nobody on the other side of
-/// that wall to keep out, which is the whole of ticket 074's argument.
-///
-/// Four names are still handed in, and none of them is a restriction:
-///
-///   `Page`      the door itself. The one thing here that is Passenger's.
-///   `console`   **rebuilt so that all of it goes to stderr**, and this one is
-///               not negotiable at any level of trust. `console.log` writes to
-///               stdout, which is the JSON-RPC transport, so one tracing line
-///               in a caller's script corrupts the stream it is travelling on.
-///               Passed as an argument precisely so it *shadows* the real
-///               global rather than hoping the caller avoids it.
-///   `fs`/`path` bound for convenience, because every recipe in the skill uses
-///               them -- the walker is read off disk and bytes that cannot
-///               cross back as JSON are written out. `require` reaches the same
-///               modules; these two save the ceremony.
-///   `require`   this file's own, from `createRequire`. ES module scope has no
-///               `require` global to inherit, so a script that wants a module
-///               would otherwise have nothing but dynamic `import`.
-///
-/// Every method on `console`, pointed at stderr. Not a subset: a script
-/// reaching for `console.table` or `console.dir` must not be the one that
-/// breaks the wire.
+/// Not a subset: a script reaching for `console.table` or `console.dir` must
+/// not be the one that breaks the wire. stdout is the JSON-RPC transport, so
+/// `console.log` reaching the real console corrupts the stream the reply is
+/// travelling on. This is the one thing in `context` below that is protocol
+/// correctness rather than convenience, and it holds at any level of trust.
 let quietConsole: 'a = %raw(`(() => {
   const out = {};
   for (const name of Object.keys(console)) {
@@ -237,7 +190,57 @@ let quietConsole: 'a = %raw(`(() => {
 
 let require = createRequire(%raw(`import.meta.url`))
 
-let apply: ('f, 'a, 'b, 'c, 'd, 'e) => promise<'r> = %raw(`(f, a, b, c, d, e) => f(a, b, c, d, e)`)
+/// The context a script runs in: node's own global object, plus five names.
+///
+/// The prototype is the whole of ticket 074. A vm context starts with V8's
+/// intrinsics and *none* of node's globals, so this used to be a flat list that
+/// had to name every global a caller might reach for -- and `fetch` was left
+/// off it by hand (046), which made the list a confinement whether or not it
+/// was meant as one. **passenger runs on the caller's own machine**, driving
+/// their own logged-in Chrome, so there was nobody on the other side of that
+/// wall; and the list never enforced anything anyway, since what it omitted was
+/// a `require` away. Giving the context object node's real global as its
+/// prototype ends it: `fetch`, `URL`, `Buffer`, `process`, the timers and the
+/// rest resolve through the chain, because a global lookup is an ordinary
+/// [[Get]] and walks it.
+///
+/// Two properties of doing it here rather than around the source, and both are
+/// the reason it is done here:
+///
+///   **A script's own `const` shadows.** Top-level `const` in a vm context
+///   lands in that context's lexical scope, which is consulted before the
+///   global object, so `const path = "/tmp/x.md"` is a caller naming their own
+///   variable rather than colliding with one of these. The recipes in the skill
+///   spell exactly that line.
+///
+///   **The five own properties are per call, so nothing races.** Two lanes
+///   calling `script` at once get a context object each and neither `Page` is
+///   visible to the other. Setting them on the real global would be simpler and
+///   is wrong for that reason.
+///
+/// Note that `globalThis` inside a script is the *host's*, inherited like any
+/// other property: `globalThis.Page` is undefined and a script assigning to it
+/// writes to this process's real global. Deliberately not a sandbox, and not
+/// pretending to be one -- a caller-supplied script runs in this process either
+/// way.
+@val external globalThis: 'a = "globalThis"
+
+let context = (page): 'a => {
+  let scope = Object.create(globalThis)
+  scope->Object.set("Page", page)
+  // stdout is the JSON-RPC transport, so this one is protocol correctness
+  // rather than confinement: `console.log` reaching the real console corrupts
+  // the stream the reply is travelling on.
+  scope->Object.set("console", quietConsole)
+  // `fs` and `path` because every recipe in the skill reads a walker off disk
+  // and writes back the bytes that cannot cross as JSON. `require` because ES
+  // module scope has no global one to inherit, so without it a script has only
+  // dynamic `import()`.
+  scope->Object.set("fs", fs)
+  scope->Object.set("path", path)
+  scope->Object.set("require", require)
+  scope
+}
 
 /// Run the script and return what it returned, checked.
 ///
@@ -245,8 +248,8 @@ let apply: ('f, 'a, 'b, 'c, 'd, 'e) => promise<'r> = %raw(`(f, a, b, c, d, e) =>
 /// script that threw, and a value that cannot leave -- each naming which one it
 /// was, since the caller's next move differs for each.
 let execute = async (source, page) => {
-  let body = compile(source)->Node.runInThisContext
-  switch await apply(body, page, quietConsole, fs, path, require) {
+  let compiled = compile(source)
+  switch await compiled->Node.runInContext(Node.createContext(context(page))) {
   | returned => crossable(returned)
   | exception JsExn(e) => throw(raised(e, source))
   }

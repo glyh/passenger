@@ -1,182 +1,199 @@
 ---
 name: using-passenger
 description: |
-  Use when reading or driving web pages through the passenger MCP server --
-  `openLane`, `script`, `showBrowser`, `listTabs`, `closeTabs`. Read it before
-  the first call in a session, and again whenever a read comes back thinner
-  than the page looked. Site-specific mechanics (selectors, silent failures,
-  login state) belong in that site's own skill, not here.
+  Use when reading or driving a web page through the passenger MCP server:
+  `openLane`, `script`, `showBrowser`, `listTabs`, `closeTabs`. Reaches pages
+  through a real logged-in Chrome, so use it when a page needs a login, sits
+  behind anti-bot protection, or renders its content with JavaScript. Triggers
+  include: "read this page", "log in and get X", "this site blocks me", "the
+  fetch came back empty", "scrape this listing", "a captcha is in the way",
+  plus any first call in a session and any read that returns less than the page
+  appeared to hold.
+  Does NOT cover site-specific mechanics — selectors, that site's silent
+  failures, its login state — which belong in that site's own skill. To turn
+  HTML you already have into markdown, use `html-to-markdown`. To write down
+  what you learned about a site, use `passenger-skill-authoring`.
 ---
 
 # Using passenger
 
-`passenger` reaches web pages through a real, logged-in Chrome that sites
-cannot distinguish from an ordinary browser. Reach for it over a plain HTTP
-fetch when a page needs a login, sits behind anti-bot protection, or renders
-its content with JavaScript.
+passenger reaches web pages through a real, logged-in Chrome that sites cannot
+distinguish from an ordinary browser. Prefer it over a plain HTTP fetch when a
+page requires a login, sits behind anti-bot protection, or renders its content
+with JavaScript.
 
-**This file is the judgement**: what is true before any particular call, and
-what to notice once a page is in front of you. The mechanics live in four
-files under `references/`, and none of them are worth opening until you want
-one:
+This file is the decision content: what holds before any call, and what to
+check once a page is in front of you. Mechanics live in `references/`.
 
-| what you are doing | open |
-|---|---|
-| getting the text, the markdown, or the page's own JSON | `references/reading-a-page.md` |
-| a page whose content is photographs, menus or charts | `references/pictures.md` |
-| writing the JavaScript: what is in scope, what cannot cross back | `references/writing-scripts.md` |
-| tabs piling up, a wedged browser, a shared screen, `orphan` | `references/tabs-and-lanes.md` |
+| Task | File |
+| --- | --- |
+| Get text, markdown, or the page's own JSON | `references/reading-a-page.md` |
+| Page whose content is photographs, menus, charts | `references/pictures.md` |
+| Write the JavaScript: scope, traps, what can cross back | `references/writing-scripts.md` |
+| Tabs piling up, wedged browser, shared screen, `orphan` | `references/tabs-and-lanes.md` |
 
-The recipes those files run -- `markdown.js`, `unstrip-asides.js`,
-`pictures.js` -- are in `scripts/`. What each tool *argument* means is in the
-tool schemas, and is repeated nowhere here.
+Recipes those files run — `markdown.js`, `unstrip-asides.js`, `pictures.js` —
+are in `scripts/`. Per-argument meaning is in the tool schemas and is not
+duplicated here.
 
-**The server runs on your machine, in your filesystem.** A script gets `fs`
-(`node:fs/promises`) and it lands on the same disk your other tools see, in both
-directions: read a recipe off its real path instead of pasting it into a script,
-and `fs.writeFile` bytes to a path you can then open yourself. A screenshot or a
-downloaded image does not have to cross back as JSON. It is also how a file gets
-*into* a page -- `setInputFiles` takes a path on this same disk.
+## The server runs on your machine, on your filesystem
+
+A script gets `fs` (`node:fs/promises`) pointed at the same disk your other
+tools see. This works in both directions:
+
+- Read a recipe from its real path instead of pasting it into a script.
+- `fs.writeFile` bytes to a path you can open yourself. A screenshot or a
+  downloaded image never has to cross back as JSON.
+- Put a file *into* a page: `setInputFiles` takes a path on this same disk.
 
 ## Open a lane first
 
-    lane = openLane()
+```
+lane = openLane()
+```
 
 Every tab-touching tool takes it. A lane owns the tabs opened in it: no other
-caller can see them, list them or close them, and nothing you do reaches
-theirs. This matters more than it sounds -- one Chrome is shared by every agent
-on the machine, including your own subagents, and the tab-closing verb used to
-take no argument at all: it closed everything but one blank tab, whoever was
-driving it.
+caller can see, list, or close them, and nothing you do reaches theirs.
 
-A lane collects itself after **30 minutes with no calls**, closing its tabs.
-Every call naming the lane restarts that clock, so work in progress is safe;
-what is not safe is a wait you start and then leave. Before asking a human for
-something slow, say how long you are prepared to wait:
+This matters because one Chrome is shared by every agent on the machine,
+including your own subagents. The tab-closing verb previously took no argument
+and closed everything but one blank tab, whoever was driving it.
 
-    setTtl(lane, 120)                     # minutes
-    showBrowser(lane, ttlMinutes: 120)    # or say it as you ask
+**A lane collects itself after 30 minutes with no calls**, closing its tabs.
+Every call naming the lane restarts that clock. Work in progress is therefore
+safe; a wait you start and then leave is not. Before asking a human for
+something slow, declare how long you will wait:
 
-Say `destroyLane(lane)` when you are finished, rather than leaving tabs parked
-until the clock reaches them. A lane that ran out comes back `LANE_NOT_FOUND`
-with its tabs already closed: nothing is recoverable, so open a new one and
-start again.
+```
+setTtl(lane, 120)                     # minutes
+showBrowser(lane, ttlMinutes: 120)    # or declare it as you ask
+```
 
-## One door, and it hands you the page
+Call `destroyLane(lane)` when finished rather than leaving tabs parked until
+the clock reaches them. **A lane that expired returns `LANE_NOT_FOUND` with its
+tabs already closed. Nothing is recoverable and retrying will not help** — open
+a new lane and start again.
 
-There is no `fetch` *tool*. `script` is the whole surface onto a page: it
-navigates, it drives, and it returns what you tell it to.
+## One door: `script`
 
-    script(lane, source: """
-        await Page.goto("https://example.com");
-        return await Page.innerText("body");
-    """)
+There is no `fetch` tool. `script` is the entire surface onto a page: it
+navigates, drives, and returns what you tell it to.
 
-That is plain JavaScript, and `Page` is Playwright's own `Page` -- the API you
-already know, not a binding of it. Omit `tab` and you get a fresh one; pass a
-tab id from an earlier reply and you continue on it. Navigation, interaction and
-reading are all one call, so a page you know how to handle costs exactly one
-round trip.
+```js
+script(lane, source: """
+    await Page.goto("https://example.com");
+    return await Page.innerText("body");
+""")
+```
 
-**Two things about the source**, and they account for nearly every first-try
-failure:
+The source is plain JavaScript and `Page` is Playwright's own `Page` — the API
+you already know, not a binding of it. Omit `tab` for a fresh one; pass a tab
+id from an earlier reply to continue on it. Navigation, interaction, and
+reading are one call, so a page you know how to handle costs one round trip.
 
-- **`Page`, capitalised.** The one name this side introduces, and the one thing
-  in your script that is not ordinary JavaScript spelling. `page` is not
-  defined.
+Two rules account for nearly every first-try failure:
+
+- **`Page` is capitalised.** It is the one name this side introduces. `page` is
+  not defined.
 - **`return` and top-level `await` both work.** Your source is wrapped in an
-  async function before it runs, so there is no module, no wrapper to write, and
-  no `(async () => {...})()` to add yourself.
+  async function before it runs. Do not add `(async () => {...})()` yourself.
 
-The ones that bite afterwards -- `Page.evaluate` silently answering `undefined`
-when handed a string, what is in scope around your source, the live handles
-that cannot cross back -- are in `references/writing-scripts.md`.
-**Trigger:** open it the moment a script fails to parse, a call throws something
-other than a wall or a timeout, or an `evaluate` comes back `undefined`.
+The traps that bite later — `Page.evaluate` silently returning `undefined` when
+handed a string, what is in scope, which values cannot cross back — are in
+`references/writing-scripts.md`.
 
-**This server does not interpret pages.** It used to: there was a `fetch` tool
-with an `article` mode and a `dom` mode, and choosing between them was the caller's
-problem while getting them wrong was everyone's. Extraction is a judgement
-about what a page *means*, and that judgement is yours -- you know what you
-asked for and what you need from it. What this side does is navigate, measure
-and get out of the way.
+**Open it when:** a script fails to parse, a call throws anything other than a
+wall or a timeout, or an `evaluate` returns `undefined`.
+
+**This server does not interpret pages.** It previously did, via a `fetch` tool
+with `article` and `dom` modes; choosing between them was the caller's problem
+and getting it wrong was everyone's. Extraction is a judgement about what a
+page *means*, and that judgement is yours. This side navigates, measures, and
+gets out of the way.
 
 ## Reading a page
 
-Start with the cheapest thing that answers your question.
+Start with the cheapest read that answers the question.
 
-    return await Page.innerText("body");                 // the text, and nothing else
-    return await Page.locator("#results").innerText();   // just the part you want
+```js
+return await Page.innerText("body");                 // the text, nothing else
+return await Page.locator("#results").innerText();   // only the part you want
+```
 
-Those two answer most questions, and the second costs you the least context:
-you know what you are looking for, and the page does not. Two more are worth
-knowing by name, both in `references/reading-a-page.md`:
+Those answer most questions, and the second costs the least context: you know
+what you are looking for and the page does not. Two more are worth knowing by
+name, both detailed in `references/reading-a-page.md`:
 
-- **`Page.request`**, which often reaches the site's own JSON without
-  rendering the page at all -- a `__INITIAL_STATE__` blob, or a preload link in
-  the `<head>` -- and is the cheapest and most structured read there is when a
-  site has one. Look for it before writing selectors.
-- **`markdown.js`**, when structure is the thing you need: headings, lists,
-  fenced code, and every link resolved and inline.
+- **`Page.request`** often reaches the site's own JSON without rendering the
+  page at all — an `__INITIAL_STATE__` blob, or a preload link in the `<head>`.
+  This is the cheapest and most structured read available when a site has one.
+  **Look for it before writing selectors.**
+- **`markdown.js`** when you need structure: headings, lists, fenced code, and
+  every link resolved and inline. It reads the *live* page, so it sees what
+  JavaScript drew. For a forum thread, or when you want frontmatter, hand the
+  HTML to the `html-to-markdown` skill instead — `references/reading-a-page.md`
+  documents the seam with measurements on the same page.
 
-**Trigger:** open `references/reading-a-page.md` before writing a selector by
+**Open `references/reading-a-page.md` when:** before writing a selector by
 hand, or before assuming a page has no structured JSON of its own.
 
-**A short read comes back; a long one goes to disk.** A tool reply is JSON, so
-a returned page arrives quoted and escaped, on one line, and all of it is in
-your context whether you wanted it or not. Write it out with
-`fs.writeFile` and return the path and the length instead -- the length being
-the thing you read against what you expected.
+**Short reads return; long reads go to disk.** A tool reply is JSON, so a
+returned page arrives quoted and escaped on one line, and all of it enters your
+context whether or not you wanted it. Write it out with `fs.writeFile` and
+return the path plus the length. The length is what you check against
+expectation.
 
 ## The tool measures; you judge
 
-The one thing this server reports about a page is something it *measured*: a
-vendor's own markup, matched against a fixed table. It never rules on what a
-page means. That division is deliberate and load-bearing -- six mechanisms that
-crossed it have been deleted from this codebase -- and it is why the reading
-above is yours to do.
+The one thing this server reports about a page is measured: a vendor's own
+markup, matched against a fixed table. It never rules on what a page means.
+That division is load-bearing — six mechanisms that crossed it have been
+deleted from this codebase — and it is why the reading above is yours to do.
 
-**A `script` reply is flat, and carries what you returned plus nothing about the
-page except a wall.**
+A `script` reply is flat. It carries what you returned, plus nothing about the
+page except a wall:
 
-    tab           always -- the handle you pass back to continue on this page
-    returned      what your script returned. absent if it did not finish
-    code, error,  present only on failure, and their presence *is* the failure:
-      where       `if (r.error)` is the test, and `where` is your own line
-    wallChecked   always. false means you passed `checkWall: false`
-    blocked       present only when a vendor's markup matched -- `if (r.blocked)`
- It used to carry a measurement of the tab you ended on -- a character
-count, the picture geometry, the url and title -- and that is gone. Whatever
-you want to know about the page, return it: `Page.url()`,
-`await Page.title()`, `(await Page.innerText("body")).length`. They cost you
-nothing extra, because your script is already there.
+| Field | When | Meaning |
+| --- | --- | --- |
+| `tab` | always | the handle to pass back to continue on this page |
+| `returned` | on success | what your script returned; absent if it did not finish |
+| `code`, `error`, `where` | on failure | their presence *is* the failure. Test `if (r.error)`. `where` cites your own line |
+| `wallChecked` | always | `false` means you passed `checkWall: false` |
+| `blocked` | wall matched only | test `if (r.blocked)` |
 
-The consequence is worth stating plainly, because nothing else will state it:
-**a page that reads short will not tell you it was picture-borne**, and no
-field in the reply hints at it.
+The reply previously carried a measurement of the tab you ended on — character
+count, picture geometry, url, title. That is gone. Whatever you want to know
+about the page, return it: `Page.url()`, `await Page.title()`,
+`(await Page.innerText("body")).length`. These cost nothing extra because your
+script is already there.
 
-## Walls, and the ones the tool cannot see
+Consequence, since nothing else states it: **a page that reads short will not
+tell you it was picture-borne.** No field in the reply hints at it.
 
-A `blocked` result means a *known vendor's* markup was matched: Cloudflare,
-reCAPTCHA, hCaptcha, DataDome, Arkose, PerimeterX, or a plain login wall. That
-table is fixed. It does not grow, and it never will.
+## Walls, including the ones the tool cannot see
 
-**Everything else arrives as an ordinary page.** A soft wall is not a `blocked`
-verdict that is late; it is a `blocked` verdict that is never coming. You are
-the one who notices.
+`blocked` means a *known vendor's* markup matched: Cloudflare, reCAPTCHA,
+hCaptcha, DataDome, Arkose, PerimeterX, or a plain login wall. **That table is
+fixed. It does not grow.**
 
-What to notice -- examples, not a checklist:
+**Everything else arrives as an ordinary page.** A soft wall is not a late
+`blocked` verdict; it is a verdict that is never coming. You are the one who
+notices.
+
+Check for — examples, not a checklist:
 
 - a short page whose text says *verify you are human*, *请完成验证*, *checking
   your browser*, *unusual traffic from your network*
-- a login or signup prompt where an article or a listing was expected
-- a page that is structurally fine and semantically empty: nav, footer, and a
-  sentence in the middle
+- a login or signup prompt where an article or listing was expected
+- a page that is structurally complete and semantically empty: nav, footer, and
+  one sentence in the middle
 
-When you see one, you have seen enough. Do not run the same script again hoping
-for a different verdict.
+**When you see one, stop. Do not re-run the same script hoping for a different
+verdict.**
 
-    showBrowser(lane, tab, waitSeconds, notifyHuman, until)
+```
+showBrowser(lane, tab, waitSeconds, notifyHuman, until)
+```
 
 Tell the user what is in the way. `notifyHuman` is for when they are not
 watching this conversation. `until` decides what ends the wait:
@@ -184,102 +201,102 @@ watching this conversation. `until` decides what ends the wait:
 - `closed` (default) returns when the human closes the viewer. That is a fact
   about the human, not about the page.
 - `unblocked` polls the named tab until the vendor's signature stops matching.
-  Stronger -- a human can close a window without solving anything -- but it
-  needs a `tab`, and it only sees walls this tool can name.
+  Stronger, since a human can close a window without solving anything — but it
+  requires a `tab` and only sees walls this tool can name.
 
 Either way, **read the tab again with `script` and judge for yourself.**
 
-`showBrowser` is also how you ask for a human *deliberately*, not only in
-answer to a `blocked` reply. A login you cannot complete is the same situation
-as a captcha.
+`showBrowser` is also how you request a human *deliberately*, not only in
+response to `blocked`. A login you cannot complete is the same situation as a
+captcha.
 
 ## A read is one screen
 
 `script` runs against the page as it is. Anything the page defers until a
-reader scrolls or clicks is not in what you return, **and nothing will tell you
-so.** The page looks complete because it is complete -- for a reader who never
+reader scrolls or clicks is absent from what you return, **and nothing reports
+this**. The page looks complete because it is complete — for a reader who never
 moved.
 
-Before concluding you have a whole comment section or a whole listing, look in
-what you read for the page's own account of what it kept back: a stated total
+Before concluding you have a whole comment section or a whole listing, search
+what you read for the page's own account of what it withheld: a stated total
 (`共 153 条评论`), an expander (`展开 12 条回复`), a pager, a "showing 20 of
 619". Those strings are almost always already in front of you. Reaching what
-they point at is more `script` -- and you are already there, with `Page` in
-hand.
+they point at is more `script`, and you are already there with `Page` in hand.
 
 ## Pictures are not in the text
 
-What lives in a photograph, a menu board, a chart or a comic was never text, so
-such a page reads as *short* rather than as *truncated*, and no field in the
-reply distinguishes the two. If you did not measure the pictures, nobody did.
+Content living in a photograph, menu board, chart, or comic was never text, so
+such a page reads as *short* rather than *truncated*, and no field distinguishes
+the two. **If you did not measure the pictures, nobody did.**
 
-`scripts/pictures.js` measures them -- the biggest visible picture as a share
-of the window, how many clear a tenth of it, and how to reach the biggest one
--- and `references/pictures.md` says how to run it, how to read the number, and
-how to get the bytes onto your disk. **A large picture and little text is the
-case worth acting on**, so measure the text in the same script and compare the
-two yourself.
+`scripts/pictures.js` measures them: the largest visible picture as a share of
+the window, how many clear a tenth of it, and how to reach the largest.
+`references/pictures.md` covers running it, reading the number, and getting the
+bytes onto disk. **Large picture plus little text is the case to act on**, so
+measure the text in the same script and compare them yourself.
 
-**Trigger:** open `references/pictures.md` whenever a read comes back short
-and you have not yet measured the pictures -- a menu, a price list, a chart, a
-comic panel never was text.
+**Open `references/pictures.md` when:** a read comes back short and you have not
+yet measured the pictures. A menu, price list, chart, or comic panel never was
+text.
 
 ## Prefer reading to driving
 
-`script` is the way to reach a search box, a tab, the next page of a list. But
+`script` is how you reach a search box, a tab, the next page of a list. But
 reading and driving are different kinds of act, not degrees of one.
 
-After a human has navigated -- during a handoff, or just in their own browser
--- `script` against that tab costs nothing and is invisible to the site. So
-does `Page.request` against a URL. Synthetic clicks and fills are not: they
-have no cursor path and no keystroke timing, and that is exactly what
-behavioural anti-bot systems score. Driving spends the reputation of a session
-whose entire value is that it has never done anything unusual.
+Reading is invisible: `script` against a tab a human already navigated costs
+nothing, and so does `Page.request` against a URL. **Synthetic clicks and fills
+are not invisible.** They have no cursor path and no keystroke timing, which is
+exactly what behavioural anti-bot systems score. Driving spends the reputation
+of a session whose entire value is that it has never done anything unusual.
 
-**That reputation is a budget, and it is not yours alone.** Sites meter per
-account, not per lane and not per session, so a brand-new lane on its first
-page of the day can be thrown out on its first click because something else
-spent the allowance hours earlier. And the throttle rarely announces itself:
-one expansion too many and the tab is navigated away, after which the selectors
-match nothing and the page reads exactly like an item nobody ever replied to.
-**An empty result after a burst of driving is a fact about you, not about the
-page.**
+**That reputation is a shared budget.** Sites meter per account, not per lane
+and not per session, so a brand-new lane on its first page of the day can be
+thrown out on its first click because something else spent the allowance hours
+earlier. The throttle rarely announces itself: one expansion too many and the
+tab is navigated away, after which selectors match nothing and the page reads
+exactly like an item nobody ever replied to. **An empty result after a burst of
+driving is a fact about you, not about the page.**
 
-So spend it last. Take everything reachable without clicking first, and put the
-one operation you know is expensive at the end of the task, where being cut off
-costs you that step instead of the whole run.
+Therefore:
 
-And: navigate by hand where you can, drive only where you must, and prefer one
-`script` that ends where you need to be over five that walk there.
+- Take everything reachable without clicking first.
+- Put the operation you know is expensive at the end of the task, where being
+  cut off costs that step instead of the whole run.
+- Navigate by hand where you can, drive only where you must, and prefer one
+  `script` that ends where you need to be over five that walk there.
 
 ## Close what you opened
 
-    closeTabs(lane, [tab, ...])    the ones you name
-    closeAllTabs(lane)             every tab in your lane; the lane survives
-    destroyLane(lane)              the tabs, then the lane itself
+```
+closeTabs(lane, [tab, ...])    the ones you name
+closeAllTabs(lane)             every tab in your lane; the lane survives
+destroyLane(lane)              the tabs, then the lane itself
+```
 
-A `script` with no `tab` opens a fresh one *every call*, so a batch of twenty
-pages driven one call each leaves twenty tabs in a browser meant to stay warm
-for weeks. Pass the `tab` back when you are working through a list, and close
-what you are done with; the TTL is a backstop for the calls you never got to
-make, not the plan. `references/tabs-and-lanes.md` has the rest: the shared
-screen, the `orphan` drawer a human's tabs land in, and why a tab wedged in
-someone else's lane still costs you.
+**A `script` with no `tab` opens a fresh one on every call**, so twenty pages
+driven one call each leave twenty tabs in a browser meant to stay warm for
+weeks. Pass the `tab` back when working through a list and close what you are
+done with. The TTL is a backstop for calls you never got to make, not the plan.
 
-**Trigger:** open it when tabs are piling up, a call comes back `wedged` or
-`LANE_NOT_FOUND`, or you need to hand the screen to a human without stepping
-on another caller's tabs.
+`references/tabs-and-lanes.md` has the rest: the shared screen, the `orphan`
+drawer a human's tabs land in, and why a tab wedged in another lane still costs
+you.
+
+**Open it when:** tabs are piling up, a call returns `wedged` or
+`LANE_NOT_FOUND`, or you need to hand the screen to a human without stepping on
+another caller's tabs.
 
 ## The tool remembers nothing about a site
 
-Your lane and its tabs are bookkeeping, and they are the only thing kept
-between calls -- you can read all of it back with `listTabs`, and it is gone
-when the browser restarts. Nothing else is remembered. The tool will not learn
-that this site walls the third request, that this listing needs its own
-selector, that this domain redirects logged-out readers to a signup page.
+Your lane and its tabs are the only state kept between calls. You can read all
+of it back with `listTabs`, and it is gone when the browser restarts.
 
-**That is yours to remember**, in your own memory or in a site-scoped skill.
-Anything durable you discover about a *site* belongs there -- including the
-selector that reads it, which is now the most valuable thing you can write
-down. A tool that remembered it would be a second memory owned by the wrong
-party: invisible to you, unexplainable, and revisable only by surprise.
+Nothing else is remembered. The tool will not learn that this site walls the
+third request, that this listing needs its own selector, or that this domain
+redirects logged-out readers to a signup page.
+
+**That is yours to remember**, in your own memory or in a site-scoped skill —
+including the selector that reads it, which is the most valuable thing you can
+write down. A tool that remembered it would be a second memory owned by the
+wrong party: invisible to you, unexplainable, and revisable only by surprise.

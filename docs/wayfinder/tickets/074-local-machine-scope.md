@@ -54,36 +54,57 @@ on your machine.**
 **Both removed.** A script's scope is this process's scope, and the timeout is
 optional.
 
-`Node.runInThisContext` replaces `runInContext`, and `Node.wrap` builds an
-async *function expression* over the names in `Script.bound` rather than an
-IIFE over nothing. So `fetch`, `URL`, `TextEncoder`, `Buffer`, `process`,
-`structuredClone`, `AbortController` and the timers are simply there, because
-they are there for the file that runs them. Measured over the live door:
+The scope change is one line: the object handed to `vm.createContext` is
+`Object.create(globalThis)` rather than a flat dictionary. A vm context starts
+with V8's intrinsics and none of node's globals, which is why the old version
+had to name every global a caller might want and why leaving `fetch` off that
+list looked like a rule. Giving the context object node's real global as its
+**prototype** ends it: a global lookup is an ordinary [[Get]] and walks the
+chain. Measured through the live door:
 
-    return [typeof fetch, typeof process, require('node:os').platform()].join();
-    -> "function,object,linux"
+    return [typeof fetch, typeof Buffer, typeof process, typeof structuredClone].join();
+    -> "function,function,object,function"
 
-Five names are still handed in, as arguments:
+Five names are set as own properties of that object:
 
     Page      the door itself
-    console   rebuilt onto stderr, and passed as an argument so that it
-              *shadows* the real global rather than relying on the caller
-    fs/path   every recipe in the skill uses them; `require` reaches the same
-              modules, these save the ceremony
+    console   rebuilt onto stderr
+    fs/path   every recipe in the skill reads a walker off disk and writes back
+              the bytes that cannot cross as JSON
     require   `createRequire`, because ES module scope has no `require` to
-              inherit
+              inherit -- and it is the *only* module loader here, since a vm
+              context has no dynamic-import callback and `import()` throws
 
-The wrapper still adds exactly one line and no newline before the body, which
-is what `where` and the syntax-error path depend on. Both verified: a throw on
-line 3 still reports `line 3: throw new Error("boom")`, and `var y = (;` on
-line 2 still reports line 2.
+Two properties of putting them there rather than around the source:
+
+- **A caller's own `const` shadows them.** Top-level `const` in a vm context
+  lands in that context's lexical scope, consulted before the global object, so
+  `const path = "/tmp/pep8.md"` -- which the skill's own recipe writes -- names
+  the caller's variable. Both meanings work: bare `path` is still the module.
+- **They are per call, so nothing races.** Two lanes calling `script` at once
+  get a context object each.
+
+`Node.res` is untouched by this ticket. It is byte-identical to its state
+before, and `Node.wrap` is the same async IIFE it has always been.
+
+⚠️ **Recorded because it was nearly shipped:** the first implementation opened
+the scope by making the wrapper an async *function of the bound names* and
+running it with `runInThisContext`. It worked, and it cost two things. The
+bound names became parameters, so `const path = "/tmp/x.md"` was a
+redeclaration -- `SyntaxError: Identifier 'path' has already been declared`,
+before the browser is touched, on a line this repo's own skill tells callers to
+write. The fix for *that* was a nested block around the caller's source, and
+the fix for the block was unbinding `path` -- each patch covering the last.
+The context object does the whole job with none of them. **When a change starts
+needing shape imposed on the caller's source, the mechanism is in the wrong
+place.**
 
 `timeoutSeconds` is `operationTimeoutSeconds`, optional, `minimum: 0`, no
-maximum. Absent leaves Playwright's own 30s alone -- `Service.run` does not
-call `setDefaultTimeout` at all -- and 0 is Playwright's spelling of no limit.
-The rename is the substantive half: the old name read as a budget for the
-script, and the docs had to keep correcting it. It is a budget for one
-*operation*, and nothing bounds a script that never calls Playwright.
+maximum. Absent leaves Playwright's own 30s alone -- `Service.run` does not call
+`setDefaultTimeout` at all -- and 0 is Playwright's spelling of no limit. The
+rename is the substantive half: the old name read as a budget for the script,
+and the docs had to keep correcting it. It is a budget for one *operation*, and
+nothing bounds a script that never calls Playwright.
 
 **What did not change, and why it looked like it should have.**
 
@@ -99,9 +120,10 @@ withholding a name, and the point survives without the withholding:
 recipe reaching for `fetch` has misunderstood the tool. The skill says so now
 instead.
 
-The test that asserted the wall is gone, replaced by three that assert what is
+The test that asserted the wall is gone, replaced by five that assert what is
 true: node's globals are in scope, a name nobody bound is still a
-`ReferenceError` at the caller's own line, and `console` is not the global one.
+`ReferenceError` at the caller's own line, `console` is not the global one, a
+caller's `const` shadows a bound name, and `require` is the only module loader.
 It also stopped reaching example.com to prove a negative -- 258ms of network in
 a unit suite.
 
