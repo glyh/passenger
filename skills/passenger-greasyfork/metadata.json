@@ -1,0 +1,16 @@
+{
+  "site": "greasyfork",
+  "tables": {
+    "by_site_count": {
+      "describes": "hostname a script declares it applies to -> how many public scripts the site holds for it. Both the key a `by-site` listing needs, and the expected row count for one.",
+      "source": "upstream",
+      "url": "https://greasyfork.org/scripts/by-site.json",
+      "format": "one flat JSON object, `\"<host>\": <count>`, roughly 45,000 keys. Keys are hosts as scripts declared them: bare registrable hosts (`youtube.com`), explicit subdomains where a script named one, and a tail of junk keys (leading dots, empty string) that are somebody's malformed @match rather than a site.",
+      "size": "about 780 KB. Never read it into context whole - query it in the page and return the one row.",
+      "on_mismatch": "a hostname that is not a key returns a 200 listing page titled 'User scripts' with zero rows and the words 'No scripts' - byte-identical to a real domain that genuinely has none. A `www.` prefix is the usual cause: `www.youtube.com` is not a key and yields nothing, while `youtube.com` yields 4,619.",
+      "verify": "look the host up in this table before fetching its listing, and after fetching compare row count against the value. Under the 2,000 cap the two match exactly; a zero listing for a host with a non-zero count means the key was wrong, not that the site is empty.",
+      "coverage": "complete",
+      "query": "const t = await (await fetch('https://greasyfork.org/scripts/by-site.json')).json(); const h = host.replace(/^www\\./, ''); return { key: h, count: t[h] ?? null, subdomains: Object.keys(t).filter(k => k.endsWith('.' + h)).map(k => [k, t[k]]) };"
+    }
+  }
+}

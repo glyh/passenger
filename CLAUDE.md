@@ -187,12 +187,18 @@ cleanup.
   screen. `SKILL.md` is the judgement, `references/` the mechanics, `scripts/` the recipes
   (`markdown.js`, `unstrip-asides.js`, `pictures.js`) that a caller reads off disk and runs in
   a page.
-- **`skills/` ships three, and they are not peers.** `using-passenger` is this server's own
+- **`skills/` ships four, and they are not peers.** `using-passenger` is this server's own
   operating knowledge, and is the only one the tool docstrings assume. `html-to-markdown` is a
   converter a caller reaches for once it has HTML in hand -- it fetches nothing. And
   `passenger-skill-authoring` is a level up: how to *write* a scraping skill for a site, which
-  is what a caller ends up doing after the second time it works a site out from scratch. A site's
-  own skill lives with that caller, not here; this repo carries only what is true of the tool.
+  is what a caller ends up doing after the second time it works a site out from scratch.
+  `passenger-greasyfork` is the one exception to "a site's own skill lives with that caller":
+  it is a site skill, and it is here because `passenger-skill-authoring` step 1 sends every
+  author to that site to look for prior art before probing. A pointer to a skill a caller may
+  not have is not a step, so the step ships with the document that names it. **This is not a
+  precedent for a second site.** Any other site's skill belongs with the caller who scrapes it;
+  what earns a place here is what is true of the tool, plus the one site the tool's own
+  method depends on.
 
 ## Working in this repo
 

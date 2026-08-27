@@ -156,12 +156,46 @@ Where to look, cheapest first:
    mentions the site; the request URL inside it always does. **An abandoned
    repo is still useful** — a dead client names endpoints and parameters even
    when its code no longer runs.
-2. **Greasefork and the userscript indexes.** A userscript runs *inside the
+
+   ⇒ **Run the search through `gh` when the CLI is on the machine, not through
+   the browser.** Check once with `command -v gh` and `gh auth status`; if both
+   hold, code search is a shell call whose output is already the thing you
+   wanted:
+
+       gh search code 'api.<site>.com/v2/feed' --limit 50
+       gh search code '__INITIAL_STATE__ <site>' --limit 50
+       gh api -X GET search/code -f q='"x-s-common" repo-language:python'
+
+   A browser round-trip to `github.com/search` costs a lane, a render, and a
+   page of markup to strip before the paths are readable — and GitHub's code
+   search UI is one of the pages that decides a real Chrome driven by an agent
+   is worth a challenge. `gh` is an authenticated API client, so it returns
+   repository, path and matched line as text, and it does not rate-limit the
+   same way. Fetch the interesting file with `gh api` (or
+   `gh search code --json path,repository,textMatches`) rather than opening it.
+
+   **Fall back to the browser only when `gh` is absent or unauthenticated** —
+   `gh search code` needs a logged-in user token and fails loudly without one,
+   which is the signal to reach for `using-passenger`, not a reason to retry.
+   The other reason to fall back is that `gh` searches through the *legacy*
+   code-search API: no regex, and a query the web UI answers can come back
+   empty here. An empty `gh` result is therefore not the "nothing found" that
+   section 8 wants logged — confirm it in the UI before writing that line.
+2. **Greasy Fork and the userscript indexes.** A userscript runs *inside the
    logged-in page*, which is exactly the position this tool puts a caller in.
    Scripts that expand truncated bodies, strip an overlay, or re-add a download
    link are a tested selector list plus a working DOM trick — tested by users
    who file an issue the week it breaks, which is a freshness signal nothing
    else on this list has.
+
+   ⇒ **Use the `passenger-greasyfork` skill for this step rather than working
+   the site out again.** It is the one site skill this repo carries, and it
+   carries it because this is the step that reaches for it: the site's search
+   silently returns the wrong language, the wrong page of results, or a generic
+   top-100 for whatever you asked, and each of those failures hands you a
+   full-looking list that answers "nobody has done this site" wrongly. The
+   two-fetch path from a target domain to downloaded `.user.js` source is in
+   there too, which is what this step actually wants.
 3. **An old wrapper on PyPI/npm, or the site's own app/API docs.** Unmaintained
    ones still name parameters and enum values, and enum values are section 3's
    whole problem.
@@ -640,7 +674,7 @@ confirmation, in `evals/` until then.
 ### Negative results are a line each, and only the log can hold them
 
 "The `.json` endpoint 404s." "No `__NEXT_DATA__` on the detail page." "Scrolling
-past round 12 adds nothing." "Nothing on Greasefork; the two GitHub clients both
+past round 12 adds nothing." "Nothing on Greasy Fork; the two GitHub clients both
 predate the current signing scheme." These are never sentences `SKILL.md`
 should carry — it says what to do, not the list of things that do not work —
 but re-checking each of them costs a probe. The log is where a probe gets paid
@@ -768,9 +802,9 @@ the conclusion; the conclusion is one line at the top of that file.
 - [ ] Directory name and `name:` are both `passenger-<site>`
 - [ ] It opens with a thesis sentence, not with rule 1
 - [ ] Lookup or corpus was decided before the layout, and the layout matches
-- [ ] Prior art was searched before probing — GitHub code search, userscripts,
-      old wrappers — and the outcome, including "nothing found", is a line in
-      `evals/`
+- [ ] Prior art was searched before probing — GitHub code search (via `gh`
+      where it exists), userscripts, old wrappers — and the outcome, including
+      "nothing found", is a line in `evals/`
 - [ ] Every name taken from someone else's code was confirmed against the live
       site this session; no third-party repo is cited as authority in `SKILL.md`
 - [ ] Every page type says whether it needs rendering
