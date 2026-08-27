@@ -5,13 +5,16 @@
 // binding a JavaScript one (commander, cac, yargs) and using what the runtime
 // already ships. `parseArgs` has been stable since Node 20 and does the two
 // things this surface needs: it separates positionals from options, and it
-// refuses an option nobody declared instead of ignoring it. Help text for two
+// refuses an option nobody declared instead of ignoring it. Help text for four
 // subcommands is a string, not a feature worth a dependency -- which is the same
 // call `node:sqlite` and the global `WebSocket` got, and the reason this server
 // has three runtime dependencies rather than a screenful.
 //
-// If a third subcommand ever arrives with flags of its own, revisit it; the
-// binding below is the whole of what would have to change.
+// `show` and `hide` arriving is what this comment used to say would be the
+// moment to revisit the choice, and the answer was no: they cost two entries in
+// the table below and nothing else. What would change it is an option that is
+// not a boolean flag -- one taking a value, or a positional -- since every
+// declaration here is built as `{"type": "boolean"}` and nothing else.
 
 type parsed = {positionals: array<string>, values: Dict.t<bool>}
 
@@ -31,6 +34,21 @@ let commands = [
     name: "serve",
     summary: "speak MCP over stdio -- what a client launches",
     options: [],
+  },
+  {
+    name: "show",
+    summary: "put the browser on screen for you, not for a lane",
+    options: [],
+  },
+  {
+    name: "hide",
+    summary: "take it off screen again",
+    options: [
+      {
+        name: "force",
+        description: "hide even while a lane holds the screen",
+      },
+    ],
   },
   {
     name: "stop",

@@ -227,6 +227,35 @@ laneTest("claiming twice still needs one release", () => {
   T.equal(Lanes.releaseScreen(lane), true)
 })
 
+laneTest("the human can hold the screen against a lane that never opened one", () => {
+  // `passenger show` claims under a reserved lane rather than presenting bare,
+  // because the alternative is the same interruption as above with the person
+  // at the keyboard on the receiving end: they open the window to look, and the
+  // next agent to finish calls hideBrowser and takes it away.
+  Lanes.claimScreen(Lanes.human)
+  T.equal(Lanes.releaseScreen(Lanes.openLane()), false)
+  T.equal(Lanes.releaseScreen(Lanes.human), true)
+})
+
+laneTest("force drops every claim, whoever holds it", () => {
+  // What `passenger hide --force` is for, and what no tool may do.
+  Lanes.claimScreen(Lanes.openLane())
+  Lanes.claimScreen(Lanes.openLane())
+  Lanes.claimScreen(Lanes.human)
+  T.equal(Lanes.releaseAllScreens(), true)
+  T.equal(Lanes.screenClaims(), [])
+})
+
+laneTestAsync("the human lane is not work that stops a stop", async () => {
+  // `occupied` is what `stop` refuses on. The human lane holds a claim and
+  // never a tab -- unattributed targets go to `orphan` -- so a person looking
+  // at the browser must not read as tabs about to be lost.
+  fake.ids = ["T1"]
+  Lanes.claimScreen(Lanes.human)
+  Lanes.reconcile(fake.ids, Dict.make())
+  T.equal(await Lanes.occupied(), [])
+})
+
 // --- closing ----------------------------------------------------------------
 
 laneTestAsync("closing reaches only this lane's tabs", async () => {

@@ -33,13 +33,24 @@
 @module("node:fs") external mkdirSync: (string, {..}) => unit = "mkdirSync"
 @module("node:path") external joinPath: (string, string) => string = "join"
 
-/// The reserved lane. A row like any other -- same table, same sweep -- and
+/// A reserved lane. A row like any other -- same table, same sweep -- and
 /// differs only in having a fixed, guessable id instead of a minted one.
 ///
 /// It holds tabs nothing else can claim, overwhelmingly the ones a human opened
 /// during a handoff, which have no opener to trace. Any caller may read and
 /// close it, which makes it a junk drawer and it is documented as one.
 let orphan = "orphan"
+
+/// The other reserved lane: the human at the CLI.
+///
+/// `passenger show` puts the browser on screen for a person who is not an agent
+/// and therefore has no lane of their own, and the screen is refcounted (see
+/// "the screen" below) -- so without a row to hold, that look would be taken
+/// away by the next agent's `hideBrowser`, which is precisely the interruption
+/// ticket 040 built the refcount to stop. A fixed id rather than a minted one
+/// because two processes have to name the same claim, and it never holds a tab:
+/// unattributed targets go to `orphan`.
+let human = "human"
 
 let defaultTtlS = 1800
 
@@ -105,7 +116,7 @@ CREATE TABLE IF NOT EXISTS screen_claims (
 let clock = ref(() => Math.floor(Date.now() /. 1000.0))
 let now = () => clock.contents()
 
-/// One connection, with the schema and the reserved lane guaranteed.
+/// One connection, with the schema and the reserved lanes guaranteed.
 ///
 /// WAL because the other writer is another process, `foreign_keys` because the
 /// cascade from `lanes` is what keeps a destroyed lane from leaving rows that
@@ -120,9 +131,9 @@ let open_ = () => {
   db->Sqlite.exec("PRAGMA foreign_keys=ON")
   db->Sqlite.exec("PRAGMA busy_timeout=10000")
   db->Sqlite.exec(schema)
-  db
-  ->Sqlite.prepare("INSERT OR IGNORE INTO lanes (id, ttl_s, touched_at) VALUES ($id, $ttl, $at)")
-  ->Sqlite.run({"id": orphan, "ttl": noTtl, "at": now()})
+  let reserve =
+    db->Sqlite.prepare("INSERT OR IGNORE INTO lanes (id, ttl_s, touched_at) VALUES ($id, $ttl, $at)")
+  [orphan, human]->Array.forEach(id => reserve->Sqlite.run({"id": id, "ttl": noTtl, "at": now()}))
   db
 }
 
@@ -296,6 +307,17 @@ let releaseScreen = lane => {
     db->Sqlite.prepare("DELETE FROM screen_claims WHERE lane = $lane")->Sqlite.run({"lane": lane})
   )
   screenClaims()->Array.length == 0
+}
+
+/// Drop every claim, whoever holds it. True always -- nobody is left.
+///
+/// The blunt one, and deliberately not reachable from a tool: an agent that
+/// takes the window away from another lane's human mid-captcha is the failure
+/// the refcount exists to prevent, so this is the CLI's alone, behind `--force`,
+/// on the same rule that keeps `stop` off the tool list (ticket 057).
+let releaseAllScreens = () => {
+  withDb(db => db->Sqlite.exec("DELETE FROM screen_claims"))
+  true
 }
 
 /// Lanes that would lose work if Chrome went away now, with how many tabs each

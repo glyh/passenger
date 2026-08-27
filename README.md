@@ -23,17 +23,30 @@ Then ask for a page. The first call starts the Chrome daemon itself; when a
 site puts up a login or a captcha, `showBrowser` puts the window in front of
 you, you solve it by hand, and the profile keeps the result.
 
-**There is exactly one thing you ever type**, and only when Chrome has wedged
-badly enough that the tools cannot reach it:
+**What you type yourself** is three verbs, and each is there because a person,
+not an agent, is the one who should hold it:
 
-    passenger stop [--force]
+    passenger show            put the browser on screen, for you
+    passenger hide [--force]  take it off screen again
+    passenger stop [--force]  restart Chrome, losing the warm session
 
-It restarts Chrome at the cost of the warm logged-in session, which is why no
-agent can call it and why it refuses while a lane still holds tabs or has the
-window on screen. Everything else this used to offer at a terminal -- `script`,
-`tabs`, `open`, `close-tabs`, `show`, `hide`, `serve`, `status` -- was a second
-copy of a tool, and nobody had ever run any of it. See
-`docs/wayfinder/tickets/057-delete-the-cli.md`.
+`show` is `showBrowser` without a lane -- the same viewer, claimed on your
+behalf, for when you want to look at what an agent is doing or fix something
+in the profile by hand. The screen is refcounted per lane, so your look holds a
+claim of its own and no agent's `hideBrowser` takes the window out from under
+you.
+
+The two `--force` flags are the same rule twice: `hide --force` drops every
+lane's claim, and `stop` throws away the logged-in session. Both refuse first
+and say what would be lost, and neither is a tool, because an agent that hits a
+timeout and helpfully "resets" the browser costs its owner a captcha someone was
+halfway through -- or every login on the machine.
+
+Everything else this used to offer at a terminal -- `script`, `tabs`, `open`,
+`close-tabs`, `serve`, `status` -- was a second copy of a tool, and nobody had
+ever run any of it. See `docs/wayfinder/tickets/057-delete-the-cli.md`; `show`
+and `hide` came back because that deletion took the *only* way to see the
+browser without an agent asking on your behalf.
 
 **There is no `fetch` tool.** There was, with an `article` mode and a `dom`
 mode, and ticket 046 retired both: extraction is a judgement about what a page means,
@@ -122,10 +135,11 @@ lives in the shell.
       Config.res      the PASSENGER_* env boundary
       Assets.res      the four files read from assets/
 
-    src/cli/        the entry point and its two subcommands
+    src/cli/        the entry point and the verbs a human types
       Cli.res         argument parsing, on node:util.parseArgs
       Main.res        serve: the ten tools, and the MCP server behind them
-      Stop.res        stop: the one destructive thing, and its refusal
+      Screen.res      show/hide: the window, claimed for a person
+      Stop.res        stop: the destructive one, and its refusal
 
     src/runtime/    other people's APIs, bound thinly -- nothing here is ours
       Fs Proc Posix Sqlite Timers WebSocket Node    what the BCL used to supply

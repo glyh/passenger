@@ -25,6 +25,8 @@ nix dev shell (direnv loads it on `cd`):
     node --test --test-name-pattern="a known signature" \
          test/Detect_test.res.mjs                            # one case
     node src/cli/Main.res.mjs serve       # what a client launches
+    node src/cli/Main.res.mjs show
+    node src/cli/Main.res.mjs hide [--force]
     node src/cli/Main.res.mjs stop [--force]
     nix build                         # runs the suite as part of the derivation (doCheck)
     nix run .                         # the server, as a client launches it
@@ -88,10 +90,11 @@ no reference -- the directories are for a reader, and the compiler does not care
       Handoff.res Present.res Launch.res NestedSessions.res Webserve.res Notify.res
                      summoning a human: sway + wayvnc + the noVNC viewer page
 
-    src/cli/       the entry point and its two subcommands.
+    src/cli/       the entry point and the verbs a human types.
       Cli.res        argument parsing, on `node:util.parseArgs`
       Main.res       `serve`: the ten tools, and the MCP server behind them
-      Stop.res       `stop`: the one destructive thing, and the refusal guarding it
+      Screen.res     `show`/`hide`: the window, claimed under the `human` lane
+      Stop.res       `stop`: the destructive one, and the refusal guarding it
 
     src/runtime/   other people's APIs, bound thinly. Nothing here is Passenger's.
       Fs Proc Posix Sqlite Timers WebSocket Node   what the BCL used to supply

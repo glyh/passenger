@@ -614,6 +614,8 @@ let main = async () => {
     | Some(invocation) =>
       switch invocation.command.name {
       | "serve" => await serve()
+      | "show" => exit(await Screen.show())
+      | "hide" => exit(await Screen.hide(~force=invocation->Cli.flag("force")))
       | "stop" => exit(await Stop.run(~force=invocation->Cli.flag("force")))
       | _ => exit(2)
       }

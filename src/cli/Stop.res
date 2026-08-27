@@ -63,6 +63,10 @@ let run = async (~force) => {
   // behind until the next start drops the tables, and refusing on those would
   // wedge the one command that clears a wedge.
   let up = await Browser.isUp()
+  // A claim `passenger show` left behind after its window was closed by hand is
+  // not somebody mid-handoff, and refusing on one is the exact wedge this
+  // command exists to clear. See `Screen.dropStaleHumanClaim`.
+  Screen.dropStaleHumanClaim(Present.select())
   let claims = up ? Lanes.screenClaims() : []
   let occupied = up ? await Lanes.occupied() : []
 
