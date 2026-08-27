@@ -132,11 +132,63 @@ produced skill**. They have their own owners, and both copies and pointers rot.
 
 ---
 
-## 1. Probe for the cheapest read first — it is half the skill's value
+## 1. Find the cheapest read — other people's first, then your own probes
 
 Taking a site from "render plus 25 scroll rounds" down to "fetch the HTML once"
 justifies the whole skill on its own. It is also a cost **only the first prober
-pays**: everyone after either follows the recipe or re-derives it.
+pays**: everyone after either follows the recipe or re-derives it — and on a
+site of any size, somebody outside this repo has already paid it.
+
+### Search for prior art before the first probe
+
+⇒ **Do not start scraping straight away. Spend the first ten minutes looking
+for someone who has already worked the site out.** The endpoint, the parameter
+that must not be omitted, the header the site signs, the field that means "it
+worked" — these are things a stranger's code *names*, and naming them is the
+expensive half. A probe ladder run blind can spend an hour rediscovering a path
+that is written down in public.
+
+Where to look, cheapest first:
+
+1. **GitHub code search, not repository search.** Search for the API host and a
+   path fragment (`api.<site>.com/`), or for a token the site's own page emits
+   (`__INITIAL_STATE__`, `x-s`, `sign=`). The repository name almost never
+   mentions the site; the request URL inside it always does. **An abandoned
+   repo is still useful** — a dead client names endpoints and parameters even
+   when its code no longer runs.
+2. **Greasefork and the userscript indexes.** A userscript runs *inside the
+   logged-in page*, which is exactly the position this tool puts a caller in.
+   Scripts that expand truncated bodies, strip an overlay, or re-add a download
+   link are a tested selector list plus a working DOM trick — tested by users
+   who file an issue the week it breaks, which is a freshness signal nothing
+   else on this list has.
+3. **An old wrapper on PyPI/npm, or the site's own app/API docs.** Unmaintained
+   ones still name parameters and enum values, and enum values are section 3's
+   whole problem.
+
+**Take the names, not the code.** Endpoint paths, parameter names, the marker
+field, which header carries the signature, which page type has JSON in it.
+Copying a signing routine or a selector block wholesale imports a bug you
+cannot see and did not write.
+
+⚠️ **Prior art is a hypothesis with a date on it, and the date is not today.**
+A path that has moved usually does not 404 — it 200s with a shape nobody
+checked, which is section 2's failure mode arriving through the front door.
+**Self-check: every name taken from someone else's code must be confirmed
+against the live site in this session before it reaches `SKILL.md`** — the
+endpoint returns the field you expected it to, under this account's login
+state. Write the confirmed finding first-person, as something this run
+measured. **A third-party repository is not a citation `SKILL.md` can rest on**:
+it is unversioned, it can vanish, and a reader who follows it reads a claim
+nobody here checked. The URL and the date belong in `evals/` as provenance
+(section 8), with the site skill stating only what was verified.
+
+**Timebox it and record the outcome either way.** Two searches turning up
+nothing is itself a finding worth one line in `evals/` — otherwise the next
+author spends the same ten minutes proving the same absence (section 8,
+negative results). Then probe.
+
+### The probe ladder
 
 **Try in order; stop at the first that holds:**
 
@@ -588,9 +640,11 @@ confirmation, in `evals/` until then.
 ### Negative results are a line each, and only the log can hold them
 
 "The `.json` endpoint 404s." "No `__NEXT_DATA__` on the detail page." "Scrolling
-past round 12 adds nothing." These are never sentences `SKILL.md` should carry —
-it says what to do, not the list of things that do not work — but re-checking
-each of them costs a probe. The log is where a probe gets paid for once.
+past round 12 adds nothing." "Nothing on Greasefork; the two GitHub clients both
+predate the current signing scheme." These are never sentences `SKILL.md`
+should carry — it says what to do, not the list of things that do not work —
+but re-checking each of them costs a probe. The log is where a probe gets paid
+for once.
 
 ### Read them before revising
 
@@ -714,6 +768,11 @@ the conclusion; the conclusion is one line at the top of that file.
 - [ ] Directory name and `name:` are both `passenger-<site>`
 - [ ] It opens with a thesis sentence, not with rule 1
 - [ ] Lookup or corpus was decided before the layout, and the layout matches
+- [ ] Prior art was searched before probing — GitHub code search, userscripts,
+      old wrappers — and the outcome, including "nothing found", is a line in
+      `evals/`
+- [ ] Every name taken from someone else's code was confirmed against the live
+      site this session; no third-party repo is cited as authority in `SKILL.md`
 - [ ] Every page type says whether it needs rendering
 - [ ] Every hard rule is a silent failure — following it wrong yields a
       well-formed wrong answer. The rest moved to the capability table or the
