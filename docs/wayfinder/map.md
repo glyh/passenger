@@ -86,6 +86,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [Stop the browser when nobody has used it for hours](tickets/076-idle-browser-reaper.md)
+  — the serve process lingers after its client to do it: idle is
+  `max(touched_at)` from the shared registry, the guards are `Stop.refusal`'s
+  two questions plus known-empty and no-call-in-flight (the clock skips what
+  it cannot see, where `--force` proceeds), `PASSENGER_IDLE_STOP` defaults
+  3h with 0 = never, and the reap leaves a tombstone that
+  `browserStatus` and `laneNotFound` both read. Found on the way:
+  `occupied` swallows its own failure, `Webserve.ensure` drops the page
+  server's pid, and `passenger stop` leaves the viewer window and the page
+  server alive. Build in [077](tickets/077-build-idle-reap.md).
+
 - [A script does not need a JSON encoder in scope](tickets/068-json-encoder-in-scope.md)
   — the escaping people kept seeing was the *site's*: Baidu answers escaped
   JSON, and a `Regex.Matches` over the raw body returns the spelling where
