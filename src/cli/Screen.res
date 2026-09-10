@@ -16,27 +16,6 @@
 // **stdout is this file's to use**, for the same reason `Stop.res` says it is:
 // reaching here means no server was started and none will be.
 
-/// Drop the human's claim if the window it stands for is gone.
-///
-/// Nothing releases it otherwise: the reserved lane has no TTL, so a person who
-/// opens the viewer with `show` and then closes it with the mouse -- which is
-/// the obvious way to close a window -- leaves a claim behind forever. The cost
-/// is not hypothetical: it is `passenger stop` refusing with "the browser is on
-/// screen for 1 lane(s): human -- somebody may be mid-handoff" when nothing is
-/// on screen and nobody is anywhere near a handoff.
-///
-/// Only for presenters that can see their own window. The `web` one reports
-/// `presented() == false` always, and treating that as "the window is gone"
-/// would drop the claim the instant after it was made.
-let dropStaleHumanClaim = presenter =>
-  if (
-    presenter.Present.observesPresence &&
-    !presenter.presented() &&
-    Lanes.screenClaims()->Array.includes(Lanes.human)
-  ) {
-    Lanes.releaseScreen(Lanes.human)->ignore
-  }
-
 /// Put the browser on screen for the person at this terminal.
 ///
 /// Claims under the reserved `human` lane rather than presenting bare. The
@@ -56,7 +35,7 @@ let show = async () => {
 
   let _ = await Lanes.sweep()
   let presenter = Present.select()
-  dropStaleHumanClaim(presenter)
+  Present.dropStaleHumanClaim(presenter)
   Lanes.claimScreen(Lanes.human)
   switch await presenter.present() {
   | how =>
@@ -89,7 +68,7 @@ let refusal = claims =>
 let hide = async (~force) => {
   let _ = await Lanes.sweep()
   let presenter = Present.select()
-  dropStaleHumanClaim(presenter)
+  Present.dropStaleHumanClaim(presenter)
   let others = Lanes.screenClaims()->Array.filter(lane => lane != Lanes.human)
 
   if !force && others->Array.length > 0 {

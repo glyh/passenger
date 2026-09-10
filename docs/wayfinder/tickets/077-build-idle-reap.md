@@ -2,7 +2,7 @@
 id: 077
 title: Build the idle reap
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -49,3 +49,32 @@ server -- the serve process is untouched.
   movable clock, unit; the watchdog lifecycle (spawn, single-instance,
   exit-on-down, ping-then-teardown) in `live/`, which is where things
   needing a real browser already live.
+
+## Answer
+
+Built, as 076 settled it. `src/shell/Reaper.res` holds the rules and the
+shared teardown; `src/cli/Watchdog.res` is the detached carrier;
+`test/Reaper_test.res` crosses the horizon in a line and
+`live/LiveWatchdog.res` spawns the real thing on a two-second setting.
+
+Three things the ticket could not have named, found while wiring it:
+
+**The cycle.** `Reaper` needs `Present` for `dismiss`, and `Present` reached
+`Browser.unfullscreen` -- which is Playwright, and is exactly what the
+watchdog cannot import. Rather than move `prepared`, `Present.unfullscreen`
+became a ref that `Browser` fills in when it loads, the same seam
+`Lanes.chrome` already is. A process that never presents keeps the no-op and
+never loads Playwright; presenting is always downstream of `Browser`, so by
+the time any `present()` runs the real body is in there.
+
+**The sweep moved twice.** `Main.housekeep` held the collect-and-dismiss
+pair; `Reaper.sweepPresentation` holds it now and both callers run the same
+one. That is what makes `openLane`'s promise -- "collects itself after 30
+minutes of no calls" -- true with no call arriving, which it had not been.
+
+**`dropStaleHumanClaim` has three callers now**, so it moved from `Screen`
+to `Present` for the same reason: `Screen` imports `Browser`.
+
+The tombstone is delivered where the ticket said, in the `LaneNotFound`
+branch of `Main`'s error boundary -- taken and deleted in one breath -- and
+read without consuming by `browserStatus` under `lastIdleStop`.

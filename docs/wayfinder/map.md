@@ -86,6 +86,12 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [Build the idle reap](tickets/077-build-idle-reap.md) — `Reaper` holds the
+  rules and the one teardown, `cli/Watchdog` carries them in a process of its
+  own. Two seams fell out of keeping Playwright away from it:
+  `Present.unfullscreen` is a ref `Browser` fills in, and the sweep with its
+  dismiss half moved out of `Main.housekeep` so the tick runs the same one.
+
 - [Stop the browser when nobody has used it for hours](tickets/076-idle-browser-reaper.md)
   — idle is `max(touched_at)` from the shared registry; the guards are
   `Stop.refusal`'s two questions plus known-empty; `PASSENGER_IDLE_STOP`

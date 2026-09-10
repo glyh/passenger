@@ -76,6 +76,16 @@ let pageUrl = () => {
   `${Config.viewerUrl()}?ws=${host}:${port->Int.toString}`
 }
 
+/// Putting Chrome back into a window, filled in by `Browser` when it loads.
+///
+/// A seam rather than a call, and the same one `Lanes.chrome` is: the body
+/// lives in `Browser`, which is Playwright, and Playwright is exactly what the
+/// idle reaper's watchdog cannot afford to import (ticket 076) -- it reaches
+/// this module for `dismiss` and nothing else. Presenting is always downstream
+/// of `Browser`, so by the time any `present()` runs the real one is in here;
+/// a watchdog that never presents keeps the no-op and never loads Playwright.
+let unfullscreen: ref<unit => promise<unit>> = ref(async () => ())
+
 /// Make the nested session fit to be looked at, and say what changed.
 ///
 /// Two things a human needs that a hidden browser does not. The output takes the
@@ -93,7 +103,7 @@ let prepared = async live =>
   switch live {
   | None => ""
   | Some(session) =>
-    await Browser.unfullscreen()
+    await unfullscreen.contents()
     switch Geometry.fit(session.NestedSessions.waylandDisplay) {
     | Some(change) => `, ${change}`
     | None => ""
@@ -258,4 +268,30 @@ let select = () =>
     | Some(candidate) => candidate
     | None => none
     }
+  }
+
+/// Drop the human's claim if the window it stands for is gone.
+///
+/// Nothing releases it otherwise: the reserved lane has no TTL, so a person who
+/// opens the viewer with `show` and then closes it with the mouse -- which is
+/// the obvious way to close a window -- leaves a claim behind forever. The cost
+/// is not hypothetical: it is `passenger stop` refusing with "the browser is on
+/// screen for 1 lane(s): human -- somebody may be mid-handoff" when nothing is
+/// on screen and nobody is anywhere near a handoff.
+///
+/// Only for presenters that can see their own window. The `web` one reports
+/// `presented() == false` always, and treating that as "the window is gone"
+/// would drop the claim the instant after it was made.
+///
+/// Lives here rather than in `Screen` (where it was written) because three
+/// callers ask it and one of them is the idle reaper's watchdog, which must
+/// not reach this module through `Screen`'s import of `Browser` -- the one
+/// path along which Playwright would reach the reaper (ticket 076).
+let dropStaleHumanClaim = presenter =>
+  if (
+    presenter.observesPresence &&
+    !presenter.presented() &&
+    Lanes.screenClaims()->Array.includes(Lanes.human)
+  ) {
+    Lanes.releaseScreen(Lanes.human)->ignore
   }

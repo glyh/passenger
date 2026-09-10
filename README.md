@@ -344,6 +344,9 @@ supports both ways.
     PASSENGER_PORT          CDP port (default 9222)
     PASSENGER_CHROME        chrome binary (default google-chrome-stable)
     PASSENGER_HANDOFF_TIMEOUT  seconds to wait for you (default 300)
+    PASSENGER_IDLE_STOP     seconds the browser may sit unused before it is
+                            stopped, and everything started with it torn down
+                            (default 10800, three hours; `0` never stops it)
     PASSENGER_IME           `none` (default; see ticket 067) or `fcitx5`, which
                             asks the running one to serve the session too
     PASSENGER_WM            window backend

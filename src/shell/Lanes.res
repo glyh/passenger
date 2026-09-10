@@ -274,6 +274,27 @@ let expired = (~at=?) => {
   })
 }
 
+type touchedRow = {touched: Nullable.t<float>}
+
+/// The freshest touch in the registry: the last moment anyone, in any
+/// process, did anything through this side. This is the reaper's whole
+/// measurement of idleness (ticket 076) -- `touched_at` is written on entry
+/// *and* return of every lane-naming call, so a call in flight reads as use
+/// at both ends, and the wall clock it is kept under is the one fact here
+/// that crosses processes, which is what disqualifies last-CDP-activity:
+/// the attach lives in one process for one call, so a CDP-derived clock
+/// cannot see the lane next door.
+///
+/// Never empty in practice -- `open_` reserves two rows at creation and
+/// `Browser.start` drops the tables -- but a missing answer reads as "just
+/// used", which is the direction that cannot reap anything.
+let newestTouch = () =>
+  withDb(db => {
+    let rows: array<touchedRow> =
+      db->Sqlite.prepare("SELECT MAX(touched_at) AS touched FROM lanes")->Sqlite.allBare
+    rows->Array.get(0)->Option.flatMap(r => r.touched->Nullable.toOption)->Option.getOr(now())
+  })
+
 // --- the screen -------------------------------------------------------------
 //
 // Lanes divide tabs. They do not divide the compositor, the VNC server or the
@@ -321,17 +342,24 @@ let releaseAllScreens = () => {
 }
 
 /// Lanes that would lose work if Chrome went away now, with how many tabs each
-/// holds -- what `stop` refuses on (ticket 057).
+/// holds -- what `stop` refuses on (ticket 057) -- or `None` when the question
+/// could not be asked.
 ///
 /// Live tabs, not rows: a row for a tab Chrome no longer has is not work, and
 /// the sweep that would drop it may not have run. Reserved lanes are excluded
 /// because Chrome is launched with `about:blank`, which lands in `orphan` on the
 /// first reconcile -- counting it would mean a refusal that never lifts.
 ///
-/// Empty when Chrome does not answer, and for the same caller: a wedged browser
-/// is the case `stop` exists for, and a check that cannot complete must not be
-/// what stands in the way.
-let occupied = async () =>
+/// The two callers want opposite readings of the same failure, which is why
+/// the answer and the failure are separable at all. `occupied` below is
+/// `stop`'s: a wedged browser is the case `stop` exists for, and a check that
+/// cannot complete must not be what stands in the way of a human holding
+/// `--force`, so the failure reads as empty. The reaper wants the other
+/// polarity (ticket 076): a clock that cannot *see* that the lanes are empty
+/// does not know the browser is idle, and must skip the round rather than
+/// kill what it could not inspect -- so it asks here, where `None` means
+/// unknown, and unknown never fires.
+let occupiedKnown = async () =>
   switch await chrome.contents.liveTabs() {
   | live =>
     let counts = Dict.make()
@@ -346,11 +374,17 @@ let occupied = async () =>
         }
       )
     })
-    counts
-    ->Dict.toArray
-    ->Array.toSorted(((a, _), (b, _)) => String.compare(a, b))
-  | exception _ => []
+    Some(
+      counts
+      ->Dict.toArray
+      ->Array.toSorted(((a, _), (b, _)) => String.compare(a, b)),
+    )
+  | exception _ => None
   }
+
+/// The same question, answering `stop`'s reading of it: unknown is empty, so
+/// a wedged browser never stands between a human and `--force`.
+let occupied = async () => (await occupiedKnown())->Option.getOr([])
 
 /// Make the table agree with what Chrome actually holds.
 ///

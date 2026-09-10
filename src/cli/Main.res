@@ -98,11 +98,10 @@ let ensureDaemon = async () =>
 /// and nothing else would then put the viewer away -- so the sweep that frees the
 /// last claim is also what dismisses it.
 let housekeep = async (~lane=?) => {
-  let holders = Lanes.screenClaims()
-  let collected = await Lanes.sweep()
-  if holders->Array.some(h => collected->Array.includes(h)) && Lanes.screenClaims()->Array.length == 0 {
-    Present.select().dismiss()
-  }
+  // The sweep and its presentation half moved to `Reaper` (ticket 077) so the
+  // watchdog's tick could run the same one: with no call arriving, nothing
+  // used to keep `openLane`'s promise that a lane collects itself.
+  await Reaper.sweepPresentation()
 
   switch lane {
   | Some(lane) => Lanes.require(lane)->ignore
@@ -188,7 +187,11 @@ let openLaneTool = {
 A lane owns the tabs opened in it. Nothing outside it can see or close them,
 and nothing it does reaches another caller's tabs. It collects itself after 30
 minutes of no calls, closing its tabs -- \`setTtl\` when you know you will be
-waiting longer than that.`,
+waiting longer than that.
+
+The browser itself stops after PASSENGER_IDLE_STOP (3h by default) in which
+nobody, in any lane, called anything; every lane is gone with it, and the next
+call starts a fresh browser. A lane id does not survive that.`,
   "inputSchema": {"type": "object", "properties": noProperties, "required": nothingRequired},
 }
 
@@ -198,7 +201,11 @@ let setTtlTool = {
 
 Every call naming the lane restarts its clock, so this is for waits you are
 about to start rather than for work in progress -- asking a human for something
-slow, most often.`,
+slow, most often.
+
+This clock is the lane's, not the browser's: a lane set to wait longer than
+PASSENGER_IDLE_STOP (3h by default) still dies with the browser, which stops
+when nobody in any lane has called anything for that long.`,
   "inputSchema": {
     "type": "object",
     "properties": {
@@ -559,6 +566,14 @@ let call = async (name, a) =>
             "wedged",
             JSON.Encode.string(up ? await Targets.stuckSummary() : "unknown"),
           ),
+          // Why the lane a caller held is gone, when a reaper took it. Read
+          // without consuming: `browserStatus` is a diagnostic and may be
+          // asked twice, while the one *delivery* is the LANE_NOT_FOUND that
+          // surprised somebody (ticket 076).
+          (
+            "lastIdleStop",
+            JSON.Encode.string(Reaper.peekNote()->Option.getOr("none")),
+          ),
           (
             "screenClaims",
             JSON.Encode.string(Lanes.screenClaims()->Array.length->Int.toString),
@@ -590,6 +605,19 @@ server->Mcp.setRequestHandler(Mcp.callToolRequest, async req =>
   switch await call(req["params"]["name"], args(req)) {
   | result => result
   | exception Errors.Passenger({code, message, detail}) =>
+    // The one place the reaper's note is *delivered*. A lane that vanished
+    // because the browser was stopped for idleness is the surprise the note
+    // exists to explain, and this is the error that surprise arrives as.
+    // Taken, not read: one delivery is one delivery, so a second caller whose
+    // lane died the same death gets the bare error (ticket 076, as amended).
+    let detail = switch code {
+    | LaneNotFound =>
+      switch Reaper.takeNote() {
+      | Some(note) => Some(detail->Option.getOr("") ++ " -- " ++ note)
+      | None => detail
+      }
+    | _ => detail
+    }
     throw(error(Errors.rendered(code, message, detail)))
   }
 )

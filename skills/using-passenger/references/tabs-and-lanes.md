@@ -102,3 +102,16 @@ new lane and start again.
 
 The usual way to get there is a handoff the human took longer over than you
 allowed for, which is what `ttlMinutes` and `setTtl` are for.
+
+The other way is the browser itself stopping. It stops after
+`PASSENGER_IDLE_STOP` — three hours by default — in which nobody, in any lane,
+called anything, and every lane goes with it. When that is what happened, the
+`LANE_NOT_FOUND` says so in its detail, and `browserStatus` reports the same
+line under `lastIdleStop` for as long as it stands. **The remedy is the same:
+open a new lane.** The next call starts a fresh browser on its own, so nothing
+has to be restarted by hand — but the logins are still there, since the profile
+outlives the process, and only the tabs are gone.
+
+A lane you set a long `setTtl` on is not exempt: that clock is the lane's, and
+this one is the browser's. A wait longer than three hours needs the setting
+raised, not the lane's TTL.

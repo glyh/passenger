@@ -95,6 +95,11 @@ let unfullscreen = async () =>
 /// the JSON-RPC transport. No caller ever passed false.
 let start = async (~hidden=true) =>
   if await isUp() {
+    // A browser left running by a previous client still deserves a reaper even
+    // when its own died with something, so "already running" summons too --
+    // and summons, not assumes: the pid record is what keeps this from
+    // stacking a second one beside a live watcher.
+    Reaper.summon()
     `already running on ${Config.cdpUrl()}`
   } else if await portTaken() {
     Errors.fail(
@@ -168,6 +173,10 @@ let start = async (~hidden=true) =>
 
     if came {
       await unfullscreen()
+      // The reaper is summoned only after Chrome answers, so what it watches
+      // is what actually came up -- and its environment is this process's,
+      // which is this browser's, by construction (ticket 076).
+      Reaper.summon()
       let state = hidden ? "hidden" : "visible"
       let line = `chrome up on ${Config.cdpUrl()} [${state}] (profile: ${Config.profileDir()})`
       // A reap that could not finish is said out loud here: it means something is
@@ -188,12 +197,13 @@ let start = async (~hidden=true) =>
 
 /// Stop this tool's browser, and nothing else. Returns what would not go.
 ///
-/// Scoped to the recorded session and to our own profile directory. The previous
-/// `pkill -x cage` matched on the program name, so it also killed cage sessions
-/// belonging to anyone else on the machine.
-let stop = async () => {
-  NestedSessions.pidsRunning(`--user-data-dir=${Config.profileDir()}`)->Array.forEach(
-    NestedSessions.terminate,
-  )
-  await NestedSessions.teardown()
-}
+/// The body moved to `Reaper.takeDown` (ticket 076) so the idle reaper's
+/// watchdog could share it without importing this module -- Playwright hangs
+/// off `Session`, which hangs off here. Still scoped to the recorded session
+/// and to our own profile directory; the move also completed the inventory,
+/// since `stop` used to leave the viewer window and the page server behind.
+let stop = async () => await Reaper.takeDown()
+
+// The seam `Present` declares, closed here: presenting fullscreens nothing but
+// has to undo it, and the body is Playwright's. See `Present.unfullscreen`.
+Present.unfullscreen := unfullscreen

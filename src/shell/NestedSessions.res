@@ -457,3 +457,50 @@ let viewerPid = () =>
   ->Option.filter(isAlive)
 
 let clearViewer = () => Fs.delete(viewerFile())
+
+// --- the page server ---------------------------------------------------------
+
+let viewerServerFile = () => Fs.join(Config.stateDir.contents, "viewer-server.pid")
+
+/// The viewer page server's pid, recorded when it is spawned.
+///
+/// `Webserve.ensure` used to drop this pid on the floor, and nothing anywhere
+/// killed the process: a detached re-exec serving two static files outlived
+/// `passenger stop` until logout (ticket 076). Recorded now, so the shared
+/// teardown can name it -- by pid, not by a sweep over command lines, because
+/// a second checkout of this tool shares the private flag and not the state
+/// dir, and kill-by-name is the exact scar `Present.dismiss`'s comment is
+/// about.
+let recordViewerServer = pid => {
+  Fs.mkdirp(Config.stateDir.contents)
+  Fs.writeFileSync(viewerServerFile(), pid->Int.toString)
+}
+
+let viewerServerPid = () =>
+  Fs.readText(viewerServerFile())
+  ->Option.flatMap(t => Int.fromString(t->String.trim))
+  ->Option.filter(isAlive)
+
+let clearViewerServer = () => Fs.delete(viewerServerFile())
+
+// --- the reaper --------------------------------------------------------------
+
+let watchdogFile = () => Fs.join(Config.stateDir.contents, "watchdog.pid")
+
+/// The idle reaper's pid, recorded when `Browser.start` summons it.
+///
+/// The record is what keeps starts from stacking reapers -- a Chrome already
+/// running when the next client connects still needs one watching it, but not
+/// two -- and what lets a caller tell a live reaper from a dead one, the same
+/// question `viewerPid` answers for the viewer window.
+let recordWatchdog = pid => {
+  Fs.mkdirp(Config.stateDir.contents)
+  Fs.writeFileSync(watchdogFile(), pid->Int.toString)
+}
+
+let watchdogPid = () =>
+  Fs.readText(watchdogFile())
+  ->Option.flatMap(t => Int.fromString(t->String.trim))
+  ->Option.filter(isAlive)
+
+let clearWatchdog = () => Fs.delete(watchdogFile())

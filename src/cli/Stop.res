@@ -65,8 +65,8 @@ let run = async (~force) => {
   let up = await Browser.isUp()
   // A claim `passenger show` left behind after its window was closed by hand is
   // not somebody mid-handoff, and refusing on one is the exact wedge this
-  // command exists to clear. See `Screen.dropStaleHumanClaim`.
-  Screen.dropStaleHumanClaim(Present.select())
+  // command exists to clear. See `Present.dropStaleHumanClaim`.
+  Present.dropStaleHumanClaim(Present.select())
   let claims = up ? Lanes.screenClaims() : []
   let occupied = up ? await Lanes.occupied() : []
 
@@ -74,6 +74,9 @@ let run = async (~force) => {
     Console.error(refusal(claims, occupied))
     1
   } else {
+    // A human stopping the browser on purpose is owed no explanation for the
+    // next lane failure, so a reaper's note from an earlier stop goes here.
+    Reaper.forgetNote()
     Console.log((await Browser.stop())->Option.getOr("stopped"))
     0
   }

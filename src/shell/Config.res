@@ -50,6 +50,16 @@ let handoffTimeoutS = ref(int("PASSENGER_HANDOFF_TIMEOUT", 300, 1, 2147483647))
 /// slowest one.
 let attachTimeoutS = ref(int("PASSENGER_ATTACH_TIMEOUT", 15, 1, 2147483647))
 
+/// How long the browser may sit with nobody using it before it is stopped,
+/// and everything spawned with it taken down. Chrome starts on demand and
+/// nothing else ever ended it, so a laptop that read one page at 10:00 used
+/// to run the whole nested stack until shutdown; the reaper (ticket 076) is
+/// what closes that. Zero is `Lanes.noTtl`'s spelling carried over: never.
+/// The blind horizon -- reaping a browser that stopped answering -- is
+/// derived from this one, 8x, so one variable governs both and "never"
+/// cannot be argued with half of.
+let idleStopS = ref(int("PASSENGER_IDLE_STOP", 10800, 0, 2147483647))
+
 let vncHost = ref(raw("PASSENGER_VNC_HOST")->Option.getOr("127.0.0.1"))
 let vncPort = ref(int("PASSENGER_VNC_PORT", 5900, 1, 65535))
 

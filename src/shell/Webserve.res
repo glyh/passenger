@@ -207,7 +207,12 @@ let ensure = async port =>
   } else {
     switch Proc.detach(execPath, reExecArgs(port)) {
     | None => false
-    | Some(_) =>
+    | Some(pid) =>
+      // Recorded, because nothing used to kill this: a detached re-exec serving
+      // two static files outlived `passenger stop` until logout (ticket 076).
+      // The shared teardown names it by pid, the way `recordViewer` lets it name
+      // the window.
+      NestedSessions.recordViewerServer(pid)
       // Serving, not listening: the bind happens before the first route exists,
       // and a caller told "yes" in that window is told a URL it could not have
       // fetched.
