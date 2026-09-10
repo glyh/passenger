@@ -3,7 +3,7 @@ id: 077
 title: Build the idle reap
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
