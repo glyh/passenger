@@ -283,3 +283,62 @@ flight) are places the reaper is *more* careful than the human's verb, not
 different.
 
 The build is [077](077-build-idle-reap.md).
+
+## Amendment — grilled, 076 revised
+
+The answer above was grilled branch by branch, and three of its calls were
+overruled by the owner. Recorded as overrulings, not smoothed over.
+
+**The carrier is a detached watchdog, not the lingering server.** Ruling:
+*no assumptions about how downstream tears the server down.* Claude and pi
+are the clients in play, and whether either closes stdin politely or kills
+the process tree is a fact about them that this design refused to bet on.
+So the serve process keeps today's lifecycle exactly -- it lives and dies
+with its client, however that death arrives -- and the reaper is
+`Proc.detach`ed at `Browser.start`, beside the Chrome it watches: its own
+session, so a tree-kill misses it the way it already misses Chrome. It
+needs only sqlite and the CDP HTTP endpoint -- never Playwright -- for the
+decision and the teardown; it records its pid (`watchdog.pid`, symmetric
+with `viewer.pid`, so starts don't stack), exits when its browser is gone,
+and overlapping watchdogs are the same benign idempotent race as before.
+What the linger design contributed survives: the sweep runs on the
+watchdog's tick too, so the lane TTL contract holds with no caller around.
+Cost, stated: one resident node process, tens of MB, ~0 CPU -- the price
+of the ruling. The linger design itself stays in the answer above as the
+considered-and-rejected alternative, with its reasoning intact.
+
+**The reap announces itself on the desktop.** Overruled from "no
+notification": `Notify.desktop` (notify-send, best-effort, skipped when
+absent) fires *before* the tombstone and teardown -- "browser stopped
+after 3h idle; the next call starts it fresh." Not the full fan-out: no
+webhook, which the owner ranked below the desktop ping.
+
+**A browser the watchdog cannot see is reaped blind at 8x the horizon.**
+Overruled from "tell me once" and from the ticket's own line. A wedged
+Chrome never answers the occupied question, so the sighted reap skips it
+forever -- silently burning watts in exactly the abandoned state this
+ticket is about. The owner chose closing it: after **8x the idle horizon**
+of continuous silence (24h at the default), the teardown proceeds without
+the tab answer. Bounded four ways, so the blind act is as careful as a
+blind act can be: the blind horizon is derived, not a second knob, and
+`PASSENGER_IDLE_STOP=0` disables both -- never means never; the registry
+guards still apply, because "Chrome won't answer" is not "sqlite won't
+read" -- a claim standing for a live viewer window stops even the blind
+reap; every tick re-asks, so the moment Chrome answers the full sighted
+guards apply and the blind teardown is simply what is left after 24h of
+asks all came back silent; and the desktop ping accompanies it, saying
+what is happening and why. The ticket's "must not become" list said a
+clock must not judge what it cannot see; the owner moved that line, on
+the record, for this one case -- the work a blind reap destroys was
+already unreachable for a full day, and the profile it keeps survives.
+
+**Settled as proposed, for the record:** orphan tabs do not block the reap
+(same answer `passenger stop` gives without `--force`); one shared
+teardown serves both the watchdog and `passenger stop`, completing stop's
+inventory (viewer window and page server die on `--force`); the horizon is
+`PASSENGER_IDLE_STOP`, 3h, `0` = never; and the tombstone delivers exactly
+once -- consumed only by the `laneNotFound` decoration, read passively by
+`browserStatus`, cleared by a human `passenger stop`, overwritten by the
+next reap. The owner chose deliver-once over the timestamp-only rule,
+accepting that a second caller whose lane died gets the bare error: one
+delivery is one delivery.
