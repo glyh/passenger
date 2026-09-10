@@ -3,7 +3,7 @@ id: 076
 title: Stop the browser when nobody has used it for hours
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
