@@ -53,23 +53,39 @@ owner's 30 GiB machine. The session had opened a lane only to run
 **Clearing it, for the record:** killing all 46 page targets over CDP — not the
 browser — took chrome from 26.8 GB to 8.3 GB and `available` from 3.0 GiB to
 14 GiB, without touching the profile. `destroyLane` was never usable here: the
-siblings' lanes were nameable only by the siblings, and one of them (§Adjacent)
-was not the build the caller thought it was talking to.
+siblings' lanes were nameable only by the siblings, which is 079's hole and not
+a build question.
 
-## Adjacent finding — this belongs in its own ticket
+## Adjacent finding — [065](065-viewer-page-from-a-dead-build.md)'s class, second process, no symptom shown
 
-Found while diagnosing the above, and it is a different bug. Two passenger
-builds were live at once: the long-lived `Watchdog.res.mjs` (pid 767377, started
-14:39) came from nix store path `nl5sv3463…`, while this session's four
-`Main.res.mjs serve` processes (started 16:30) came from `ryzq6yviv1…`. The
-store held **six** `passenger-0.1.0` derivations. Nothing errored; the only way
-to see it was to read `/proc/<pid>` for every passenger process and compare
-store paths. The remedy was kill everything and reconnect, after which exactly
-one build was in use.
+Found while diagnosing the above. **Not a separate ticket: 065 already owns this
+question, and this is one more instance of it.** It is recorded here because 065
+is scoped to the viewer page and this instance is the daemon.
 
-A daemon that outlives the build that produced it, and keeps serving clients
-from the new build, is worth its own question — at minimum, whether it can
-notice and stand down. Filed here only so the measurement is not lost.
+Two builds were live at once. The long-lived `Watchdog.res.mjs` (pid 767377,
+started 14:39) came from store path `nl5sv3463…`; this session's four
+`Main.res.mjs serve` processes (started 16:30) came from `ryzq6yviv1…`; the
+store held **six** `passenger-0.1.0` derivations. Nothing errored. The only way
+to see it was to read `/proc/<pid>/cmdline` for every passenger process and
+diff store paths — no reply carried it, exactly as 065 says of its own case.
+
+**What is not established, and should not be read into this:** no symptom from
+the skew was ever demonstrated. It was noticed while cleaning up, not because
+anything misbehaved; the 3.0 → 14 GiB recovery above is attributable to closing
+the 46 page targets, which happened first and was measured separately. The full
+kill-and-reconnect came after, so **the restart's contribution to the fix is
+unproven** — it removed the mismatch, it did not cure a measured fault.
+
+065's case was different in precisely the way that matters: three committed
+viewer fixes were invisible and `grep -c clipboardPasteFrom → 0` said so. Nothing
+equivalent was observed here.
+
+What would settle it: whether a stale `Watchdog` can serve a client from a newer
+build at all, and if so whether 065's remedy — kill and re-exec the
+stale-but-ours server — should name the daemon alongside `--serve-viewer`. 065
+already argues the exception is deliberate ("ours by construction", unlike the
+foreign-process case 058 solved). If the daemon is in scope, it is that
+paragraph that needs the second process, not a new ticket.
 
 ## What this is not
 
