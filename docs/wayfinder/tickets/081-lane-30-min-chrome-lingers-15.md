@@ -3,7 +3,7 @@ id: 081
 title: A lane lives 30 minutes, and the browser lingers 15 more
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
