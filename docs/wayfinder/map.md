@@ -86,6 +86,28 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [056's encoder still escapes emoji and rare Han](tickets/070-astral-still-escapes.md)
+  — closed as **moot by the port**, with no code change. The defect was
+  `JavaScriptEncoder`'s UnicodeRange allow-list, which cannot express anything
+  above `U+FFFF`; the wire is `JSON.stringify` now (`Main.res:117`,
+  `Script.res:78`) and node emits astral characters literally, measured. The
+  one item the ticket left open — a sentence in `writing-scripts.md` it said
+  "needs trimming whichever way this ticket goes" — turned out to need
+  nothing: under `JSON.stringify` that sentence (*"nothing on this path escapes
+  non-ASCII"*) is true including above the BMP, so sentence and code agree for
+  the first time by the code moving. Verified rather than assumed; the first
+  pass had left it "unverified".
+
+- [Getting a file into the session, since a drag cannot](tickets/072-file-into-the-session.md)
+  — closed as **already done, before the ticket was opened**. No `src/` change
+  was ever indicated, and the skill had both answers already:
+  `writing-scripts.md:207-211` carries the `setInputFiles` recipe with the
+  RFB-has-no-file-transfer reasoning, `tabs-and-lanes.md:58-64` carries "**Files
+  do not cross by dragging, and never will**" plus the wording to use with the
+  human, and `SKILL.md:49` carries the one-liner. The declined candidate — a
+  line in `showBrowser`'s description — is absent on purpose, not by oversight.
+  Nothing to build, and no second door beside RFB was wanted.
+
 - [A lane lives 30 minutes, and the browser lingers 15 more](tickets/081-lane-30-min-chrome-lingers-15.md)
   — `PASSENGER_IDLE_STOP` defaults **2700 (45 min)**; the lane stays at 30 and
   the 15-minute gap is the whole arithmetic, counted from `max(touched_at)`
