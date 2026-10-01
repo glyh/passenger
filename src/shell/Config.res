@@ -58,7 +58,7 @@ let attachTimeoutS = ref(int("PASSENGER_ATTACH_TIMEOUT", 15, 1, 2147483647))
 /// The blind horizon -- reaping a browser that stopped answering -- is
 /// derived from this one, 8x, so one variable governs both and "never"
 /// cannot be argued with half of.
-let idleStopS = ref(int("PASSENGER_IDLE_STOP", 10800, 0, 2147483647))
+let idleStopS = ref(int("PASSENGER_IDLE_STOP", 2700, 0, 2147483647))
 
 let vncHost = ref(raw("PASSENGER_VNC_HOST")->Option.getOr("127.0.0.1"))
 let vncPort = ref(int("PASSENGER_VNC_PORT", 5900, 1, 65535))

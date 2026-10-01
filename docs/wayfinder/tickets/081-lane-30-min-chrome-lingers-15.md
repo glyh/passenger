@@ -2,7 +2,7 @@
 id: 081
 title: A lane lives 30 minutes, and the browser lingers 15 more
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -51,10 +51,44 @@ One constant, and the prose that tells a caller what it means:
 - `skills/using-passenger/references/tabs-and-lanes.md:107,116` — "three hours
   by default", twice. Same two sentences, same fix.
 
-Acceptance: `grep -rn "10800\|three hours\|3h"` over `src/`, `README.md` and
-`skills/` returns nothing (excluding the emitted `.res.mjs`). `map.md:98` is the
-decisions-so-far record as it stood at 076 and is history — append the closing
-line beside it, do not rewrite it.
+`map.md:98` is the decisions-so-far record as it stood at 076 and is history —
+append the closing line beside it, do not rewrite it.
+
+## Answer
+
+Built. `Config.idleStopS` defaults **2700 (45 minutes)**, and the five prose
+sites that named the old number now name the new one: `Main.res:192,207` (both
+`openLane`/`setTtl` docstrings), `README.md:349`, and the two sentences in
+`tabs-and-lanes.md`. Acceptance grep over `src/`, `README.md` and `skills/`
+returns nothing for `10800|three hours|3h`; `npm test` is 139/139.
+
+Three things worth having on the record, found while doing it:
+
+**It really is one constant, and that is a fact about `Reaper`, not luck.**
+The blind horizon -- reaping a browser that has stopped answering -- is
+`Reaper.blindMultiple = 8` multiplying whatever `idleStopS` holds, so it moved
+with the constant to 6h and no second number had to be found. Had the 8x been
+written out as `86400` anywhere, this ticket would have been a different ticket.
+
+**Nothing pins the old default, so no test changed.** `test/Reaper_test.res`
+injects `~idleStopS` rather than reading `Config`, and `live/LiveWatchdog.res`
+overrides it to 2 for its two-second run. That means the acceptance grep is the
+whole verification and there is no unit test that would have caught a
+half-done edit -- worth knowing, since the failure mode here is exactly the
+stale prose this ticket is about: a constant moved and one of six sentences
+left behind.
+
+**One site the ticket's own grep would have missed, and one it correctly
+excluded.** A wider search over `docs/` still finds `3h`/`10800` in `076` and
+`077` and at `map.md:98`, all of them closed-ticket records and history -- left
+alone, as instructed. `skills/html-to-markdown/references/benchmark.md:42`
+matches `3h`-adjacent patterns only through a `2.8x` timing column, which is why
+the ticket's narrower grep is the right one.
+
+**The accepted consequence bites sooner and is unchanged in kind.** A lane whose
+`setTtl` or handoff `ttlMinutes` exceeds 45 minutes now outlives the browser
+rather than merely outliving it at 3h; the handoff case stays covered by its
+screen claim, which is what holds the reap off. No new state, no new knob.
 
 ## Accepted consequences, not open questions
 

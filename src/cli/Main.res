@@ -189,7 +189,7 @@ and nothing it does reaches another caller's tabs. It collects itself after 30
 minutes of no calls, closing its tabs -- \`setTtl\` when you know you will be
 waiting longer than that.
 
-The browser itself stops after PASSENGER_IDLE_STOP (3h by default) in which
+The browser itself stops after PASSENGER_IDLE_STOP (45m by default) in which
 nobody, in any lane, called anything; every lane is gone with it, and the next
 call starts a fresh browser. A lane id does not survive that.`,
   "inputSchema": {"type": "object", "properties": noProperties, "required": nothingRequired},
@@ -204,7 +204,7 @@ about to start rather than for work in progress -- asking a human for something
 slow, most often.
 
 This clock is the lane's, not the browser's: a lane set to wait longer than
-PASSENGER_IDLE_STOP (3h by default) still dies with the browser, which stops
+PASSENGER_IDLE_STOP (45m by default) still dies with the browser, which stops
 when nobody in any lane has called anything for that long.`,
   "inputSchema": {
     "type": "object",

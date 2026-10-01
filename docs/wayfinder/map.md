@@ -86,6 +86,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [A lane lives 30 minutes, and the browser lingers 15 more](tickets/081-lane-30-min-chrome-lingers-15.md)
+  — `PASSENGER_IDLE_STOP` defaults **2700 (45 min)**; the lane stays at 30 and
+  the 15-minute gap is the whole arithmetic, counted from `max(touched_at)`
+  over the registry, which keeps growing across the sweep because the swept
+  lane's row is deleted. The blind horizon came along for free -- it is
+  `Reaper.blindMultiple = 8`, not a second constant -- so it is 6h now. Five
+  prose sites moved with it; `076`/`077`/`map.md` keep the old number as
+  history. Accepted: a `setTtl` above 45 minutes now outlives the browser and
+  its caller returns to `laneNotFound`, the same shape as at 3h, biting
+  sooner; the handoff case is held off by its screen claim.
+
 - [Build the idle reap](tickets/077-build-idle-reap.md) — `Reaper` holds the
   rules and the one teardown, `cli/Watchdog` carries them in a process of its
   own. Two seams fell out of keeping Playwright away from it:
