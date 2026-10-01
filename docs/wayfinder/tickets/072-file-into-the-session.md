@@ -2,8 +2,8 @@
 id: 072
 title: Getting a file into the session, since a drag cannot
 labels: [wayfinder:task]
-status: open
-assignee:
+status: closed
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
@@ -112,3 +112,38 @@ Both exist today and neither is written down anywhere a caller looks.
   `filechooser` event both present.
 - By hand through the node door: paste in, copy out and in-page drag all work;
   the file drop is silent; the session's own file chooser reaches host paths.
+
+## Answer
+
+**Both halves of "What to do" are already true — nothing was left to do.**
+The ticket's diagnosis stands exactly as written (the viewer still carries the
+`preventDefault` comment and its `dragover`/`drop` loop at
+`assets/web/viewer.html:128-136`), and nothing in `src/` was ever to change, as
+the ticket itself concluded. What it asked for was the skill to say it, and the
+skill says it — written *before* this ticket was opened, which is why nobody
+re-derived it:
+
+- `skills/using-passenger/references/writing-scripts.md:207-211` — the
+  `await Page.locator('input[type=file]').setInputFiles('/tmp/x.pdf')` recipe,
+  with "VNC carries no file transfer" and "the browser shares this filesystem"
+  as the reasoning. Answer 1, in full.
+- `skills/using-passenger/references/tabs-and-lanes.md:58-64` — **"Files do not
+  cross by dragging, and never will."** RFB has no file transfer; the chooser
+  is the route; and the wording to use with the human is spelled out — *say
+  "click the upload button and choose the file", never "drag it in"*. Answer 2,
+  in full, including the sentence the ticket said nothing tells the person.
+- `skills/using-passenger/SKILL.md:49` — one line in the entry point's list:
+  *"Put a file *into* a page: `setInputFiles` takes a path on this same disk."*
+
+**The declined half is correctly declined.** Answer 2 in "What to do" was a
+candidate line in the `showBrowser` description, which the ticket already
+called "probably still a skill matter". `showBrowser`'s description
+(`src/cli/Main.res:280-291`) has no such line, which is the intended outcome
+and not a gap — *operating knowledge lives in the skill* is the rule this
+ticket would have been an exception to, and the case for the exception was the
+one moment a human is looking at the window. The skill covers that moment
+already, at `tabs-and-lanes.md:64`, in words addressed to the human.
+
+Nothing to build, and no second door was wanted: the ticket's own conclusion
+that inventing a file-transfer channel beside RFB "would be a second door onto
+the session for something `script` already does better" stands.
