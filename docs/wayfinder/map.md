@@ -86,6 +86,18 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [The visible-window fallback no caller can reach](tickets/059-none-backend-unreachable.md)
+  — closed on **answer 3, "keep it dead, fix the string"**: the `CannotHide`
+  detail stops naming `--visible` (a flag 057 deleted) and the README's `none`
+  row stops advertising a fallback that refuses every time. `autoOrder`'s second
+  entry, the `noOp` null object and the guard itself are untouched — answers 1
+  (delete `none`) and 2 (make it reachable) were **declined, not refuted**, and
+  remain open for a future ticket. What is still true: a machine without sway +
+  wayvnc has no working configuration, and now says so without pointing at a
+  command that does not exist. Adjacent find not taken: `README.md:273` says
+  "Selectable via `PASSENGER_WM`" above the *Presenters* table — wrong variable,
+  pre-existing.
+
 - [056's encoder still escapes emoji and rare Han](tickets/070-astral-still-escapes.md)
   — closed as **moot by the port**, with no code change. The defect was
   `JavaScriptEncoder`'s UnicodeRange allow-list, which cannot express anything

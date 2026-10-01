@@ -2,7 +2,7 @@
 id: 059
 title: The visible-window fallback no caller can reach
 labels: [wayfinder:research]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -78,3 +78,47 @@ headless is refused for good reasons (`Launch.cs:1` -- fingerprint, and no
 human handoff), so "runs anywhere" has a floor no packaging can lower. A DRM
 render node and a host Chrome are requirements of the design, not of the
 build.
+
+## Answer
+
+**The third answer: keep it dead, fix the string.** Two lines, and the guard it
+errors out of is untouched.
+
+- `src/shell/Browser.res:139` — the `CannotHide` detail loses its second clause.
+  It read `install sway + wayvnc (or \`nix develop\`), or start it with
+  --visible to accept a visible window`; it now reads `install sway + wayvnc
+  (or \`nix develop\`)`. The message sentence, the error code, the
+  `(true, NoBackend)` condition and the comment above it are unchanged.
+- `README.md:304` — the launch table's `none` row claimed *"fallback when
+  sway/wayvnc are missing — the window stays visible"*. It now reads *"refuses
+  to start — sway + wayvnc are requirements, not preferences"*. Verified as the
+  **only** live copy of the claim: `grep -rn -i 'fallback when\|window stays
+  visible'` finds nothing else outside this ticket's own history.
+
+**The premise held exactly as written.** `--visible` has no parser anywhere —
+`src/cli/Cli.res` declares only `--force` (on `hide` and `stop`) — and the
+remaining mentions are two prose comments (`Browser.res:45`,
+`Launch.res:155`) plus the string that was fixed. The backend `none` is still
+`Launch.autoOrder`'s second entry (`Launch.res:240`), the `noOp` null object is
+still there, and `hidden` still has one possible value at `Browser.res:96`, so
+this remains a guard on a constant that fires every time. Closing this ticket
+says *which of the three answers was taken*, not that the question is settled:
+answers 1 and 2 were declined rather than refuted, and both are still open for
+a future ticket — deleting `none` is `autoOrder` plus a `PASSENGER_WM` value
+plus this table row, and "make it reachable" needs the `Present`/`showBrowser`
+look the ticket describes and did not do.
+
+**What is still true, and worth leaving visible:** on a machine without sway
+and wayvnc, `passenger` still has no working configuration. It now says so
+honestly instead of pointing at a command that does not exist — which was the
+fault 057 was named after, one string later than 057 got.
+
+`npm test`: build clean under warnings-as-errors, `139 tests / 139 pass / 0
+fail`. No test covers either string; the build is the evidence, and the two
+changed lines are prose.
+
+**Found adjacent, not taken:** `README.md:273` reads "Selectable via
+`PASSENGER_WM`:" and sits directly above the **Presenters
+(`PASSENGER_PRESENTER`)** table — the launch table has its own heading at
+`:299`. The sentence names the wrong variable. Pre-existing, unrelated to this
+ticket, and a one-word fix whenever someone wants it.
