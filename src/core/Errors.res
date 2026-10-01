@@ -23,6 +23,7 @@ type code =
   | DaemonStartFailed
   | AttachTimeout
   | PortInUse
+  | SocketPathTooLong
   | ChromeNotFound
   | UnknownWindowBackend
   | NoPresenter
@@ -49,6 +50,7 @@ let codeToString = code =>
   | DaemonStartFailed => "DAEMON_START_FAILED"
   | AttachTimeout => "ATTACH_TIMEOUT"
   | PortInUse => "PORT_IN_USE"
+  | SocketPathTooLong => "SOCKET_PATH_TOO_LONG"
   | ChromeNotFound => "CHROME_NOT_FOUND"
   | UnknownWindowBackend => "UNKNOWN_WINDOW_BACKEND"
   | NoPresenter => "NO_PRESENTER"

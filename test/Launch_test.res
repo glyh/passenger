@@ -146,3 +146,36 @@ T.testAsync("the script is executable", async () => {
   let _ = await planned()
   T.ok(Launch.isExecutable(Launch.sessionSh()))
 })
+
+T.testAsync("a control socket path the kernel cannot take is refused", async () => {
+  // A unix socket path lives in `sun_path`, 108 bytes on Linux with the NUL
+  // counted, and one byte past that wayvnc dies with "File name too long" into
+  // a pipe nobody reads -- the session then reports itself fine with a
+  // compositor and no VNC at all (ticket 064). So the plan refuses the path
+  // instead of composing files nothing can bind.
+  let saved = Config.stateDir.contents
+  let deep = saved ++ "/" ++ String.repeat("deep", 30)
+  Config.stateDir := deep
+  // Pinned to a five-digit port so the length the refusal names is knowable
+  // here: `freePort` scans upward from this, and every port it can land on has
+  // the same width. Restored before anything asserts, so a failed assertion
+  // cannot leave a mutated config for the cases after this one.
+  let savedPort = Config.vncPort.contents
+  Config.vncPort := 25900
+  let outcome = switch await planned() {
+  | _ => None
+  | exception Errors.Passenger({code, message}) => Some((code, message))
+  }
+  Config.stateDir := saved
+  Config.vncPort := savedPort
+  switch outcome {
+  | None => T.ok(false) // the plan accepted a path no one can bind
+  | Some((code, message)) =>
+    T.equal(code, SocketPathTooLong)
+    // The two numbers and the code, and no prose: wording is free to change.
+    // The length is checked against the composed path -- deep ++ "/" ++
+    // "wayvnc-" ++ five digits ++ ".sock" is 18 bytes past the state dir.
+    T.ok(message->String.includes("107"))
+    T.ok(message->String.includes(Int.toString(String.length(deep) + 18)))
+  }
+})

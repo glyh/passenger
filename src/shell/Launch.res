@@ -179,6 +179,22 @@ let nested = {
     // compositor to anyone who connected.
     let port = await NestedSessions.freePort()
     let ctl = NestedSessions.ctlSocket(port)
+    // Checked here, not inside `ctlSocket`, which stays a pure path composer:
+    // the 107 is not a property of the string but of `sun_path` -- the
+    // 108-byte buffer, NUL included, the kernel binds a unix socket from -- and
+    // this is where the path is about to be handed to one. Past it wayvnc dies
+    // with "File name too long" into a pipe nobody reads, and the session comes
+    // up with a compositor and no VNC, reporting itself fine (ticket 064). The
+    // message names the limit and the length so whoever set PASSENGER_STATE can
+    // see how far past it they are; the path says which variable did it.
+    let ctlLen = String.length(ctl)
+    if ctlLen > 107 {
+      Errors.fail(
+        SocketPathTooLong,
+        `the control socket path is ${ctlLen->Int.toString} bytes and a unix socket path stops at 107`,
+        ~detail=ctl,
+      )
+    }
     // After argv[0], so the browser being launched is still the first word and a
     // reader of the generated script sees which one it is.
     let full =
