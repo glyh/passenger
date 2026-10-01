@@ -3,7 +3,7 @@ id: 064
 title: A deep state dir silently costs the session its VNC
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
