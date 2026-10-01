@@ -136,8 +136,7 @@ let start = async (~hidden=true) =>
       Errors.fail(
         CannotHide,
         "asked to start hidden, but nothing here can hide a window",
-        ~detail="install sway + wayvnc (or `nix develop`), " ++
-        "or start it with --visible to accept a visible window",
+        ~detail="install sway + wayvnc (or `nix develop`)",
       )
     | _ => ()
     }

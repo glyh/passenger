@@ -301,7 +301,7 @@ and freeze that aspect at connect time, and the one that does resize costs
 | value    | mechanism               | notes |
 |----------|-------------------------|-------|
 | `nested` | sway + wayvnc (default) | the only real mechanism; portable everywhere |
-| `none`   | no-op                   | fallback when sway/wayvnc are missing — the window stays visible |
+| `none`   | no-op                   | refuses to start — sway + wayvnc are requirements, not preferences |
 
 Compositor-specific backends (hyprctl special workspaces, `wlrctl` minimize)
 were tried and removed. They break: Hyprland 0.56 dropped `hyprctl keyword` and
