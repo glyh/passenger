@@ -14,6 +14,8 @@ description: |
   no listing exposes more than 2,000 entries however deep you page, and
   libraries and unlisted scripts exist but are absent from every search and
   every by-site listing.
+metadata:
+  author: glyh
 ---
 
 # Greasy Fork

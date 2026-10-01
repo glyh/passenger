@@ -13,6 +13,8 @@ description: |
   failures, its login state — which belong in that site's own skill. To turn
   HTML you already have into markdown, use `html-to-markdown`. To write down
   what you learned about a site, use `passenger-skill-authoring`.
+metadata:
+  author: glyh
 ---
 
 # Using passenger

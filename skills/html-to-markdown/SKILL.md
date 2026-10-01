@@ -13,6 +13,8 @@ description: |
   Does NOT fetch URLs: it converts HTML you already have. To obtain the HTML
   from a live site, especially one needing a login or rendering, use
   `using-passenger`.
+metadata:
+  author: glyh
 ---
 
 # HTML to AI-ready markdown

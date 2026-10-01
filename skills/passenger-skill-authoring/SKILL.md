@@ -11,6 +11,8 @@ description: |
   Does NOT cover performing a single scrape, and does NOT cover any individual
   site's mechanics — those belong in that site's own skill. For driving the
   browser at all, use `using-passenger` instead.
+metadata:
+  author: glyh
 ---
 
 # Writing a scraping skill for a site
@@ -49,9 +51,12 @@ body. It contains only:
 1. **What it can do** (capability)
 2. **When to use it** (positive trigger — include the phrasings a caller
    actually types)
-3. **Where its boundary is** — stated in the first person, as a fact about this
-   site: "overseas house prices are not here", "this site cannot give distance
-   or routing". Never the destination; see below.
+3. **Where its boundary is**, and optionally where to go instead — stated in the
+   first person as a fact about this site ("overseas house prices are not here"),
+   followed by a pointer if there is one ("— house prices overseas are in X").
+   The boundary is the load-bearing half: it holds when the pointer is stale or
+   the sibling has been deleted. See "Naming another site" below for what may
+   follow a pointer and what may not.
 
 **Mechanism never goes in `description`:** selectors, field names, URL shapes,
 evidence for silent failures. All of it stays in the body, which is in front of
@@ -63,45 +68,57 @@ contradict each other in front of a user.
 **Test after writing a description:** does this sentence help me *choose* this
 skill, or help me *use* it? If the latter, move it into the body.
 
-### A site skill never names another site
+### Naming another site: a pointer is fine, a claim needs a measurement
 
-**No "use X instead", no "X is better for this", no link to a sibling skill.**
-Unruled, these accumulate into a hand-maintained graph between every pair of
-skills that touch one subject, and that graph fails three ways at once.
+**A pointer is allowed.** "Overseas house prices are not here — go to X" is fine,
+and so is a link to the sibling skill. This was once banned outright, on two
+grounds, and both have since gone away:
 
-- **It fires too late to help.** A routing line inside skill A is only read once
-  A has been selected. If A was the wrong choice, selection already failed and
-  the line is repairing the damage, not preventing it.
-- **The claim cannot be verified by the skill making it.** "This source has the
-  best rent samples of the three" is an assertion about three sites written in
-  one site's description, backed by nothing the reader can reach. Section 6
-  applies with full force and there is no way to run it.
-- **The edges are one-way and stay that way.** Skill A routes to B; B has never
-  heard of A. A caller who lands on B never learns the boundary exists.
+- **There was no single home for routing knowledge**, so a pointer inside a skill
+  was the only place that knowledge existed, and nothing maintained it. Each
+  question the family competes on now has its own routing document (see the next
+  section), so a pointer sits beside an authority instead of being one.
+- **A pointer could dangle** — written in a skill whose counterpart had never
+  been written. Every target is now a real skill, and that is the one thing a
+  pointer must satisfy: **if you name it, it must exist.** A pointer to something
+  that is not there is worse than no pointer, because it is read as an
+  instruction.
 
-⇒ A description carries only what **one run against this one site** could
-establish. "Overseas house prices are not here" is that. "For overseas house
-prices use X" is not.
+**What is still forbidden is the unmeasured claim.** "This source has the best
+rent samples of the three", "X only ever says pending", "X has no ratings" — an
+assertion about another site's nature, made by a skill that cannot verify it.
+That is not a routing problem but the honesty rule: a claim about a site nobody
+measured belongs in the "haven't tried" list, not in a description. Either
+restate it as what your own run established about *your* site, or bring the
+measurement.
 
-### Comparisons live in one document per *question*
+⇒ The test is no longer "does this name another site". It is **"is this a
+pointer, or a claim?"** A pointer may name a destination. A claim must point at
+a measurement.
 
-The routing knowledge is real and deleting it would lose it — so it moves, whole,
-to where it can be maintained and verified: **one document per question the
-sites compete to answer** — house prices in a country, web search, local
-restaurant reputation — owned by whoever ran the comparison, with the comparison itself recorded in an `evals/`
-file covering **the whole family** rather than one member (section 8).
+### Routing also lives in one document per *question*
+
+A pointer inside one skill is unreadable from the skill the caller actually
+needs, and it cannot be maintained from there. So the routing knowledge **also**
+lives in one document per question the sites compete to answer — house prices in a
+country, web search, local restaurant reputation, air quality — kept beside the
+skills and loaded before any of them is chosen, with the comparison itself
+recorded in an `evals/` file covering **the whole family** rather than one member
+(section 8).
 
 Per *question*, not per site, because that is what the caller is actually holding
 when they choose. Nobody arrives wanting a particular property portal; they
-arrive wanting a rent number, and a document named for the rent number is
-selectable while a web of cross-links between three site skills is not.
+arrive wanting a rent number.
 
-**One carve-out: two skills reaching the same site.** When a site is reachable
-two ways — an official API client and a scrape of its web version — one of them
-must say which is primary and when to fall back, because otherwise the caller
-faces two descriptions of the same site and has no basis to choose. That claim
-is first-person (the cap you hit is yours to measure) and there is exactly one
-edge, so it does not become a graph. This does not extend to a second *site*.
+The two homes do different jobs and both are wanted: the document is the
+authority and survives a skill being deleted, while the pointer in the skill is
+what the reader sees at the moment they need it. Keep them saying the same thing.
+
+**Two skills reaching the same site** is the case that most needs a pointer: when
+a site is reachable two ways — an official API client and a scrape of its web
+version — one of them must say which is primary and when to fall back, because
+otherwise the caller faces two descriptions of the same site with no basis to
+choose.
 
 ### Two kinds of site, and they do not want the same document
 
@@ -826,9 +843,10 @@ the conclusion; the conclusion is one line at the top of that file.
 - [ ] Every recipe touched in this pass was actually run; body grepped for old
       field names and old API names
 - [ ] Nothing restates or links to the tool itself or other generic capabilities
-- [ ] **No other site is named anywhere** — not in `description`, not in the
-      body. Boundaries are first-person; comparisons went to the family
-      document. (Sole carve-out: a second route to *this same* site)
+- [ ] **Every site named resolves to a skill that exists**, and the claim beside it
+      survives the pointer/claim test: a pointer may name a destination, a claim
+      must point at a measurement. Boundaries stated first-person; comparisons
+      also live in the family document for that question
 - [ ] `description` has no mechanism and is not a table of contents — only
       capability, when to use, and where this site's own boundary is
 - [ ] "Won't", "can't" and "haven't tried" are three separate lists
