@@ -187,7 +187,9 @@ let nested = {
     // up with a compositor and no VNC, reporting itself fine (ticket 064). The
     // message names the limit and the length so whoever set PASSENGER_STATE can
     // see how far past it they are; the path says which variable did it.
-    let ctlLen = String.length(ctl)
+    // Counted in UTF-8 bytes: `sun_path` is a byte array, and code units
+    // undercount a CJK path up to threefold.
+    let ctlLen = Node.byteLength(ctl)
     if ctlLen > 107 {
       Errors.fail(
         SocketPathTooLong,

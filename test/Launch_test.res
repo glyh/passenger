@@ -179,3 +179,34 @@ T.testAsync("a control socket path the kernel cannot take is refused", async () 
     T.ok(message->String.includes(Int.toString(String.length(deep) + 18)))
   }
 })
+
+T.testAsync("a control socket path long only in bytes is refused", async () => {
+  // The same refusal, aimed at the unit it is measured in: `sun_path` is bytes,
+  // so the kernel counts the UTF-8 length, while `String.length` counts code
+  // units -- a path of CJK directories is up to three bytes per code unit and
+  // sails past 107 while its code-unit length says it is fine (ticket 064).
+  // This path is exactly that split: under the limit by code units, over it by
+  // bytes.
+  let saved = Config.stateDir.contents
+  let deep = saved ++ "/" ++ String.repeat("文档", 15)
+  Config.stateDir := deep
+  // Pinned for the same reason as above, and restored before anything asserts.
+  let savedPort = Config.vncPort.contents
+  Config.vncPort := 25900
+  let outcome = switch await planned() {
+  | _ => None
+  | exception Errors.Passenger({code, message}) => Some((code, message))
+  }
+  Config.stateDir := saved
+  Config.vncPort := savedPort
+  // The split between the two measures is the whole point of the case, so it
+  // is asserted: a path over the limit by both proves nothing here.
+  T.ok(String.length(deep) + 18 <= 107)
+  switch outcome {
+  | None => T.ok(false) // the plan accepted a path no one can bind
+  | Some((code, message)) =>
+    T.equal(code, SocketPathTooLong)
+    T.ok(message->String.includes("107"))
+    T.ok(message->String.includes(Int.toString(Node.byteLength(deep) + 18)))
+  }
+})

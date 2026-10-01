@@ -21,3 +21,7 @@ external script: (string, {"filename": string}) => script = "Script"
 let wrap = source => "(async()=>{" ++ source ++ "\n})()"
 
 @val @scope("process") external cwd: unit => string = "cwd"
+
+// `Buffer.byteLength` at its default encoding, UTF-8: a string's length in
+// bytes, which is what a syscall counts -- `String.length` is code units.
+@val @scope("Buffer") external byteLength: string => int = "byteLength"
