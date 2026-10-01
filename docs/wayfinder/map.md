@@ -86,6 +86,19 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [A deep state dir silently costs the session its VNC](tickets/064-wayvnc-socket-path-too-long.md)
+  — **item 1 only**: `nested.plan` refuses a control socket path past the
+  `sun_path` limit, naming the 107, the length and the path (`SocketPathTooLong`
+  in `Errors.res`). The first pass measured it with `String.length` — UTF-16 code
+  units against a byte array — which accepted a **157-byte** CJK path while
+  reporting "77 bytes", reinstating the silent failure for exactly the case this
+  tool is aimed at; fixed in `7d1aa23` via `Node.byteLength`, with a test that
+  asserts the *split* between the two measures so a path over by both cannot
+  pass as evidence. Still owed: item 2 (the session script's output into a pipe
+  nobody drains — `session.log` is written but no failed start names it) and
+  both open decisions (refuse vs relocate to `XDG_RUNTIME_DIR`; whether wayvnc's
+  failure should fail the start).
+
 - [The visible-window fallback no caller can reach](tickets/059-none-backend-unreachable.md)
   — closed on **answer 3, "keep it dead, fix the string"**: the `CannotHide`
   detail stops naming `--visible` (a flag 057 deleted) and the README's `none`
