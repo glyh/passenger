@@ -3,7 +3,7 @@ id: 059
 title: The visible-window fallback no caller can reach
 labels: [wayfinder:research]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
