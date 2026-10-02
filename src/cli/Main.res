@@ -633,9 +633,11 @@ let serve = async () => await server->Mcp.connect(Mcp.stdio())
 let main = async () => {
   let args = argv->Array.slice(~start=2, ~end=argv->Array.length)
 
-  // Ahead of the parser, not inside it: this is the viewer server re-execing
-  // this same module, never something a person types, and it takes a port
-  // rather than the flags a command takes. Keeping it out of `Cli.commands`
+  // Ahead of the parser, not inside it: this is the viewer server's re-exec
+  // argument -- `src/cli/Entry.res` normally dispatches it to `Webserve` without
+  // ever importing this module, and this branch is what keeps a directly run
+  // `Main.res.mjs` behaving the same. Never something a person types: it takes a
+  // port rather than the flags a command takes. Keeping it out of `Cli.commands`
   // keeps it out of the usage text, which is where it belongs.
   if !Webserve.serveIfAsked(args) {
     switch Cli.parse(args) {

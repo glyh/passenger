@@ -24,7 +24,7 @@ let main = async () => {
   await client->Mcp.connectClient(
     Mcp.stdioClient({
       "command": "node",
-      "args": ["src/cli/Main.res.mjs", "serve"],
+      "args": ["src/cli/Entry.res.mjs", "serve"],
       "cwd": Node.cwd(),
       "stderr": "inherit",
       "env": childEnv(),

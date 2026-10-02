@@ -95,14 +95,27 @@ let nextBlindSince = (~occupied, ~current, ~now) =>
 // --- summoning the carrier --------------------------------------------------
 
 @val @scope("process") external execPath: string = "execPath"
-@val @scope("process") external argv: array<string> = "argv"
 
-/// The entry that carries these rules, beside whoever summoned us. `nix run`
-/// and a client's own registration both land `argv[1]` on `Main.res.mjs`,
-/// and the flake copies `src/` with its shape intact, so the sibling is
-/// there in every deployment this tool ships in.
-let watchdogEntry = () =>
-  Fs.join(Fs.dirname(argv->Array.get(1)->Option.getOr("")), "Watchdog.res.mjs")
+/// The flag `src/cli/Entry.res` dispatches on to the watchdog body, spelled the
+/// same on both sides. Two literals rather than one shared constant, and this
+/// is deliberate: the entry may not be imported here (it dispatches at import
+/// time), this module may not be imported there (the entry keeps an empty
+/// static graph), and a shared module for one string is a third file to keep
+/// honest. The two spellings name each other in their comments; that is the
+/// coupling.
+let watchdogFlag = "--watchdog"
+
+/// Where the dispatcher entry sits, on disk. Derived from *this module's* own
+/// file rather than from `argv[1]`: `argv[1]` is whoever was run, and that is
+/// not always the entry -- `node live/LiveWatchdog.res.mjs` summons this too,
+/// and spawning `argv[1]` with the flag there would re-run the summoner instead
+/// of the reaper. In a single-file build this path names nothing on disk, and
+/// that is fine: the compiled forms re-exec their own binary, whose entry *is*
+/// the dispatcher, and carry this string as one more inert argv (see the spawn
+/// shape below).
+@module("node:url") external fileURLToPath: string => string = "fileURLToPath"
+let hereUrl: unit => string = %raw(`() => import.meta.url`)
+let entry = () => Fs.join(Fs.dirname(fileURLToPath(hereUrl())), "../cli/Entry.res.mjs")
 
 /// Spawn the reaper for this browser, unless one is already watching or the
 /// setting says never.
@@ -115,13 +128,26 @@ let watchdogEntry = () =>
 /// rather than by re-reading anything. A reaper that could not start is no
 /// reason to fail a start that did -- the cost is the old world, a browser
 /// nothing stops.
+///
+/// One spawn shape for every runtime: `execPath`, then the entry path, then the
+/// flag. Under node the entry path is the script node runs and the flag lands at
+/// argv[2]; under `bun build --compile` and Node SEA the script-slot argument is
+/// carried as one more user argument and the flag lands at argv[3] (measured,
+/// ticket 082's table). The dispatcher scans the first few argv entries for a
+/// flag it knows instead of assuming one index, so this spawn is never rewritten
+/// per runtime and `Webserve`'s re-exec is covered by the same tolerance. The
+/// other shape the ticket offered -- branching here on whether `argv[1]` is a
+/// file on disk to pick between `[argv[1], flag]` and `[flag]` -- is rejected
+/// here on measured grounds: SEA's `argv[1]` is the binary itself, a file on
+/// disk, and the `live/` summons have a file at `argv[1]` that is not the entry
+/// at all.
 let summon = () => {
   if Config.idleStopS.contents == 0 {
     ()
   } else if NestedSessions.watchdogPid()->Option.isSome {
     ()
   } else {
-    switch Proc.detach(execPath, [watchdogEntry()]) {
+    switch Proc.detach(execPath, [entry(), watchdogFlag]) {
     | Some(pid) => NestedSessions.recordWatchdog(pid)
     | None => ()
     }

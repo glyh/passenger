@@ -435,7 +435,7 @@ Then register the entry module instead of `nix run`:
 
     claude mcp add passenger --scope user \
       --env PASSENGER_NOVNC=/usr/share/novnc \
-      -- node /path/to/passenger/src/cli/Main.res.mjs serve
+      -- node /path/to/passenger/src/cli/Entry.res.mjs serve
 
 Nothing about that tree is nix-specific: `playwright-core` is a library in this
 process, not a driver on the other end of a pipe, so there is no bundled

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `passenger` is an MCP server, and nothing else. It hands agents web pages through a real,
 logged-in Chrome that sites cannot distinguish from a human's daily driver, with a handoff to
-a human when a site puts up a captcha or a login. One entry point: `src/cli/Main.res.mjs`, stdio.
+a human when a site puts up a captcha or a login. One entry point: `src/cli/Entry.res.mjs`, stdio.
 
 Read `README.md` first — it carries the design reasoning, the tool list, the `PASSENGER_*`
 environment surface, and why there is no `fetch` and no CLI any more.
@@ -24,10 +24,10 @@ nix dev shell (direnv loads it on `cd`):
     node --test test/Detect_test.res.mjs                     # one suite
     node --test --test-name-pattern="a known signature" \
          test/Detect_test.res.mjs                            # one case
-    node src/cli/Main.res.mjs serve       # what a client launches
-    node src/cli/Main.res.mjs show
-    node src/cli/Main.res.mjs hide [--force]
-    node src/cli/Main.res.mjs stop [--force]
+    node src/cli/Entry.res.mjs serve       # what a client launches
+    node src/cli/Entry.res.mjs show
+    node src/cli/Entry.res.mjs hide [--force]
+    node src/cli/Entry.res.mjs stop [--force]
     nix build                         # runs the suite as part of the derivation (doCheck)
     nix run .                         # the server, as a client launches it
 
@@ -92,6 +92,8 @@ no reference -- the directories are for a reader, and the compiler does not care
 
     src/cli/       the entry point and the verbs a human types.
       Cli.res        argument parsing, on `node:util.parseArgs`
+      Entry.res      the entry point: the re-exec flags, dispatched through dynamic
+                     import so the watchdog's graph stays free of Playwright
       Main.res       `serve`: the ten tools, and the MCP server behind them
       Screen.res     `show`/`hide`: the window, claimed under the `human` lane
       Stop.res       `stop`: the destructive one, and the refusal guarding it

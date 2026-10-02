@@ -196,7 +196,7 @@
             # Both the server and the viewer's own re-exec need the compositor on
             # PATH and noVNC findable; neither can be discovered at runtime.
             makeWrapper ${pkgs.lib.getExe pkgs.nodejs-slim} $out/bin/passenger \
-              --add-flags $out/lib/passenger/src/cli/Main.res.mjs \
+              --add-flags $out/lib/passenger/src/cli/Entry.res.mjs \
               --prefix PATH : ${pkgs.lib.makeBinPath runtimeDeps} \
               --set-default PASSENGER_NOVNC ${novncStatic}
 
@@ -233,7 +233,7 @@
             {
               echo "passenger dev shell"
               echo "${chromeNote}"
-              echo "run: node src/cli/Main.res.mjs serve   (or: stop [--force])"
+              echo "run: node src/cli/Entry.res.mjs serve   (or: stop [--force])"
             } >&2
           '';
         };
