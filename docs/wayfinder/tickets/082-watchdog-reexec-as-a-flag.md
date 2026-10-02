@@ -3,7 +3,7 @@ id: 082
 title: The watchdog re-exec looks for a sibling file a single binary cannot have
 labels: [wayfinder:task]
 status: open
-assignee:
+assignee: lyh (via Claude)
 blocked_by: []
 ---
 
