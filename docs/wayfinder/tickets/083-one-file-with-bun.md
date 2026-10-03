@@ -75,13 +75,17 @@ would otherwise install with a system package manager"*. So:
 
 ## Open, and unmeasured
 
-1. **The assets.** `Assets.root()` walks up from `import.meta.dirname` looking
-   for a real `assets/` directory, and `novncRoot()` wants `core/rfb.js` on a
-   real path. Inside a compiled binary `import.meta.dirname` is `/$bunfs/root`,
-   so both break. Either embed — bun's file embedding, then teach both readers
-   to use it — or ship `assets/` and noVNC beside the binary and accept that it
-   is not literally one file. **Measure it**, including whether the four assets
-   and the noVNC tree survive `--compile` when imported.
+1. **The assets — measured, and the answer is embed.** 2026-10-02, compiling
+   `src/cli/Entry.res.mjs` with bun 1.4.2: `import.meta.dirname` is `/$bunfs/root`
+   inside the binary, and `Assets.read("web/viewer.html")` throws
+   `Failure("no assets directory above /$bunfs/root")`. `Browser.start()` throws
+   with it, so `openLane` and `script` return `Internal error` and no Chrome ever
+   comes up. Baselines (system node 24.19.0, and the same source under bun) both
+   work, so it is compile-only. **Embedding is required, not optional** — it is
+   the difference between a binary that runs and one that does not. Still to
+   settle: the mechanism (bun's file embedding, then teach `Assets.root()` and
+   `novncRoot()` to read it), and whether the noVNC tree (1.4 MiB) is embedded
+   too or left to a distro package.
 2. **Whether the real app loads under 1.4.2 at all.** No probe has loaded
    `passenger` itself — only the three primitives. This needs
    [082](082-watchdog-reexec-as-a-flag.md) first, since the watchdog re-exec is

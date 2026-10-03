@@ -2,7 +2,7 @@
 id: 082
 title: The watchdog re-exec looks for a sibling file a single binary cannot have
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -111,3 +111,50 @@ prerequisite both need, and it is worth doing under `node` alone.
 **Found on the way, not this ticket:** `package-lock.json:16` records the bin as
 `src/door/Main.res.mjs` while `package.json` says `src/cli/Main.res.mjs` — a
 stale lockfile entry naming a directory that does not exist.
+
+## Answer
+
+**The re-exec mechanism is verified. The compiled binary still does not reap,
+and the reason is not this ticket.**
+
+Measured 2026-10-02 with bun 1.4.2 (the system `/usr/bin/bun`, after the stale
+`~/.bun` 1.3.14 was removed) compiling `src/cli/Entry.res.mjs`:
+
+- `bun build --compile --external chromium-bidi` → 269 modules, 88,602,080 bytes.
+  (`--external chromium-bidi` is required for the app, unlike for a bare probe.)
+- The binary answers MCP over stdio: `initialize` then `tools/list` → 10 tools.
+  The dispatcher's no-flag branch reaches the server.
+- `--watchdog` runs the watchdog body (exit 0, silent); `--nonsense` gives exit 2
+  and usage.
+- **The spawn shape is exactly what this ticket was written for.** Forcing
+  `show` through `Browser.start`'s "already running → summon" branch, with a
+  fake CDP up, produced a real detached watchdog:
+
+      watchdog /proc cmdline: ["/tmp/eb/passenger-bin","/$bunfs/cli/Entry.res.mjs","--watchdog"]
+      PPid: 1
+
+  The `/$bunfs/...` entry path arrives as one more inert argv, the flag follows
+  it, and the child is reparented to init. That is the shape the ticket's argv
+  table predicted for compiled bun, observed.
+
+**Why the compiled build does not reap:** it never starts Chrome. `openLane` and
+`script` both return `Internal error`, no CDP ever comes up, no `watchdog.pid`
+appears — because `Assets.read` throws:
+
+    Failure("no assets directory above /$bunfs/root")
+
+`import.meta.dirname` is `/$bunfs/root` inside a compiled binary, so
+`Assets.root()`'s walk-up finds nothing and `Browser.start()` throws before
+`Reaper.summon` is reached. Baselines confirm it is compile-only: system node
+24.19.0 and the same source run under bun both `openLane` fine.
+
+So the single-file build's remaining blocker is
+[083](083-one-file-with-bun.md)'s open question 1 — the assets — and this
+ticket's subject, the re-exec, is done. Closed on that basis, with the caveat
+recorded rather than hidden: **a compiled binary does not yet reap, and will not
+until the assets resolve.**
+
+Worth keeping: `live/LiveWatchdog.res.mjs` was already silently broken before
+this change — it summoned `live/Watchdog.res`, which does not exist — so no
+existing check would have caught a broken re-exec. `test/ImportGraph_test.res`
+is now the guard against that class.

@@ -86,6 +86,20 @@ get](tickets/020-how-thin-can-this-layer-get.md).
 
 <!-- one line per closed ticket -->
 
+- [The watchdog re-exec looks for a sibling file a single binary cannot have](tickets/082-watchdog-reexec-as-a-flag.md)
+  — **closed: the mechanism is verified, in a compiled binary.** A real detached
+  watchdog spawned with cmdline `["/tmp/eb/passenger-bin","/$bunfs/cli/Entry.res.mjs","--watchdog"]`
+  and `PPid: 1` — the `/$bunfs/...` entry path as one more inert argv, the flag
+  after it, reparented to init, exactly the shape the ticket predicted. The
+  binary also answers MCP over stdio (10 tools) and `--watchdog` runs the body.
+  **Caveat recorded, not hidden:** the compiled build still does not reap,
+  because it never starts Chrome — `Assets.read` throws `no assets directory
+  above /$bunfs/root`, so `Browser.start()` throws before `Reaper.summon`. That
+  is [083](083-one-file-with-bun.md)'s asset question, now measured and answered
+  (embed), not this ticket's subject. Also found: `live/LiveWatchdog.res.mjs`
+  was already silently broken before the change — it summoned `live/Watchdog.res`,
+  which does not exist — so no existing check would have caught a broken re-exec.
+
 - [A deep state dir silently costs the session its VNC](tickets/064-wayvnc-socket-path-too-long.md)
   — **item 1 only**: `nested.plan` refuses a control socket path past the
   `sun_path` limit, naming the 107, the length and the path (`SocketPathTooLong`
