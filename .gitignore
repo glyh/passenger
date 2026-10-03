@@ -2,6 +2,10 @@
 result
 node_modules/
 
+# `npm run compile` writes the single-file binary here (scripts/compile.sh);
+# it is a build artefact like the emitted .res.mjs, not source.
+/passenger
+
 # ReScript's build cache, and the JavaScript it emits beside each source. The
 # emitted code is readable on purpose -- that is what the compiler is for -- but
 # it is a build artefact, not a second copy of the program to keep in git.

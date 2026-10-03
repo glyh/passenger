@@ -10,6 +10,7 @@
     "watch": "rescript build -w",
     "clean": "rescript clean",
     "start": "node src/cli/Entry.res.mjs",
+    "compile": "bash scripts/compile.sh",
     "test": "rescript build && node --test test/*_test.res.mjs"
   },
   "dependencies": {

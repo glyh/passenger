@@ -147,7 +147,7 @@
           version = "0.1.0";
           src = source;
 
-          npmDepsHash = "sha256-8OJne2FkIZjJFeLc9pt10T2X/LwmdTQY0oWHtBgNhb0=";
+          npmDepsHash = "sha256-Z3HsAArY+qdmJayRo9A2qDzYj80f+Q5u122/qS/YjtM=";
 
           # `npm run build` is `rescript build`, which emits each module's
           # JavaScript beside its source.

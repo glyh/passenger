@@ -21,6 +21,15 @@ let novncCandidates = ["/usr/share/webapps/novnc", "/usr/share/novnc", "/usr/loc
 /// PASSENGER_NOVNC first, which is what the flake sets to a store path holding
 /// just the static files; the well-known distribution paths after it, so a
 /// system-installed noVNC works without configuration.
+///
+/// **Deliberately left external when ticket 083 embedded the four assets.**
+/// noVNC is a *tree* of files this server hands out over HTTP -- `core/rfb.js`
+/// and its neighbours, addressed by relative URL -- not one file read into a
+/// string, and embedding it would mean embedding it file by file and rebuilding
+/// this server's routing around mangled embedded names. This resolves from a
+/// real path on disk and stays that way; do not "fix" it into the embed. What
+/// the packaging owes instead is a noVNC on the machine (see ticket 083's
+/// Answer for the prerequisite list).
 let novncRoot = () => {
   let holdsNovnc = dir => Fs.existsSync(Fs.join(Fs.join(dir, "core"), "rfb.js"))
   switch Config.novncDir.contents {
