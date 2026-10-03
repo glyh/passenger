@@ -76,6 +76,68 @@ let pageUrl = () => {
   `${Config.viewerUrl()}?ws=${host}:${port->Int.toString}`
 }
 
+/// Where the VNC endpoint stands: what was measured, in the shape
+/// `browserStatus` reports it and every presenter refuses on it.
+///
+/// `vnc: 127.0.0.1:5900` used to be a plan -- the address the session intends
+/// to serve on -- sitting in a field that reads like an observation beside
+/// `daemon` and `session`, which are. The address is right until the moment it
+/// matters: wayvnc can die while the session stays live (ticket 086 found it
+/// segfaulting eighty-two minutes in), the viewer page still serves, and the URL
+/// `showBrowser` hands over names a port nothing answers. So the field is now
+/// what was measured, and the measurement is the same connect probe a viewer
+/// would make.
+type vnc = Serving(string, int) | Dead(NestedSessions.session) | Absent
+
+let vncProbe = async () =>
+  switch NestedSessions.live() {
+  | None => Absent
+  | Some(session) =>
+    if await NestedSessions.isListening(session.vncHost, session.vncPort) {
+      Serving(session.vncHost, session.vncPort)
+    } else {
+      Dead(session)
+    }
+  }
+
+/// The field `browserStatus` reports: `serving host:port`, `dead`, or `none` --
+/// the last for a configuration with no nested session and so no VNC at all.
+let vncState = async () =>
+  switch await vncProbe() {
+  | Serving(host, port) => `serving ${host}:${port->Int.toString}`
+  | Dead(_) => "dead"
+  | Absent => "none"
+  }
+
+/// Refuse to hand a human a viewer nothing can connect to.
+///
+/// One check behind all three presenters, because the handoff is the one path
+/// whose entire value is that a human can see something: a URL that cannot
+/// connect spends the person's attention at the exact moment they were asked
+/// for it. That is the cost ticket 058 paid for the viewer port, and 086 found
+/// the same silence one layer down -- a live session, a served page, and a ws=
+/// target nothing answers. The detail names what is gone, where the dead
+/// process's words would be, and the one move that fixes it.
+let requireVnc = async () =>
+  switch await vncProbe() {
+  | Dead(session) =>
+    let crashed = NestedSessions.coredumpOf("wayvnc", session.vncPid)
+    Errors.fail(
+      VncNotServing,
+      `nothing is serving VNC on ${session.vncHost}:${session.vncPort->Int.toString}`,
+      ~detail=
+        `the session's wayvnc (pid ${session.vncPid->Int.toString}) is gone` ++
+        switch crashed {
+        | Some(core) => ` -- it crashed, and systemd-coredump kept the core (${core})`
+        | None => ""
+        } ++
+        `; ${Fs.join(Config.stateDir.contents, "session.log")} holds whatever it ` ++
+        "said before it died. Reading pages still works, the screen does not; " ++
+        "`passenger stop` and a fresh call starts a new session",
+    )
+  | _ => ()
+  }
+
 /// Putting Chrome back into a window, filled in by `Browser` when it loads.
 ///
 /// A seam rather than a call, and the same one `Lanes.chrome` is: the body
@@ -160,6 +222,10 @@ let window = {
   available: () => viewerBrowser()->Option.isSome && Webserve.novncRoot()->Option.isSome,
   presented: windowPresented,
   present: async () => {
+    // Before either branch: a window already open is no better than a fresh
+    // one if the endpoint behind it died -- the human is already looking at
+    // "reconnecting", and `already open` would send them back to it.
+    await requireVnc()
     let live = NestedSessions.live()
     if windowPresented() {
       `viewer already open${await prepared(live)}`
@@ -217,6 +283,7 @@ let link = {
   available: () => Webserve.novncRoot()->Option.isSome,
   presented: () => false,
   present: async () => {
+    await requireVnc()
     let live = NestedSessions.live()
     if !(await Webserve.ensure(Config.novncPort.contents)) {
       throw(noViewer("cannot serve the viewer", "no noVNC found; set PASSENGER_NOVNC"))
@@ -241,6 +308,11 @@ let none = {
   /// machine, or a phone. It speaks websocket rather than raw RFB, though, so a
   /// native VNC client is not the fallback it used to be.
   present: async () => {
+    // The advice below is conditional on wayvnc being up, so the condition is
+    // checked rather than assumed: pointing a noVNC at a dead port is the
+    // same silent lie one layer down, in the one presenter whose whole reply
+    // is an address.
+    await requireVnc()
     let (host, port) = endpoint()
     `no viewer: nothing here can serve the noVNC page. wayvnc is ` ++
     `listening on ws://${host}:${port->Int.toString} -- point a noVNC at it`

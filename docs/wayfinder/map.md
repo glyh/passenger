@@ -8,7 +8,7 @@ labels: [wayfinder:map]
 
 **Domain.** `passenger` fetches pages through a real, logged-in
 Chrome that sites cannot distinguish from an ordinary browser. Chrome
-runs inside its own `cage` compositor; `wayvnc` serves that compositor,
+runs inside its own `sway` compositor; `wayvnc` serves that compositor,
 and a viewer is spawned on demand when a human has to take over -- solve
 a captcha, log in. The value of the whole tool rests on two things: the
 session staying warm and real, and the handoff to a human actually
@@ -820,6 +820,29 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   parameter lists and fails unless each difference is declared beside its reason,
   which is the ticket's own goal for forty lines. It needed two doors. See
   [Delete the CLI door](tickets/057-delete-the-cli.md).
+
+- [A live session can name a VNC endpoint that nothing serves](tickets/086-live-session-with-no-vnc-behind-it.md)
+  — closed, and the four decisions all went the way the ticket argued.
+  `browserStatus`'s `vnc` is now `serving host:port` / `dead` / `none` rather
+  than an address that was a *plan* sitting in a field that reads like an
+  observation; `onScreen` became `viewer` (`up`/`down`), because its old name
+  said "somebody is looking" and so contradicted `screenClaims` beside it when
+  both were true and read as one false; and `showBrowser` refuses a dead
+  endpoint with `VNC_NOT_SERVING` through one check behind all three
+  presenters, the `none` one included — its whole reply is an address, and it
+  was the one still pointing a noVNC at a port nothing answered. `onScreen`
+  had no reader outside `Main.res`, so the rename was free. **The cause was
+  findable after all**, which 064 assumed it was not: a segfault writes no
+  stderr, so the log 066 landed was as empty after the crash as before, and
+  the death is named only by the core — matched on the *pid*, since an older
+  `core.wayvnc.*` blames this death on that one and an invented cause is the
+  same lie as none. What was crashing was the session's wayvnc: Arch's 0.10.2
+  segfaults on **every WebSocket upgrade**, measured against the flake's
+  0.10.1 as the only variable, and it was on PATH because a standalone server
+  no longer inherits the dev shell — 083 arriving by a route its ticket did
+  not name. That defect is [087](tickets/087-the-session-takes-whatever-wayvnc-is-on-path.md)'s
+  and no guard here can prevent it: the crash happens *as the viewer
+  connects*, so a check can only report the state it found a moment earlier.
 
 - [Delete the CLI door](tickets/057-delete-the-cli.md) — done. `src/Passenger.Cli`
   and System.CommandLine are gone; `stop` survives alone as a verb on

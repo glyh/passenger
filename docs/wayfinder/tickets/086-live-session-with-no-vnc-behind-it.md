@@ -2,7 +2,7 @@
 id: 086
 title: A live session can name a VNC endpoint that nothing serves
 labels: [wayfinder:task]
-status: open
+status: closed
 assignee: lyh (via Claude)
 blocked_by: []
 ---
@@ -133,3 +133,100 @@ this was the escalation path.
 agrees with 063. Worth correcting while this area is being read, since this
 ticket is about the link between the compositor and the thing serving it, and
 the map names the wrong compositor.
+
+## Answer
+
+All four decisions were taken as the ticket argued them, and the fourth was
+free: `onScreen` had no reader outside `Main.res` -- no test, no skill, no
+live check -- so renaming it cost nothing.
+
+- **`showBrowser` refuses when the far end is dead.** `Present.requireVnc`
+  (`src/shell/Present.res`, beside `endpoint`) probes the endpoint the way a
+  viewer would -- `NestedSessions.isListening` on the live session's host and
+  port -- and raises a new `VNC_NOT_SERVING` naming the endpoint, the recorded
+  `wayvnc` pid, the core file when there is one, and `session.log`. One call
+  behind all three presenters, including `none`'s advice line, whose whole
+  reply is an address and would otherwise point a noVNC at a dead port.
+- **`browserStatus`'s `vnc` is an observation.** `$host:$port` -- a plan that
+  is right until the moment it matters -- became `serving host:port` / `dead`
+  / `none`, the last for a configuration with no nested session at all.
+- **`onScreen` became `viewer`, reporting `up`/`down`.** The old name read as
+  "somebody is looking at the screen" and so contradicted `screenClaims`
+  beside it; both fields were true in the incident (window gone, claim
+  lingering) and read as one false. `viewer` is what is measured.
+- **wayvnc's stderr was already drained** -- ticket 066 sends the session to
+  `{state}/session.log`, and 064's closing note had it as still owed. Draining
+  it was never going to be enough here: **a segfault writes no stderr**, so the
+  log was as empty after the crash as before it. What names the death is the
+  core systemd-coredump kept, matched on the pid -- `coredumpOf("wayvnc",
+  session.vncPid)`, over `core.<exe>.<uid>.<bootid>.<pid>.<timestamp>`. Matching
+  the program alone was the first version and it is wrong on the ordinary
+  machine that has left an older core around: it blames this death on that
+  one, which is an invented cause, the same lie as no cause at all.
+
+`npm test`: **154 tests, 154 pass**. `test/Present_test.res` is six new cases
+against a temp state dir with liveness stubbed (the `Sessions_test` pattern):
+`none` / `dead` / `serving`, the refusal's code and its pid-and-log detail, a
+core that matches, a core that does not, and no core at all.
+
+### The cause, found the same evening -- and it is not this ticket's to fix
+
+The silence was real and this closes it, but the reason `wayvnc` was missing
+turned out to be findable after all, and worth recording because it decides
+what happens next.
+
+**The session was running a wayvnc that segfaults on every WebSocket
+connection.** Two builds are on this machine: `/usr/bin/wayvnc` 0.10.2 (Arch,
+neatvnc 1.0.2, linked against nettle 4) and the flake's `wayvnc` 0.10.1
+(neatvnc 1.0.1). Measured, with a hand-rolled WebSocket+RFB client as the only
+variable:
+
+    /usr/bin/wayvnc 0.10.2   client connects -> SIGSEGV, exit 139, segfault at 0
+    nix wayvnc 0.10.1        client connects -> handshake, ServerInit, frames, alive
+
+`coredumpctl` agrees: `wayvnc[787512]: segfault at 0 ip 0000000000000000`, and
+a second one at 20:15 for the next session's `wayvnc`, each within a second of
+a viewer connecting. The viewer's "reconnecting" was not a viewer problem and
+not a session problem: the thing it was connecting to died on connection.
+
+**Why the wrong one.** The generated session script calls bare `wayvnc`, so it
+resolves on the PATH of whatever spawned the server. Read out of the live
+process, that PATH begins
+`/home/lyh/.local/bin:/nix/var/nix/profiles/default/bin:...` -- no nix *store*
+wayvnc on it, so the name falls through to `/usr/bin`, the Arch package. The
+dev shell's PATH has the store one first; a server launched as a standalone
+compiled binary, by a client that is not in the dev shell, does not. The
+session script is therefore reading a variable nobody set for it.
+
+**Upstream.** It is a known bug, and it is already fixed -- but not in any
+release. [neatvnc #177](https://github.com/any1/neatvnc/issues/177) (closed)
+describes it exactly: `ws_handshake()` calls `crypto_hash_many()` with the
+pre-nettle-4 argument list, so the digest size lands in the
+`enum crypto_hash_type` parameter, `crypto_hash_new()` matches no case, and
+the NULL `update` pointer is called. Its fix, `8e0d2260` "stream: ws:
+handshake: Fix crypto_hash_many argument mixup", is on master only:
+`v1.0.2`'s `include/crypto.h` still declares the 4-argument form and
+`v1.0.2...master` contains the fix, so **the released 1.0.x line is nettle-3
+code**, and Arch's package is a nettle-4 build of it. Nothing in this repo can
+fix that, and no guard in this repo can prevent it: the crash happens *as the
+viewer connects*, so a check before the handoff can only report the state it
+found a moment earlier.
+
+### What is still owed
+
+- **The session still resolves `wayvnc` from PATH, and that is the defect
+  under this one.** [087](087-the-session-takes-whatever-wayvnc-is-on-path.md)
+  carries it: a pinned path, or a version check at plan time, so a machine's
+  package manager cannot decide whether the handoff works. The local
+  workaround applied the same evening is a shim at `~/.local/bin/wayvnc`
+  (first on the session's PATH) pointing at the flake's 0.10.1, plus an
+  indirect GC root so `nix-collect-garbage` cannot take it; the record's
+  `vnc_pid` was repaired by hand to the restarted server so teardown still
+  names it. That is a machine, not a fix.
+- **Nothing supervises wayvnc.** The ticket asked whether a failed start
+  should fail the session; it still does not, and now there is a second shape
+  -- a *running* server that dies mid-handoff -- which a start-time check
+  cannot cover at all.
+- **The 064 item 2 note is now wrong** and was corrected above rather than
+  left standing: `session.log` landed in 066, and this crash proves draining
+  it is not the general answer.

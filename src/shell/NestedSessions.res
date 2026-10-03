@@ -79,6 +79,42 @@ let readProcState = pid =>
 let alive = ref(readProcState)
 let isAlive = pid => alive.contents(pid)
 
+/// A core systemd-coredump kept for a crashed program, if this machine has one.
+///
+/// `isAlive` answers "is the pid gone" and cannot answer "how did it go". For
+/// most exits the session log says -- but a segfault writes no stderr, so the
+/// log stays as empty as the day ticket 066 started draining it, and the only
+/// evidence anywhere is the core file's name (ticket 086: wayvnc died on a null
+/// call inside libneatvnc eighty-two minutes into a session, leaving a live
+/// compositor, a live browser, and a viewer port nothing answered).
+///
+/// **Matched on the pid, not on the program.** A core left by an *earlier*
+/// wayvnc is still a file named `core.wayvnc.*`, and reporting it would blame
+/// this death on that one -- an invented cause, which is the same lie as no
+/// cause at all, arrived at from the other side. systemd names these
+/// `core.<exe>.<uid>.<bootid>.<pid>.<timestamp>[.zst]`, so the pid is the fifth
+/// field, and a format change here loses the clause rather than misattributing
+/// it.
+///
+/// Best effort throughout: the directory is root's on some machines and absent
+/// on systems without systemd-coredump, and both are answered the same way --
+/// no core, so the caller says less rather than nothing.
+let coredumpDir = ref("/var/lib/systemd/coredump")
+
+let coredumpOf = (program, pid) =>
+  switch Fs.readdirSync(coredumpDir.contents) {
+  | entries =>
+    entries->Array.find(entry =>
+      switch entry->String.split(".") {
+      | fields =>
+        fields->Array.get(0) == Some("core") &&
+        fields->Array.get(1) == Some(program) &&
+        fields->Array.get(4)->Option.flatMap(v => Int.fromString(v)) == Some(pid)
+      }
+    )
+  | exception _ => None
+  }
+
 /// Chrome is the session: the compositor exists only to hold it.
 ///
 /// Keyed on Chrome rather than on the compositor because a compositor outliving

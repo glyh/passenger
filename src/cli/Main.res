@@ -525,7 +525,6 @@ let call = async (name, a) =>
 
   | "browserStatus" =>
     let presenter = Present.select()
-    let (host, port) = Present.endpoint()
     let up = await Browser.isUp()
     let (openTabs, orphaned) = await Lanes.counts()
     json(
@@ -539,7 +538,12 @@ let call = async (name, a) =>
           // says so before somebody notices a browser on their desktop.
           ("launch", JSON.Encode.string(Models.backendToString(Launch.select().name))),
           ("presenter", JSON.Encode.string(Models.presenterToString(presenter.name))),
-          ("onScreen", JSON.Encode.string(presenter.presented() ? "True" : "False")),
+          // `viewer`, not `onScreen`: the old name read as "somebody is
+          // looking at the screen" and so contradicted `screenClaims` beside
+          // it -- the window can be gone while a claim lingers (ticket 086),
+          // and two true fields that read as one false teach a reader to trust
+          // neither. What is measured is whether the viewer window is up.
+          ("viewer", JSON.Encode.string(presenter.presented() ? "up" : "down")),
           ("profile", JSON.Encode.string(Config.profileDir())),
           // Named so a black screen is diagnosable: a viewer attached while
           // session reads "stale" is looking at a compositor with nothing in it.
@@ -547,7 +551,11 @@ let call = async (name, a) =>
             "session",
             JSON.Encode.string(NestedSessions.live()->Option.isSome ? "live" : "stale"),
           ),
-          ("vnc", JSON.Encode.string(`${host}:${port->Int.toString}`)),
+          // An observation, not a plan: the address the session intends to
+          // serve on is right until wayvnc dies, and then it is the one field
+          // that lies in the only case where anybody reads it (ticket 086).
+          // `Present.vncState` probes the endpoint the way a viewer would.
+          ("vnc", JSON.Encode.string(await Present.vncState())),
           // The only number that reveals a lane you do not own. Without it
           // nothing in this tool can show tabs piling up, since every listing is
           // scoped to the caller. A count, deliberately: ids and owners would be

@@ -24,6 +24,7 @@ type code =
   | AttachTimeout
   | PortInUse
   | SocketPathTooLong
+  | VncNotServing
   | ChromeNotFound
   | UnknownWindowBackend
   | NoPresenter
@@ -51,6 +52,7 @@ let codeToString = code =>
   | AttachTimeout => "ATTACH_TIMEOUT"
   | PortInUse => "PORT_IN_USE"
   | SocketPathTooLong => "SOCKET_PATH_TOO_LONG"
+  | VncNotServing => "VNC_NOT_SERVING"
   | ChromeNotFound => "CHROME_NOT_FOUND"
   | UnknownWindowBackend => "UNKNOWN_WINDOW_BACKEND"
   | NoPresenter => "NO_PRESENTER"
