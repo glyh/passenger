@@ -94,6 +94,29 @@ would otherwise install with a system package manager"*. So:
    it. A `nix develop` that still works is not the same as a shipping story
    that needs nix.
 
+## Landed
+
+The asset half is built and measured, 2026-10-03, commit `de73d50`:
+
+- `src/shell/AssetsEmbedded.mjs` — a hand-written `.mjs` holding the four assets
+  as bun file-attribute imports, guarded by `typeof Bun`. ReScript has no syntax
+  for an import attribute, and a *static* attributed import would poison node
+  (`ERR_UNKNOWN_FILE_EXTENSION`), so the imports are dynamic and the guard keeps
+  node on the disk path.
+- `Assets.root()` derives `assets/` from an embedded path — two `dirname`s
+  when the path keeps the source layout (node), one when bun flattens it
+  (compiled). `Assets.read` tries the tree join first, then the embedded map.
+- `scripts/compile.sh` / `npm run compile` — compiles `src/cli/Entry.res.mjs`
+  with `--external chromium-bidi` and **refuses bun < 1.4.2**, naming why.
+- `novncRoot()` deliberately left external, with a comment saying why: it is a
+  tree served over HTTP, not a file read into a string.
+
+Measured: `npm test` **148/148**. The embedding is byte-identical across
+runtimes — `root()` is `…/assets` under node and `/$bunfs/root` compiled, and
+`read("web/viewer.html")` is 6997 bytes either way. The compiled binary
+answers MCP and runs the tool path: `openLane` returns a lane id, and `script`
+with that lane returns `{"returned":2}`.
+
 ## What must not change
 
 The warm logged-in profile, the host's Chrome, and stealth. A single file is a
