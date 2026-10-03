@@ -204,7 +204,11 @@ watching this conversation. `until` decides what ends the wait:
   about the human, not about the page.
 - `unblocked` polls the named tab until the vendor's signature stops matching.
   Stronger, since a human can close a window without solving anything — but it
-  requires a `tab` and only sees walls this tool can name.
+  requires a `tab` and only sees walls this tool can name. **A wall it cannot
+  name ends the wait immediately and still reports success** — measured on a
+  plain login wall, where the reply said the wall had cleared while the tab was
+  still on the login URL. So an `unblocked` success is not evidence the wall is
+  gone; only the site's own marker is.
 
 Either way, **read the tab again with `script` and judge for yourself.**
 

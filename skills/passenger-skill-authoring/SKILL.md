@@ -316,6 +316,14 @@ pre-commit pass:
     n=$(grep -c '^### ' SKILL.md); m=$(grep -c 'Self-check' SKILL.md)
     [ "$m" -ge "$n" ] || echo "$((n - m)) rule(s) with no self-check"
 
+⚠️ **The check counts `### ` headings as rules, so it assumes the file's shape is
+「one `###` per iron rule, and nothing else gets one.」** A `###` heading
+something other than a rule drops the verdict out of alignment — measured on a
+skill whose capability section carried a `###` subheading, reported as a sixth
+rule with no self-check when there were five rules and all five had one.
+⇒ Either keep every `###` a rule, or **do not read a non-zero shortfall as
+「a rule is missing its self-check」 until you have looked.**
+
 The rule above is the one this document calls its most important sentence, and
 it is also the one most often skipped: roughly two rules in five end up with no
 self-check at all. A prose checklist is recalled rather than run, and a marker
@@ -810,7 +818,8 @@ the conclusion; the conclusion is one line at the top of that file.
 **Run these three, they are not reading tasks:**
 
     grep -nE '[0-9]{4}-[0-9]{2}-[0-9]{2}' SKILL.md   # dates: must print nothing
-    n=$(grep -c '^### ' SKILL.md); m=$(grep -c 'Self-check' SKILL.md)  # or this file's marker
+    # 'Self-check' is this file's marker; every '### ' counts as a rule — see §2
+    n=$(grep -c '^### ' SKILL.md); m=$(grep -c 'Self-check' SKILL.md)
     [ "$m" -ge "$n" ] || echo "$((n - m)) rule(s) with no self-check"
     node .../scripts/validate-metadata.mjs metadata.json    # and read the summary
 
