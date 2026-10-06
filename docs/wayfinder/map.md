@@ -178,6 +178,26 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   page server's pid, and `passenger stop` leaves the viewer window and the
   page server alive. Build in [077](tickets/077-build-idle-reap.md).
 
+- [Why the passenger Chrome drains the battery](tickets/078-chrome-power-usage.md)
+  — measured on the owner's laptop, on battery. A warm Chrome holding one
+  static tab costs nothing: 9.9 W against an 8.1–10.5 W no-browser baseline,
+  7.4% of a core, sway 0.31 and wayvnc 0.00 CPU-s per 120 s. What the report
+  was pointing at is the hidden launch's anti-throttling flags acting as a
+  **multiplier on whatever the tabs are doing** — six tabs at 3 ms per 50 ms
+  tick go from 0.65/s to 20.05/s per hidden tab, +0.67 core, +1.2 W package,
+  +0.6–1.2 W at the battery — and it is
+  `--disable-background-timer-throttling` **alone**: the two occlusion flags
+  are inert under headless sway (rAF 60.1/s either way), which is a fact about
+  this compositor rather than a law. The flag is also self-observable: a tab
+  that is `hidden` yet ticks at a visible tab's rate is a fingerprint any
+  analytics script can take for free. Found on the way: closing the last page
+  target tears the whole session down (Chrome exits → `swaymsg exit` → wayvnc
+  dies), a second pi session's server was sharing this browser mid-sweep, and
+  starting Chrome costs ~0.01 Wh. A fix is a follow-up ticket: scope the
+  throttling to the tab a call is touching, or stop the tabs accumulating
+  ([079](tickets/079-a-forgotten-lane-cannot-be-reclaimed.md) direction 3,
+  [080](tickets/080-subagent-fleet-exhaustion.md) direction 4).
+
 - [A script does not need a JSON encoder in scope](tickets/068-json-encoder-in-scope.md)
   — the escaping people kept seeing was the *site's*: Baidu answers escaped
   JSON, and a `Regex.Matches` over the raw body returns the spelling where
