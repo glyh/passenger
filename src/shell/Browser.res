@@ -143,14 +143,29 @@ let start = async (~hidden=true) =>
 
     let argv = if hidden {
       backend.prepare()
-      argv->Array.concat([
-        `--class=${Launch.wmClass}`,
-        // Off-screen windows get their timers throttled, which stalls the very
-        // challenge scripts we need to run. None are visible to page JS.
-        "--disable-background-timer-throttling",
-        "--disable-backgrounding-occluded-windows",
-        "--disable-renderer-backgrounding",
-      ])
+      // **No anti-throttling flags here any more (ticket 088).** Three sat beside
+      // `--class` until then -- `--disable-background-timer-throttling`,
+      // `--disable-backgrounding-occluded-windows` and
+      // `--disable-renderer-backgrounding` -- added so an off-screen window would
+      // not throttle the timers of the challenge scripts this tool runs.
+      //
+      // Ticket 078 measured what they actually bought. The whole cost of them is
+      // *background* tabs: with none of the three, the active tab of the window
+      // still ran at 20.02/s while the five behind it fell to 0.57/s, and of the
+      // three only the first was doing anything -- headless sway never reports
+      // the window as occluded, so rAF ran at 60.1/s either way, with the flags
+      // or without. Six tabs of ordinary work went from 21% of a core to 89%,
+      // +1.2 W on the package, for tabs nobody was using. They were also a
+      // fingerprint: a page can read `document.visibilityState` and its own tick
+      // rate, and a hidden tab ticking at a visible tab's rate is not something a
+      // human's browser does.
+      //
+      // What replaced them is `Service.run` bringing the tab a call is driving to
+      // the front, since Chrome never throttles the active tab. Every tab a
+      // caller left behind now gets throttled the way a human's browser throttles
+      // it -- which is also the point: the cost of a forgotten tab is bounded by
+      // Chrome's own rule rather than by the lane TTL (079, 080).
+      argv->Array.concat([`--class=${Launch.wmClass}`])
     } else {
       argv
     }

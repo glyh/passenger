@@ -190,6 +190,28 @@ let run = async (~source, ~lane, ~tab as named=?, ~operationTimeoutS=?, ~checkWa
   // throw -- `pageFor` refusing a tab this lane does not own is the common one.
   await Session.use(async session => {
   let page = await Session.pageFor(session, lane, named)
+  // The tab this call drives goes to the front, and that is what keeps it
+  // running: Chrome does not throttle the active tab of a window, it throttles
+  // every other one.
+  //
+  // This replaces the hidden launch's three anti-throttling flags (ticket 088).
+  // They held *every* tab at full rate, which ticket 078 measured at 31x the
+  // timer rate and ~0.67 core for six tabs nobody was using, and only
+  // `--disable-background-timer-throttling` was doing anything at all -- the two
+  // occlusion flags are inert under headless sway, which never reports the
+  // window as occluded. They were also a fingerprint: a page can read its own
+  // `document.visibilityState` and its own tick rate, and a *hidden* tab ticking
+  // at a visible tab's rate is not something a human's browser does. Measured
+  // after this change's premise, on the same rig: activating a background tab
+  // takes it from 0.57/s to 20.00/s and pushes the previous front tab down to
+  // 0.93/s, reversibly.
+  //
+  // A failure here is not fatal -- the page is still driveable, just slower if
+  // something else holds the front -- so it is not worth ending a call over.
+  switch await page->Pw.bringToFront {
+  | () => ()
+  | exception _ => ()
+  }
   // Every Playwright call inside the script inherits this, so a wait on a
   // selector that never appears ends the call instead of the session. A script
   // that loops without calling Playwright is not interruptible; that is the

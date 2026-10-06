@@ -198,6 +198,17 @@ get](tickets/020-how-thin-can-this-layer-get.md).
   ([079](tickets/079-a-forgotten-lane-cannot-be-reclaimed.md) direction 3,
   [080](tickets/080-subagent-fleet-exhaustion.md) direction 4).
 
+- [Lift throttling for the tab a call drives, not for every tab](tickets/088-throttle-the-tab-not-the-browser.md)
+  — the hidden launch's three anti-throttling flags are gone, and `Service.run`
+  brings the tab a call is driving to the front instead (`Pw.bringToFront`,
+  already bound). Chrome never throttles the active tab, so the page under a
+  script runs at full rate while everything a caller left behind is throttled
+  the way a human's browser throttles it — at most one unthrottled tab per
+  browser, and no hidden-but-unthrottled tab for a page to notice. Verified on
+  the real path rather than the rig: the driven tab 20.02 ticks/s, a tab left
+  behind by the next call 0.60/s, zero Chrome processes carrying a flag. Takes
+  effect at the next Chrome start, and 079/080 still own the tab count.
+
 - [A script does not need a JSON encoder in scope](tickets/068-json-encoder-in-scope.md)
   — the escaping people kept seeing was the *site's*: Baidu answers escaped
   JSON, and a `Regex.Matches` over the raw body returns the spelling where
