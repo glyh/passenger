@@ -238,3 +238,29 @@ forty-five throttled — which is the ticket's own to-decide 3, now with a price
 on both sides of it. Failing that, the multiplier is bounded only by how many
 tabs are left standing, which is 079 direction 3 and 080 direction 4, and this
 measurement is one more argument for both.
+
+### Addendum, 13:34 — the test the fix rests on, run and passed
+
+The per-tab scoping above depends on one thing nobody had measured: does
+*activating* a background tab lift its throttling? No flags anywhere in this
+run; `GET /json/activate/<id>` is the HTTP spelling of `Target.activateTarget`,
+which is what Playwright's `page.bringToFront()` sends, so this tests the call
+the fix would make rather than a stand-in for it.
+
+| window | the active tab | the five hidden tabs |
+|---|---|---|
+| as launched | page 1: **20.02/s**, `'visible'`, rAF 60.1/s | 0.57/s each, `'hidden'`, rAF 0 |
+| after activating page 3 | page 3: **20.00/s**, `'visible'`, rAF 60.0/s | page 1 falls to 0.93/s and `'hidden'`; the rest 0.02/s |
+| after re-activating page 1 | page 1: **20.02/s**, `'visible'` | page 3 falls to 1.00/s, `'hidden'` |
+
+Activation moves the one unthrottled slot exactly where it is needed, and it is
+reversible. The escalation is visible in the same data: a tab hidden for minutes
+sits at 0.02/s where a freshly hidden one sits at 0.57/s.
+
+So the fix is buildable as described: **`page.bringToFront()` in the attach
+path, and the three argv entries in `Browser.res`'s `hidden` branch deleted.**
+What that leaves is at most one unthrottled tab per browser — the one in front,
+which is what a human's daily driver looks like — and no hidden-but-unthrottled
+tab for a page to notice. It does not replace 079/080: the *active* tab still
+runs unthrottled if a caller walks away, so this caps the multiplier at one tab
+while those tickets cap the tab count.
