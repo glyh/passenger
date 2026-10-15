@@ -59,6 +59,35 @@ that transfers wrongly** — those bindings *require* a string.
 The one exception is `eval(js)` on a recipe file read off disk; see
 `reading-a-page.md`.
 
+### An `eval`'d fragment does not see this script's own scope
+
+Your source runs wrapped in an async function, and `require`, `fs`, `path`,
+`Page` and every name you declare at the top level are bindings of *that
+wrapper* — not globals. Code inside `eval(src)` runs against `globalThis`
+alone. Measured on this build, with `eval` called plainly in the source:
+
+```js
+const md5 = (s) => require('node:crypto').createHash('md5').update(s).digest('hex');
+
+await eval(`(async () => md5('a'))()`);              // ERR: md5 is not defined
+await eval(`(() => { const c = require('node:crypto'); ... })()`);
+                                                     // ERR: require is not defined
+eval('typeof fs')      // "undefined" — same for path and Page
+eval('typeof console') // "object"   — the only supplied name that is a real global
+eval('globalThis.x = 7'); globalThis.x              // 7 — globals cross both ways
+```
+
+So a helper written *inside* a fragment cannot reach `require`, and a helper
+defined at the top level cannot be called *from* a fragment. ⇒ Compute at the
+top level — sign it, hash it, build the URL — and pass the **result** into the
+fragment as a value; that is what makes a `sign=` computed at call time
+possible at all. If a fragment genuinely has to reach something shared, park it
+on `globalThis` first.
+
+A fragment that needs no wrapper bindings (parsing a string, walking an object)
+is unaffected and may define its own helpers. This says nothing about the page
+side: `Page.evaluate(eval(js))` runs in the page, with the page's scope.
+
 ### `console` goes to stderr, all of it
 
 stdout is the JSON-RPC transport, so the `console` in scope is rebuilt to send
